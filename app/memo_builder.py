@@ -22,6 +22,8 @@ DEFAULT_WORKING_STRUCTURE_BY_TASK_TYPE = {
     "eb1a_petition": "templates/EB1A/EB1A_working_document_structure.yaml",
 }
 
+# Regulatory criteria only. Employment-plan components are assembled through
+# their dedicated workflow destination and _draft_step_xml() path below.
 CRITERION_STEP_BY_ROLE = {
     "awards": ("criterion_awards_episode", "Awards"),
     "memberships": ("criterion_memberships_episode", "Memberships / associations"),

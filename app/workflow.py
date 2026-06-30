@@ -368,7 +368,7 @@ def render_evidence_context(
         for source_key in ["source_originals", "source_translations", "source_other"]:
             source_root = loaded.case_dir / _case_path_value(loaded.config, source_key)
             folder = source_root / folder_name
-            evidence_folders = _episode_folders_for(folder, options)
+            evidence_folders = _episode_folders_for(folder, options, step)
             if evidence_folders:
                 for evidence_folder in evidence_folders:
                     files.extend(
@@ -861,6 +861,9 @@ def _first_repeatable_gap(loaded: LoadedCase, step: dict[str, Any]) -> NextActio
 def _repeatable_episode_candidates(loaded: LoadedCase, step: dict[str, Any]) -> list[tuple[str, str]]:
     if step.get("evidence_sources"):
         return _repeatable_candidates_from_evidence_sources(loaded, step)
+    scoped_terms = _episode_folder_terms(step)
+    if scoped_terms:
+        return _scoped_repeatable_episode_candidate(loaded, step, scoped_terms)
     roles = _normalize_path_list(step.get("evidence_folder_roles", []))
     role_map = loaded.config.get("eb1a_folder_roles", {})
     if not isinstance(role_map, dict):
@@ -890,6 +893,56 @@ def _repeatable_episode_candidates(loaded: LoadedCase, step: dict[str, Any]) -> 
                 grouped_candidates.setdefault(".", (candidate[0], candidate[1], priority))
     ordered = sorted(grouped_candidates.values(), key=lambda item: (item[2], item[1].casefold()))
     return [(episode_id, folder_name) for episode_id, folder_name, _priority in ordered]
+
+
+def _scoped_repeatable_episode_candidate(
+    loaded: LoadedCase, step: dict[str, Any], terms: tuple[str, ...]
+) -> list[tuple[str, str]]:
+    """Collapse phase-specific folder aliases across originals/translations into one unit."""
+    roles = _normalize_path_list(step.get("evidence_folder_roles", []))
+    role_map = loaded.config.get("eb1a_folder_roles", {})
+    if not isinstance(role_map, dict):
+        role_map = {}
+    matches: list[tuple[int, str]] = []
+    for role in roles:
+        folder_name = str(role_map.get(role, role))
+        for priority, source_key in enumerate(["source_originals", "source_translations", "source_other"]):
+            source_root = loaded.case_dir / _case_path_value(loaded.config, source_key)
+            role_folder = source_root / folder_name
+            if not role_folder.exists():
+                continue
+            for child in sorted(role_folder.iterdir()):
+                if (
+                    child.is_dir()
+                    and _folder_has_files(child)
+                    and _episode_folder_matches_terms(child.name, terms)
+                ):
+                    matches.append((priority, child.name))
+    if not matches:
+        return []
+    matches.sort(key=lambda item: (item[0], _display_name_penalty(item[1]), -len(item[1])))
+    display_name = matches[0][1]
+    shared_id = str(step.get("shared_episode_id", "")).strip()
+    episode_id = safe_path_component(shared_id) if shared_id else _episode_id_from_folder_name(display_name)
+    return [(episode_id, display_name)]
+
+
+def _episode_folder_terms(step: dict[str, Any]) -> tuple[str, ...]:
+    terms = _normalize_path_list(step.get("episode_folder_terms", []))
+    return tuple(term for term in terms if term)
+
+
+def _episode_folder_matches_terms(name: str, terms: tuple[str, ...]) -> bool:
+    normalized_name = _normalized_episode_name(name)
+    if not normalized_name:
+        return False
+    for term in terms:
+        normalized_term = _normalized_episode_name(term)
+        if normalized_term and (
+            normalized_term in normalized_name or normalized_name in normalized_term
+        ):
+            return True
+    return False
 
 
 def _repeatable_candidates_from_evidence_sources(
@@ -1422,9 +1475,20 @@ def _episode_folder_for(role_folder: Path, options: PromptOptions) -> Path:
     return role_folder / options.episode_id
 
 
-def _episode_folders_for(role_folder: Path, options: PromptOptions) -> list[Path]:
+def _episode_folders_for(
+    role_folder: Path, options: PromptOptions, step: dict[str, Any] | None = None
+) -> list[Path]:
     if not role_folder.exists():
         return []
+    scoped_terms = _episode_folder_terms(step or {})
+    if scoped_terms:
+        return [
+            child
+            for child in sorted(role_folder.iterdir())
+            if child.is_dir()
+            and _folder_has_files(child)
+            and _episode_folder_matches_terms(child.name, scoped_terms)
+        ]
     if not options.episode_id and not options.episode_folder:
         return [role_folder] if _folder_has_files(role_folder) else []
 

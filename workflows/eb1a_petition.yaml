@@ -186,6 +186,11 @@ steps:
     section_instructions: instructions/task_types/eb1a_petition/sections/two_phase_criterion_phase_1.md
     evidence_folder_roles:
       - original_contribution
+    shared_episode_id: primary_contribution
+    episode_folder_terms:
+      - contribution description originality formal evidence description
+      - вклад его подтверждение оригинальность выражение
+      - факт наличия вклада
     destination_pattern: draft_sections/criteria/original_contribution/{episode_id}_phase_1.md
 
   - step_id: criterion_original_contribution_significance
@@ -199,6 +204,10 @@ steps:
     section_instructions: instructions/task_types/eb1a_petition/sections/two_phase_criterion_phase_2.md
     evidence_folder_roles:
       - original_contribution
+    shared_episode_id: primary_contribution
+    episode_folder_terms:
+      - major significance
+      - major sigbificance
     destination_pattern: draft_sections/criteria/original_contribution/{episode_id}_phase_2.md
 
   - step_id: criterion_scholarly_articles_episode
@@ -301,7 +310,7 @@ steps:
     section_instructions: instructions/task_types/eb1a_petition/sections/employment_plan.md
     evidence_folder_roles:
       - employment_plan
-    destination_pattern: draft_sections/employment_plan/{component_id}.md
+    destination_pattern: draft_sections/employment_plan/{episode_id}.md
 
   - step_id: final_overview
     execution: llm_manual

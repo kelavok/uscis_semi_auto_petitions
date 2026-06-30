@@ -5,6 +5,7 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+~$*.docx
 
 # Real case workspaces may contain personal and confidential records.
 case_workspace/*

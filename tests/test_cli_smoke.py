@@ -8,6 +8,7 @@ from unittest.mock import patch
 from app import bundle, draft, web
 from app import cli_support
 from app import evidence as evidence_module
+from app import progress as progress_module
 from app import workflow as workflow_module
 from app.bundle_workflow import (
     build_bundle_plan,
@@ -151,6 +152,74 @@ class CliSmokeTests(unittest.TestCase):
                 0.9,
             )
 
+    def test_two_phase_contribution_uses_one_shared_unit_with_phase_specific_folders(self) -> None:
+        with TemporaryDirectory() as temp:
+            case_dir = Path(temp)
+            originals = case_dir / "source_documents" / "originals" / "5. Вклад"
+            translations = case_dir / "source_documents" / "translations" / "5. Вклад"
+            folders = [
+                originals / "Вклад - его подтверждение, оригинальность, выражение",
+                originals / "major sigbificance",
+                translations / "Факт наличия вклада",
+                translations / "major significance",
+            ]
+            for folder in folders:
+                folder.mkdir(parents=True)
+                (folder / "evidence.txt").write_text("evidence", encoding="utf-8")
+            loaded = workflow_module.LoadedCase(
+                case_id="case_001",
+                case_dir=case_dir,
+                config={
+                    "paths": {
+                        "source_originals": "source_documents/originals",
+                        "source_translations": "source_documents/translations",
+                        "source_other": "source_documents/other",
+                    },
+                    "eb1a_folder_roles": {"original_contribution": "5. Вклад"},
+                },
+                workflow={},
+            )
+            fact_step = {
+                "step_id": "criterion_original_contribution_fact",
+                "execution": "llm_manual_repeatable",
+                "evidence_folder_roles": ["original_contribution"],
+                "shared_episode_id": "primary_contribution",
+                "episode_folder_terms": [
+                    "вклад его подтверждение оригинальность выражение",
+                    "факт наличия вклада",
+                ],
+            }
+            significance_step = {
+                "step_id": "criterion_original_contribution_significance",
+                "execution": "llm_manual_repeatable",
+                "evidence_folder_roles": ["original_contribution"],
+                "shared_episode_id": "primary_contribution",
+                "episode_folder_terms": ["major significance", "major sigbificance"],
+            }
+            self.assertEqual(
+                workflow_module._repeatable_episode_candidates(loaded, fact_step),
+                [("primary_contribution", "Вклад - его подтверждение, оригинальность, выражение")],
+            )
+            self.assertEqual(
+                workflow_module._repeatable_episode_candidates(loaded, significance_step),
+                [("primary_contribution", "major sigbificance")],
+            )
+            options = workflow_module.PromptOptions(
+                episode_id="primary_contribution",
+                episode_folder="Вклад - его подтверждение, оригинальность, выражение",
+            )
+            self.assertEqual(
+                [path.name for path in workflow_module._episode_folders_for(translations, options, fact_step)],
+                ["Факт наличия вклада"],
+            )
+
+    def test_employment_plan_destination_accepts_repeatable_episode_id(self) -> None:
+        step = {"destination_pattern": "draft_sections/employment_plan/{episode_id}.md"}
+        destination = workflow_module.destination_for_step(
+            step, workflow_module.PromptOptions(episode_id="letter_of_intent")
+        )
+        self.assertEqual(destination, "draft_sections/employment_plan/letter_of_intent.md")
+
     def test_petition_draft_validator_rejects_workflow_language_and_wrong_criterion_prefix(self) -> None:
         with TemporaryDirectory() as temp:
             case_dir = Path(temp)
@@ -258,8 +327,8 @@ class CliSmokeTests(unittest.TestCase):
                 "workflow: workflows/eb1a_petition.yaml\n"
                 "field: __REQUIRED__\n"
                 "specialization: __REQUIRED__\n"
-                "procedural_context: __REQUIRED__\n"
-                "drafting_objective: __REQUIRED__\n"
+                "procedural_context: Initial EB-1A petition\n"
+                "drafting_objective: Prepare EB-1A petition memorandum\n"
                 "source_folder_template: templates/EB1A/case_folders_template\n"
                 "beneficiary:\n"
                 "  full_name: __REQUIRED__\n"
@@ -302,8 +371,49 @@ class CliSmokeTests(unittest.TestCase):
             )
             config = (case_dir / "case_config.yaml").read_text(encoding="utf-8")
             self.assertIn("task_type: eb1a_rfe_response", config)
+            self.assertIn("procedural_context: RFE response", config)
+            self.assertIn("drafting_objective: Prepare EB-1A RFE response", config)
+            self.assertNotIn("procedural_context: Initial EB-1A petition", config)
             self.assertIn("source_rfe_notice: source_documents/rfe/notice", config)
             self.assertIn("rfe_metadata:", config)
+
+    def test_unimplemented_task_type_is_rejected_before_case_folder_is_created(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            case_root = root / "case_workspace"
+            template_root = case_root / "_template"
+            template_root.mkdir(parents=True)
+            with (
+                patch.object(cli_support, "CASE_ROOT", case_root),
+                patch.object(cli_support, "CASE_TEMPLATE_ROOT", template_root),
+            ):
+                with self.assertRaisesRegex(SystemExit, "not implemented yet"):
+                    cli_support.create_case_from_template("niw_001", "eb2niw_petition")
+            self.assertFalse((case_root / "niw_001").exists())
+
+    def test_progress_detects_final_evidence_bundle_path(self) -> None:
+        with TemporaryDirectory() as temp:
+            case_dir = Path(temp) / "case_001"
+            (case_dir / "bundle" / "final").mkdir(parents=True)
+            (case_dir / "bundle" / "final" / "evidence_bundle.pdf").write_bytes(b"%PDF-1.4")
+            loaded = workflow_module.LoadedCase(
+                case_id="case_001",
+                case_dir=case_dir,
+                config={
+                    "task_type": "eb1a_petition",
+                    "beneficiary": {"full_name": "Jane Doe", "preferred_reference": "Ms. Doe"},
+                    "field": "Business",
+                    "specialization": "Strategy",
+                    "claimed_criteria": ["awards"],
+                    "paths": {"bundle_root": "bundle"},
+                },
+                workflow={},
+            )
+            with patch.object(progress_module, "load_case", return_value=loaded):
+                result = progress_module.build_case_progress("case_001")
+            bundle_step = next(step for step in result.steps if step.key == "bundle")
+            self.assertTrue(bundle_step.complete)
+            self.assertEqual(bundle_step.detail, "1 PDF bundle file(s)")
 
     def test_web_lists_cases_from_case_root(self) -> None:
         with TemporaryDirectory() as temp:

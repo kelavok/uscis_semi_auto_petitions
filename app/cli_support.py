@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import string
 import sys
@@ -39,6 +40,7 @@ def case_path(case_id: str) -> Path:
 
 
 def create_case_from_template(case_id: str, task_type: str) -> Path:
+    workflow_value = workflow_for(task_type)
     target = case_path(case_id)
     if target.exists():
         raise SystemExit(f"Case folder already exists and was not changed: {target}")
@@ -51,7 +53,7 @@ def create_case_from_template(case_id: str, task_type: str) -> Path:
         text = config_path.read_text(encoding="utf-8")
         text = text.replace("__CASE_ID__", case_id)
         text = text.replace("task_type: eb1a_petition", f"task_type: {task_type}")
-        text = text.replace("workflow: workflows/eb1a_petition.yaml", workflow_for(task_type))
+        text = text.replace("workflow: workflows/eb1a_petition.yaml", workflow_value)
         if task_type == "eb1a_rfe_response":
             text = _rfe_case_config_text(text)
         config_path.write_text(text, encoding="utf-8")
@@ -76,11 +78,14 @@ def workflow_for(task_type: str) -> str:
     mapping = {
         "eb1a_petition": "workflow: workflows/eb1a_petition.yaml",
         "eb1a_rfe_response": "workflow: workflows/eb1a_rfe_response.yaml",
-        "eb2niw_petition": "workflow: workflows/eb2niw_petition.yaml",
-        "o1a_petition": "workflow: workflows/o1a_petition.yaml",
-        "o1b_petition": "workflow: workflows/o1b_petition.yaml",
     }
-    return mapping.get(task_type, f"workflow: workflows/{task_type}.yaml")
+    if task_type not in mapping:
+        supported = ", ".join(sorted(mapping))
+        raise SystemExit(
+            f"Task type {task_type!r} is not implemented yet. Supported task types: {supported}. "
+            "Add and test its workflow YAML before enabling case creation."
+        )
+    return mapping[task_type]
 
 
 def _rfe_case_config_text(text: str) -> str:
@@ -88,13 +93,17 @@ def _rfe_case_config_text(text: str) -> str:
         "source_folder_template: templates/EB1A/case_folders_template",
         "source_folder_template: templates/RFE/EB1",
     )
-    text = text.replace(
-        "procedural_context: __REQUIRED__",
+    text = re.sub(
+        r"(?m)^procedural_context:\s*.*$",
         "procedural_context: RFE response",
+        text,
+        count=1,
     )
-    text = text.replace(
-        "drafting_objective: __REQUIRED__",
+    text = re.sub(
+        r"(?m)^drafting_objective:\s*.*$",
         "drafting_objective: Prepare EB-1A RFE response",
+        text,
+        count=1,
     )
     marker = "  source_other: source_documents/other\n"
     if marker in text and "source_rfe_notice:" not in text:

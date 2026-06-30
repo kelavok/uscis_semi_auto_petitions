@@ -69,8 +69,9 @@ def build_case_progress(case_id: str) -> CaseProgress:
     exhibits_complete = bool(exhibit_rows)
 
     bundle_root = loaded.case_dir / _configured_path(config, "bundle_root", "bundle")
-    merged_root = bundle_root / "merged_pdf"
-    bundle_pdfs = [path for path in merged_root.glob("*.pdf") if path.is_file()] if merged_root.exists() else []
+    final_root = bundle_root / "final"
+    final_bundle = final_root / "evidence_bundle.pdf"
+    bundle_pdfs = [final_bundle] if final_bundle.exists() and final_bundle.is_file() else []
     bundle_complete = bool(bundle_pdfs)
 
     raw_steps = [

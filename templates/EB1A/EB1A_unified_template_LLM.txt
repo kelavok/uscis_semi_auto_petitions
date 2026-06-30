@@ -4,7 +4,7 @@ Unified template based on: (1) working EB-1A structure/notes, (2) actual EB-1A c
 Purpose:
 This template is designed for two audiences at once:
 1) a human drafter who needs a clean, repeatable EB-1A petition structure;
-2) an LLM agent that must generate a consistent petition without inventing facts, scattering exhibits randomly, or producing a 300-page swamp with decorative citations. Humanity’s gift to bureaucracy continues.
+2) an LLM agent that must generate a consistent petition without inventing facts, scattering exhibits randomly, or producing an unnecessarily long petition with unfocused citations.
 
 LANGUAGE RULE:
 - The petition text submitted to USCIS should be drafted in English.
@@ -56,7 +56,7 @@ Option B:
 Option C:
 (Exhibit __EXHIBIT_NO__, page __PAGE__: __DOCUMENT_TITLE__.)
 
-Use one format for the whole petition. Do not oscillate between “please kindly refer,” “see,” and “according to,” unless the goal is to make the officer wonder whether the petition was assembled by six raccoons.
+Use one format for the whole petition. Do not oscillate between “please kindly refer,” “see,” and “according to.”
 
 Quote format:
 “__QUOTE__.” __RECOMMENDER_NAME__ - __BRIEF_DESCRIPTION__ (Please, kindly refer to Exhibit 0-1, page __PAGE__: __LETTER_TITLE__, explanatory note.)
@@ -172,7 +172,7 @@ Recommended exhibit numbering:
   Exhibit 1 = Criterion i
   Exhibit 2 = Criterion ii
   etc.
-This makes the file easier to review. Apparently officers prefer not needing a treasure map.
+This makes the file easier to review and reduces citation errors.
 
 Document cluster rule:
 Within each criterion, group documents by legal thesis, not by random upload order.
@@ -234,7 +234,7 @@ Table of Contents:
 8. Exhibits
 
 Drafting rule:
-Use real page numbers only after final PDF assembly. Until then use __PAGE__ placeholders. Do not “estimate” page numbers unless you enjoy manufacturing future defects.
+Use real page numbers only after final PDF assembly. Until then use __PAGE__ placeholders. Do not estimate page numbers; premature pagination creates avoidable errors.
 
 ============================================================
 4. COVER LETTER TEMPLATE
