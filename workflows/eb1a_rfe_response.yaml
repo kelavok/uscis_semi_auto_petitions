@@ -1,0 +1,135 @@
+schema_version: 0.1-draft
+task_type: eb1a_rfe_response
+status: active_draft
+
+purpose: >
+  File-driven EB-1A RFE response workflow. The workflow keeps the response
+  flexible enough for case-specific strategy, while forcing each LLM prompt to
+  include the relevant RFE text, initial filing context, new evidence, and
+  user strategy instructions.
+
+instruction_sources:
+  universal:
+    - instructions/universal/writing_rules.md
+    - instructions/universal/evidence_rules.md
+    - instructions/universal/citation_rules.md
+    - instructions/universal/quality_control.md
+  visa_or_rfe_specific:
+    - templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.txt
+  task_type:
+    - instructions/task_types/eb1a_rfe_response/task_rules.md
+  case_specific: user_case_instructions.md
+
+manual_provider:
+  mode: prompt_file_then_manual_import
+  prompt_dir: generated_prompts
+  output_dir: llm_outputs
+  validated_dir: validated_outputs
+  required_output_schema: schemas/llm_section_output.schema.json
+
+steps:
+  - step_id: rfe_structure_and_strategy
+    execution: llm_manual
+    title: RFE issue matrix and response structure
+    objective: >
+      Read the RFE, initial filing memorandum, user strategy notes, and RFE
+      template. Produce a practical response structure, issue matrix, and
+      recommended drafting order. Do not draft final section prose yet.
+    section_instructions: instructions/task_types/eb1a_rfe_response/sections/structure_and_strategy.md
+    evidence_sources:
+      - label: Full RFE notice
+        path_key: source_rfe_notice
+        folder: .
+      - label: Initial filing memorandum
+        path_key: source_initial_filing_memo
+        folder: .
+      - label: User RFE strategy notes
+        path_key: source_rfe_strategy
+        folder: .
+    destination: draft_sections/rfe/00_structure_and_strategy.md
+
+  - step_id: rfe_cover_letter
+    execution: llm_manual
+    title: RFE cover letter and procedural introduction
+    objective: >
+      Draft the opening cover/procedural section using the case metadata,
+      RFE template, RFE notice, initial filing summary, and user strategy.
+      Do not draft criterion-specific arguments here.
+    section_instructions: instructions/task_types/eb1a_rfe_response/sections/cover_letter.md
+    evidence_sources:
+      - label: Full RFE notice
+        path_key: source_rfe_notice
+        folder: .
+      - label: Initial filing memorandum
+        path_key: source_initial_filing_memo
+        folder: .
+      - label: User RFE strategy notes
+        path_key: source_rfe_strategy
+        folder: .
+    destination: draft_sections/rfe/01_cover_letter.md
+
+  - step_id: rfe_issue_response
+    execution: llm_manual_repeatable
+    repeat_unit: one_rfe_issue_or_episode
+    title: RFE issue response section
+    objective: >
+      Draft one RFE response subsection for one issue, criterion, or episode.
+      The prompt must include only the relevant RFE issue text, relevant initial
+      filing section text, new documents collected for this issue, and strategy
+      notes. If a criterion has several episodes, run one prompt per episode.
+    section_instructions: instructions/task_types/eb1a_rfe_response/sections/rfe_issue_response.md
+    evidence_sources:
+      - label: RFE text for this issue
+        path_key: source_rfe_issues
+        folder: .
+        use_episode_folder: true
+      - label: Initial filing text/evidence list for this issue
+        path_key: source_initial_filing_issues
+        folder: .
+        use_episode_folder: true
+      - label: New documents for this RFE issue
+        path_key: source_rfe_new_issue_documents
+        folder: .
+        use_episode_folder: true
+      - label: Global and issue-specific strategy notes
+        path_key: source_rfe_strategy
+        folder: .
+    destination_pattern: draft_sections/rfe/issues/{episode_id}.md
+
+  - step_id: rfe_final_merits
+    execution: llm_manual
+    title: Final merits determination response
+    objective: >
+      Draft the final merits response only after the major issue/criterion
+      sections are drafted. Aggregate accepted criteria, cured RFE defects,
+      sustained acclaim, and top-of-field evidence without inventing new facts.
+    section_instructions: instructions/task_types/eb1a_rfe_response/sections/final_merits.md
+    evidence_sources:
+      - label: Full RFE notice
+        path_key: source_rfe_notice
+        folder: .
+      - label: Initial filing memorandum
+        path_key: source_initial_filing_memo
+        folder: .
+      - label: User RFE strategy notes
+        path_key: source_rfe_strategy
+        folder: .
+    destination: draft_sections/rfe/90_final_merits.md
+
+  - step_id: rfe_conclusion
+    execution: llm_manual
+    title: RFE conclusion
+    objective: >
+      Draft a concise conclusion requesting approval and tying the response
+      back to the RFE issues and the record as a whole.
+    section_instructions: instructions/task_types/eb1a_rfe_response/sections/conclusion.md
+    evidence_sources:
+      - label: User RFE strategy notes
+        path_key: source_rfe_strategy
+        folder: .
+    destination: draft_sections/rfe/99_conclusion.md
+
+notes:
+  - Custom user strategy in user_case_instructions.md has priority over all template defaults.
+  - The generic repeatable step rfe_issue_response is intentionally flexible; use episode_id and episode_folder to control the exact issue/subheading.
+  - For issue prompts, place matching files in the same episode folder under RFE issues, initial filing issues, and new RFE documents.

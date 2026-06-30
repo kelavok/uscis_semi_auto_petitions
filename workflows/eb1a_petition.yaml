@@ -1,0 +1,367 @@
+schema_version: 0.2-draft
+task_type: eb1a_petition
+status: active_draft
+
+purpose: >
+  File-driven EB1A memorandum workflow based on the user-provided algorithm.
+  The workflow controls order, inputs, prompt composition, validation, and
+  deterministic bundle assembly. Substantive drafting instructions remain in
+  editable instruction/template files.
+
+opening_context:
+  template: instructions/task_types/eb1a_petition/opening_context.md
+  required_case_fields:
+    - case_id
+    - beneficiary.full_name
+    - beneficiary.preferred_reference
+    - beneficiary.pronouns
+    - field
+    - specialization
+
+instruction_sources:
+  universal:
+    - instructions/universal/writing_rules.md
+    - instructions/universal/evidence_rules.md
+    - instructions/universal/citation_rules.md
+    - instructions/universal/quality_control.md
+  visa_or_rfe_specific:
+    - templates/EB1A/EB1A_unified_template_LLM.txt
+    - templates/EB1A/!Актуальный шаблон EB1.docx
+  task_type:
+    - instructions/task_types/eb1a_petition/task_rules.md
+  case_specific: user_case_instructions.md
+
+source_folder_template:
+  path: templates/EB1A/case_folders_template
+  role: >
+    Model folder tree for EB1A evidence collection. init-case copies this tree
+    into source_documents/originals so the user can place case materials inside
+    familiar criterion/episode folders.
+
+manual_provider:
+  mode: prompt_file_then_manual_import
+  prompt_dir: generated_prompts
+  output_dir: llm_outputs
+  validated_dir: validated_outputs
+  required_output_schema: schemas/llm_section_output.schema.json
+
+common_validation_rules:
+  - output_matches_case_and_step
+  - draft_text_is_present_for_llm_steps
+  - used_document_ids_exist_in_document_index
+  - used_document_ids_are_approved_or_flagged
+  - unsupported_claims_field_is_present
+  - questions_for_user_field_is_present
+  - quality_flags_field_is_present
+  - exhibit_references_match_exhibit_index_when_present
+
+steps:
+  - step_id: setup_case_workspace
+    execution: deterministic
+    title: Create working folder, working memo, and initial evidence tree
+    objective: >
+      Create the case workspace from case_workspace/_template, copy the EB1A
+      case_folders_template into source_documents/originals, and create the
+      working memo file from the configured template when template conversion is
+      implemented.
+    command: python -m app.draft init-case --case CASE_ID --task-type eb1a_petition
+    writes:
+      - case_config.yaml
+      - source_documents/originals
+      - final_memo/working_memo.md
+
+  - step_id: opening_context_intake
+    execution: llm_manual
+    title: Give LLM case context without drafting
+    objective: >
+      Provide the LLM with task type, beneficiary context, CV/profile/education
+      materials, employer letters if available, media materials if available,
+      and ask it only to read and understand the case. No memorandum text should
+      be drafted at this stage.
+    section_instructions: instructions/task_types/eb1a_petition/sections/opening_context_intake.md
+    evidence_folder_roles:
+      - identity_cv_education
+      - recommendation_letters
+      - media
+    output_expected: acknowledgement_or_structured_notes
+    destination: draft_sections/_context_notes.md
+
+  - step_id: template_review
+    execution: llm_manual
+    title: Give LLM the EB1A template and structure without drafting
+    objective: >
+      Provide the relevant EB1A template material and ask the LLM to understand
+      the required structure, headings, citation/index style, and drafting
+      conventions. No substantive section should be drafted at this stage.
+    section_instructions: instructions/task_types/eb1a_petition/sections/template_review.md
+    templates:
+      - templates/EB1A/EB1A_unified_template_LLM.txt
+      - templates/EB1A/!Актуальный шаблон EB1.docx
+    output_expected: acknowledgement_or_structure_notes
+    destination: draft_sections/_template_notes.md
+
+  - step_id: professional_biography
+    execution: llm_manual
+    title: Professional biography, specialization, and optional education
+    objective: >
+      Draft the general professional biography/specialization section in the
+      template style. Include education only if relevant to the case. Do not
+      draft the overview of achievements yet.
+    section_instructions: instructions/task_types/eb1a_petition/sections/professional_biography.md
+    evidence_folder_roles:
+      - identity_cv_education
+    destination: draft_sections/professional_biography.md
+
+  - step_id: recommendation_letters_roster
+    execution: llm_manual
+    title: Recommender list and recommendation exhibit references
+    objective: >
+      Draft the recommender roster/list in the template style using the
+      recommendation letters and related evidence. Create or reference document
+      index entries for each letter.
+    section_instructions: instructions/task_types/eb1a_petition/sections/recommendation_letters_roster.md
+    evidence_folder_roles:
+      - recommendation_letters
+    destination: draft_sections/recommendation_letters_roster.md
+
+  - step_id: recommendation_letters_quotes
+    execution: llm_manual
+    title: Select and format quotes from recommendation letters
+    objective: >
+      For each recommendation letter, select beneficiary-focused quote(s) and
+      format them according to the template. Quotes must be tied to indexed
+      documents.
+    section_instructions: instructions/task_types/eb1a_petition/sections/recommendation_letters_quotes.md
+    evidence_folder_roles:
+      - recommendation_letters
+    destination: draft_sections/recommendation_letters_quotes.md
+
+  - step_id: criterion_awards_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_episode
+    title: Awards criterion episode
+    objective: Draft one awards episode per prompt using only the selected episode documents.
+    section_instructions: instructions/task_types/eb1a_petition/sections/criterion_awards_episode.md
+    evidence_folder_roles:
+      - awards
+    destination_pattern: draft_sections/criteria/awards/{episode_id}.md
+
+  - step_id: criterion_memberships_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_episode
+    title: Memberships/associations criterion episode
+    objective: Draft one associations episode per prompt using only the selected episode documents.
+    section_instructions: instructions/task_types/eb1a_petition/sections/criterion_memberships_episode.md
+    evidence_folder_roles:
+      - memberships
+    destination_pattern: draft_sections/criteria/memberships/{episode_id}.md
+
+  - step_id: criterion_media_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_episode
+    title: Published material/media criterion episode
+    objective: Draft one media episode per prompt using only the selected episode documents.
+    section_instructions: instructions/task_types/eb1a_petition/sections/criterion_episode.md
+    evidence_folder_roles:
+      - media
+    destination_pattern: draft_sections/criteria/media/{episode_id}.md
+
+  - step_id: criterion_judging_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_episode
+    title: Judging criterion episode
+    objective: Draft one judging episode per prompt using only the selected episode documents.
+    section_instructions: instructions/task_types/eb1a_petition/sections/criterion_episode.md
+    evidence_folder_roles:
+      - judging
+    destination_pattern: draft_sections/criteria/judging/{episode_id}.md
+
+  - step_id: criterion_original_contribution_fact
+    execution: llm_manual_repeatable
+    repeat_unit: one_contribution_episode
+    title: "Original contribution, phase 1: contribution and adoption facts"
+    objective: >
+      Draft the first evidentiary phase for one contribution episode: what the
+      contribution is and what evidence shows its existence, use, or adoption.
+    section_instructions: instructions/task_types/eb1a_petition/sections/two_phase_criterion_phase_1.md
+    evidence_folder_roles:
+      - original_contribution
+    destination_pattern: draft_sections/criteria/original_contribution/{episode_id}_phase_1.md
+
+  - step_id: criterion_original_contribution_significance
+    execution: llm_manual_repeatable
+    repeat_unit: one_contribution_episode
+    title: "Original contribution, phase 2: major significance"
+    objective: >
+      Draft the second evidentiary phase for the same contribution episode:
+      major significance, impact, industry adoption, expert support, and
+      significance-linked documents.
+    section_instructions: instructions/task_types/eb1a_petition/sections/two_phase_criterion_phase_2.md
+    evidence_folder_roles:
+      - original_contribution
+    destination_pattern: draft_sections/criteria/original_contribution/{episode_id}_phase_2.md
+
+  - step_id: criterion_scholarly_articles_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_episode
+    title: Scholarly articles criterion episode
+    objective: Draft one scholarly-publication episode per prompt using only selected documents.
+    section_instructions: instructions/task_types/eb1a_petition/sections/criterion_episode.md
+    evidence_folder_roles:
+      - scholarly_articles
+    destination_pattern: draft_sections/criteria/scholarly_articles/{episode_id}.md
+
+  - step_id: criterion_exhibitions_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_episode
+    title: Exhibitions/showcases criterion episode
+    objective: Draft one exhibition/showcase episode per prompt using only selected documents.
+    section_instructions: instructions/task_types/eb1a_petition/sections/criterion_episode.md
+    evidence_folder_roles:
+      - exhibitions
+    destination_pattern: draft_sections/criteria/exhibitions/{episode_id}.md
+
+  - step_id: criterion_leading_critical_role_fact
+    execution: llm_manual_repeatable
+    repeat_unit: one_role_episode
+    title: "Leading/critical role, phase 1: employment/role facts"
+    objective: >
+      Draft the first phase for one role episode: role, employer/organization,
+      responsibilities, and why the role was leading or critical.
+    section_instructions: instructions/task_types/eb1a_petition/sections/two_phase_criterion_phase_1.md
+    evidence_folder_roles:
+      - leading_critical_role
+    destination_pattern: draft_sections/criteria/leading_critical_role/{episode_id}_phase_1.md
+
+  - step_id: criterion_leading_critical_role_reputation
+    execution: llm_manual_repeatable
+    repeat_unit: one_role_episode
+    title: "Leading/critical role, phase 2: distinguished reputation"
+    objective: >
+      Draft the second phase for the same role episode: evidence that the
+      organization has distinguished reputation.
+    section_instructions: instructions/task_types/eb1a_petition/sections/two_phase_criterion_phase_2.md
+    evidence_folder_roles:
+      - leading_critical_role
+    destination_pattern: draft_sections/criteria/leading_critical_role/{episode_id}_phase_2.md
+
+  - step_id: criterion_high_salary_fact
+    execution: llm_manual_repeatable
+    repeat_unit: one_compensation_episode
+    title: "High salary, phase 1: compensation facts"
+    objective: Draft the compensation fact section for one salary episode.
+    section_instructions: instructions/task_types/eb1a_petition/sections/two_phase_criterion_phase_1.md
+    evidence_folder_roles:
+      - high_salary
+    destination_pattern: draft_sections/criteria/high_salary/{episode_id}_phase_1.md
+
+  - step_id: criterion_high_salary_comparison
+    execution: llm_manual_repeatable
+    repeat_unit: one_compensation_episode
+    title: "High salary, phase 2: comparison sources"
+    objective: Draft the comparison phase for the same salary episode using indexed comparison sources.
+    section_instructions: instructions/task_types/eb1a_petition/sections/two_phase_criterion_phase_2.md
+    evidence_folder_roles:
+      - high_salary
+    destination_pattern: draft_sections/criteria/high_salary/{episode_id}_phase_2.md
+
+  - step_id: criterion_commercial_success_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_episode
+    title: Commercial success criterion episode
+    objective: Draft one commercial-success episode per prompt if this criterion is claimed.
+    section_instructions: instructions/task_types/eb1a_petition/sections/criterion_episode.md
+    evidence_folder_roles:
+      - commercial_success
+    destination_pattern: draft_sections/criteria/commercial_success/{episode_id}.md
+
+  - step_id: specialization_essay
+    execution: llm_manual
+    title: Specialization essay with external source research
+    objective: >
+      Draft the specialization essay according to the template. The prompt must
+      ask for U.S.-oriented sources following this hierarchy: government sources,
+      major media, research/reports, then other credible sources. The essay
+      usually covers definition, economic value, effect, and cross-sector value.
+    section_instructions: instructions/task_types/eb1a_petition/sections/specialization_essay.md
+    external_research:
+      allowed: true
+      source_hierarchy:
+        - U.S. government sources
+        - major U.S. media
+        - research papers and institutional reports
+        - other credible sources
+    destination: draft_sections/specialization_essay.md
+
+  - step_id: employment_plan
+    execution: llm_manual_repeatable
+    repeat_unit: one_plan_component
+    title: Employment plan / proposed endeavor support
+    objective: Draft employment plan components using the template and selected plan documents.
+    section_instructions: instructions/task_types/eb1a_petition/sections/employment_plan.md
+    evidence_folder_roles:
+      - employment_plan
+    destination_pattern: draft_sections/employment_plan/{component_id}.md
+
+  - step_id: final_overview
+    execution: llm_manual
+    title: Final overview after all criteria are drafted
+    objective: >
+      Return to the general section only after the case has been systematized.
+      Draft a concise overview of the beneficiary and key achievements in the
+      template style; target 2-3 paragraphs and not more than one page unless
+      case instructions say otherwise.
+    section_instructions: instructions/task_types/eb1a_petition/sections/final_overview.md
+    include_working_memo: true
+    depends_on:
+      - professional_biography
+      - recommendation_letters_roster
+      - criteria_sections_selected_by_case
+      - specialization_essay
+      - employment_plan
+    destination: draft_sections/final_overview.md
+
+  - step_id: exhibit_list
+    execution: deterministic
+    title: Generate exhibit list from indexes
+    objective: Generate the list of exhibits from approved document/exhibit indexes without LLM.
+    command: python -m app.bundle build --case CASE_ID --dry-run
+    reads:
+      - indexes/document_index.csv
+      - indexes/exhibit_index.csv
+    writes:
+      - final_memo/exhibit_list.md
+
+  - step_id: separator_pages
+    execution: deterministic
+    title: Generate technical separator pages
+    objective: >
+      Generate one general page per exhibit with the list of included documents,
+      then one title/separator page for each individual indexed document with
+      the configured title and description.
+    reads:
+      - indexes/document_index.csv
+      - indexes/exhibit_index.csv
+    writes:
+      - bundle/separators
+
+  - step_id: evidence_bundle_pdf
+    execution: deterministic
+    title: Assemble PDF evidence bundle
+    objective: >
+      Assemble PDFs according to approved indexes: exhibit separator, document
+      separator, document file(s), translation/original ordering, and final PDF
+      merge. This step must not call an LLM.
+    command: python -m app.bundle build --case CASE_ID
+    reads:
+      - indexes/document_index.csv
+      - indexes/exhibit_index.csv
+    writes:
+      - bundle/final
+
+notes:
+  - Overview is intentionally drafted near the end, not during the first general section.
+  - Criteria are drafted episode-by-episode; one prompt should cover one episode or one phase of one episode.
+  - Contribution, leading/critical role, and salary are intentionally two-phase drafting units.
+  - If a document is not machine-readable, the prompt may describe its visual nature and require only careful reference/indexing, not invented content.
+  - Exhibit lists and separator pages are deterministic bundle tasks, not LLM tasks.

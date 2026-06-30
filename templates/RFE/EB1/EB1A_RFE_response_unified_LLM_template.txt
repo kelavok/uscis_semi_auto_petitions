@@ -1,0 +1,1306 @@
+EB-1A RFE RESPONSE TEMPLATE
+LLM-FRIENDLY UNIFIED TEMPLATE
+Based on several EB-1A RFE responses and standardized around the Serik Igbayev response structure.
+
+Version: 2026-06-26
+Purpose: create a consistent, shorter, adaptable template for preparing EB-1A responses to USCIS Requests for Evidence.
+Final filing language: English.
+Instruction language: Russian + English drafting blocks.
+Primary structure: quote the RFE, respond directly, identify evidence already submitted, add new evidence, and explain why the criterion or issue is met.
+
+================================================================================
+0. HOW TO USE THIS TEMPLATE
+================================================================================
+
+Этот шаблон предназначен для LLM, которая готовит первый черновик ответа на RFE по EB-1A.
+
+RFE Response не является обычной EB-1A petition. Его задача не заново рассказать биографию заявителя, а ответить на конкретные замечания USCIS. Поэтому LLM должна работать по матрице:
+
+1. Что USCIS прямо признал met.
+2. Что USCIS прямо признал not met.
+3. Что USCIS оспорил по continued work.
+4. Что USCIS оспорил по prospective substantial benefit.
+5. Что USCIS оспорил по final merits determination.
+6. Какие критерии не комментируются или имеют неопределенный статус.
+7. Какие документы USCIS, возможно, не учел.
+8. Какие новые документы приложены именно для ответа на RFE.
+9. Какие старые документы нужно переслать повторно для удобства или потому что RFE их проигнорировал.
+
+Главный формат каждого раздела:
+
+[1] Heading: issue / criterion.
+[2] Quote from RFE.
+[3] Short procedural clarification: what exactly is disputed.
+[4] Evidence map: resubmitted evidence + new evidence.
+[5] Direct response to each RFE point.
+[6] Legal/evidentiary explanation.
+[7] Mini-conclusion.
+
+Не писать абстрактно. Каждый тезис должен отвечать на конкретный дефект из RFE.
+
+================================================================================
+1. GLOBAL STYLE SETTINGS
+================================================================================
+
+Use one style consistently across the whole RFE response.
+
+[STYLE OPTIONS]
+Font: [Times New Roman 14 / Arial 12 / Arial 14 / Montserrat 12 / Roboto 12]
+Line spacing: [1.15 / 1.5]
+Paragraph spacing: [before 0 / after 6 pt]
+Attachment naming: [Attachments / Appendices / Exhibits]
+Evidence status labels:
+- Resubmitted evidence
+- New evidence
+- Evidence previously submitted with the initial filing
+- Evidence submitted specifically in response to the RFE
+
+Recommended for RFE:
+Use "Attachments" for evidence blocks after the response text, because it makes clear that the RFE response is a separate procedural document and the evidence blocks follow it.
+
+Recommended citation format:
+(Please, kindly refer to Attachment [X], page [XX]: [document title], English translation.)
+or
+(Please, kindly refer to Exhibit [X], page [XX] of the initial filing: [document title], English translation.)
+
+Use "of the initial filing" when citing previously submitted evidence.
+Use "New Evidence, Attachment [X]" when citing evidence submitted for the first time.
+
+Do not leave page references as XX in the final version.
+
+================================================================================
+2. PRE-DRAFTING WORKFLOW FOR LLM
+================================================================================
+
+Before drafting the RFE response, complete the following internal steps.
+
+STEP 1. Extract RFE metadata.
+- Case number: [CASE_NO]
+- Receipt / accepted for review date: [RECEIPT_DATE]
+- RFE date: [RFE_DATE]
+- Response date: [RESPONSE_DATE]
+- Beneficiary: [BENEFICIARY_FULL_NAME]
+- Area: [AREA]
+- Specialization: [SPECIALIZATION]
+- Petition type: EB-1A, Form I-140, INA §203(b)(1)(A)
+
+STEP 2. Build the RFE issue matrix.
+
+Use this table internally first. It may also be included in the response if it helps navigation.
+
+| RFE issue no. | USCIS topic | RFE quote / summary | Status in RFE | Initial evidence already submitted | New evidence | Response strategy |
+|---|---|---|---|---|---|---|
+| 1 | Continued work | "[QUOTE]" | Not accepted / unclear | [Exhibit/page] | [Attachment/page] | Show prearranged commitments or concrete plan |
+| 2 | Substantial benefit | "[QUOTE]" | Not accepted / unclear | [Exhibit/page] | [Attachment/page] | Explain prospective U.S. benefit through field-specific mechanism |
+| 3 | Criterion [i] | "[QUOTE]" | Not accepted | [Exhibit/page] | [Attachment/page] | Address national/international recognition and excellence basis |
+| 4 | Final merits | "[QUOTE]" | Not accepted | [Exhibit/page] | [Attachment/page] | Aggregate accepted criteria + sustained acclaim |
+
+STEP 3. Classify every issue.
+
+For each RFE issue, mark one of the following:
+- ACCEPTED: USCIS expressly stated the criterion was met.
+- NOT ACCEPTED: USCIS expressly found the criterion not met.
+- UNCLEAR: RFE lists criterion as not met but gives no reasoning, or gives no remarks.
+- IGNORED / OVERLOOKED: RFE says evidence was missing, but it was in the initial filing.
+- GENERAL CONCERN: reliability, screenshots, links, translations, open sources, self-promotion, insufficient probative value.
+- FINAL MERITS: USCIS accepts at least 3 criteria or may accept some criteria, but disputes whether evidence shows sustained acclaim / top of field.
+- CONTINUED WORK: USCIS disputes U.S. work plans.
+- SUBSTANTIAL BENEFIT: USCIS disputes prospective benefit to the United States.
+
+STEP 4. Decide structure.
+
+Default structure based on the most current standardized approach:
+
+Cover Letter
+Section A – Evidence of Intent to Continue Professional Activities in the United States
+  A.1. Continued Work
+  A.2. Prospective Substantial Benefit to the United States
+Section B – Additional Evidence and Clarifications for the Criteria Claimed in the Petition
+  B.[criterion number] – Criterion heading
+Section C – Final Merits Determination, if challenged
+Conclusion
+Attachments / Appendix list
+Technical separator pages
+
+Alternative structure:
+If RFE does not challenge continued work or substantial benefit, begin with a short "General Response Framework" and then criteria ordered by evidentiary strength.
+
+Use the evidentiary-strength order when useful:
+1. Criteria with strong objective documents.
+2. Criteria where USCIS overlooked initial evidence.
+3. Criteria with new evidence that directly cures RFE defects.
+4. Weaker criteria or criteria acknowledged as uncertain.
+5. Final merits.
+
+Do not mechanically follow the original petition order if RFE strategy is better served by another order. Explain the ordering in the cover letter.
+
+STEP 5. Evidence policy.
+
+For each block, decide:
+- Resubmit full evidence if USCIS appears to have overlooked it, if the RFE status is unclear, or if the evidence is central to the response.
+- Refer to initial filing without resubmission if the evidence is voluminous and clearly already in the record.
+- Add new evidence only to cure the exact RFE defect, not to create unrelated narrative bulk.
+
+================================================================================
+3. LEGAL STANDARD INSERTS
+================================================================================
+
+Use legal standards only where useful. Do not turn the RFE response into a law review article, because the officer already has a job and probably did not request recreational suffering.
+
+3.1. EB-1A eligibility
+
+Suggested drafting block:
+
+The EB-1A classification requires evidence that the beneficiary has extraordinary ability in the sciences, arts, education, business, or athletics, demonstrated by sustained national or international acclaim, and that the beneficiary’s achievements have been recognized in the field through extensive documentation. The beneficiary must also intend to continue work in the area of extraordinary ability, and the beneficiary’s entry must substantially benefit the United States prospectively.
+
+[LLM INSTRUCTION]
+Use this in the introduction or final merits section only if the RFE challenges the overall statutory elements.
+
+3.2. No job offer required, but continued work must be shown
+
+Suggested drafting block:
+
+Under 8 C.F.R. § 204.5(h)(5), neither a job offer nor labor certification is required for EB-1A classification. However, the petition must include clear evidence that the beneficiary is coming to the United States to continue work in the area of expertise. Such evidence may include letters from prospective employers, evidence of prearranged commitments, contracts, or a statement from the beneficiary detailing plans to continue work in the United States.
+
+[LLM INSTRUCTION]
+Use this in Section A.1 when RFE says the beneficiary has no prearranged commitments or no clear plans.
+
+3.3. Two-step evidentiary review
+
+Suggested drafting block:
+
+USCIS applies a two-step analysis in EB-1A adjudication. First, USCIS determines whether the submitted evidence meets the regulatory criteria. Second, USCIS evaluates all evidence together in the final merits determination to determine whether the record establishes sustained national or international acclaim and that the beneficiary is among the small percentage who have risen to the top of the field.
+
+[LLM INSTRUCTION]
+Use this in the final merits section or when USCIS conflates initial-evidence analysis with final merits.
+
+3.4. Preponderance of the evidence and totality
+
+Suggested drafting block:
+
+The evidence should be assessed under the preponderance of the evidence standard and in the context of the record as a whole. Where the record contains primary evidence, corroborating secondary evidence, and testimonial evidence, the probative value of these materials should be evaluated collectively rather than by isolating each document from the evidentiary context it supports.
+
+[LLM INSTRUCTION]
+Use this when RFE dismisses screenshots, letters, media, or private documents categorically.
+
+================================================================================
+4. COVER LETTER TEMPLATE
+================================================================================
+
+RFE RESPONSE
+Case No. [CASE_NO]
+Accepted for review on [RECEIPT_DATE]
+Beneficiary: [MR_MS] [BENEFICIARY_FULL_NAME]
+
+Area: [AREA]
+Specialization: [SPECIALIZATION]
+
+Dear USCIS Officer:
+
+My name is [BENEFICIARY_FULL_NAME].
+
+Thank you for the opportunity to provide additional evidence and explanations in response to the Request for Evidence dated [RFE_DATE].
+
+I filed this petition on my own behalf as the beneficiary of Form I-140 seeking classification under the EB-1A category as an individual of extraordinary ability in [AREA], specifically in [SPECIALIZATION].
+
+In the initial petition, I provided evidence that I satisfy [NUMBER] of the ten criteria listed in 8 C.F.R. § 204.5(h)(3), namely:
+([i]) [criterion i name, if claimed]
+([ii]) [criterion ii name, if claimed]
+([iii]) [criterion iii name, if claimed]
+([iv]) [criterion iv name, if claimed]
+([v]) [criterion v name, if claimed]
+([vi]) [criterion vi name, if claimed]
+([vii]) [criterion vii name, if claimed]
+([viii]) [criterion viii name, if claimed]
+([ix]) [criterion ix name, if claimed]
+([x]) [criterion x name, if claimed]
+
+As follows from the RFE:
+- [Criterion / issue] was accepted as met.
+- [Criterion / issue] was not accepted.
+- [Criterion / issue] was not specifically discussed / its status remains unclear.
+- USCIS also requested additional evidence or clarification regarding [continued work / prospective substantial benefit / final merits / reliability of sources / field definition].
+
+[Choose one of the following strategy paragraphs.]
+
+OPTION A – Serik-style standardized structure:
+
+Please be informed that I have structured this response as follows:
+
+Section A – Evidence of My Intent to Continue Professional Activities in the United States – pages [XX–XX].
+This section contains explanations and supporting documentation demonstrating my intent and concrete steps to continue working in [AREA / SPECIALIZATION] in the United States, including [U.S. company / employment offer / contracts / business plan / investor correspondence / professional commitments]. It also addresses the RFE remarks regarding continued work and prospective substantial benefit.
+
+Section B – Additional Evidence and Clarifications for the Criteria Claimed in My Petition – pages [XX–XX].
+This section provides explanations and additional evidence regarding the criteria under 8 C.F.R. § 204.5(h)(3), including:
+([criterion]) [criterion short name];
+([criterion]) [criterion short name];
+([criterion]) [criterion short name].
+
+Section C – Final Merits Determination – pages [XX–XX].
+If necessary, this section explains how the totality of evidence demonstrates sustained national or international acclaim and establishes that I am among the small percentage who have risen to the top of my field.
+
+New evidence is marked with the label “New evidence.” Evidence previously submitted with the initial petition is marked as “Resubmitted evidence” or identified by reference to the original exhibit and page number.
+
+The documentation is provided after the response text in Attachments, organized by issue and criterion. Where appropriate, several attachment blocks contain two parts: Part 1 – Resubmitted evidence from the initial filing, and Part 2 – New evidence submitted in response to the RFE.
+
+OPTION B – Mikhail-style strategic ordering by evidentiary strength:
+
+For the officer’s convenience, I present the criteria in the order of evidentiary strength and direct relevance to the RFE comments. I begin with the criteria for which the documentary record is strongest and most directly addresses the deficiencies identified in the RFE:
+([criterion]) [criterion name];
+([criterion]) [criterion name];
+([criterion]) [criterion name].
+
+Each section contains direct references to documentary evidence included in the initial filing and, where necessary, new evidence submitted with this response. If the RFE appears to identify as missing materials that were already included in the initial filing, I respectfully identify those materials and request that they be reviewed in the context of the record as a whole.
+
+OPTION C – when one criterion is weak and strategically deprioritized:
+
+With regard to the criterion concerning [criterion], I respectfully acknowledge the concerns raised in the RFE. If USCIS determines that the evidence currently in the record does not satisfy the regulatory standard for this criterion, I understand that this criterion may not be counted. Accordingly, the explanations below focus on the remaining criteria, which independently establish eligibility under 8 C.F.R. § 204.5(h)(3).
+
+Thank you for your time and careful consideration.
+
+Sincerely,
+
+[BENEFICIARY_FULL_NAME]
+[RESPONSE_DATE]
+
+[LLM INSTRUCTIONS FOR COVER LETTER]
+- Do not claim that a criterion was accepted unless the RFE expressly says so.
+- If a criterion has no reasoning in the RFE, say its status is unclear, not automatically met.
+- If resubmitting evidence because status is unclear, explain that reason.
+- If USCIS misstated the field, include a clarification: "while the RFE refers to my intended work as [OCCUPATION], my field of extraordinary ability is [SPECIALIZATION]."
+- Keep the cover letter concise. The detailed argument belongs in the sections.
+
+================================================================================
+5. OPTIONAL SECTION 0 – GENERAL MATTERS AND EVIDENCE RELIABILITY
+================================================================================
+
+Use this section only if the RFE includes general concerns about:
+- unreliable internet sources;
+- screenshots;
+- inaccessible links;
+- open-source / user-edited platforms;
+- insufficient translations;
+- explanatory notes;
+- private documents;
+- self-serving letters;
+- lack of probative value.
+
+SECTION HEADING:
+
+General Matters and Evidentiary Clarifications
+
+As follows from the RFE:
+“[INSERT EXACT RFE QUOTE ABOUT GENERAL RELIABILITY / INTERNET SOURCES / SCREENSHOTS / EVIDENCE QUALITY].”
+
+In response, I respectfully provide the following clarification.
+
+The evidence submitted with the initial petition and with this response is organized by evidentiary purpose. Primary evidence is used to establish the core facts under the applicable regulatory criteria, while secondary evidence is used to corroborate, contextualize, or demonstrate the broader public, professional, or institutional recognition of those facts.
+
+I. Classification of Evidence
+
+Documentary evidence includes:
+- public documents, such as government records, official registrations, diplomas, or public institutional records;
+- private documents, such as contracts, employer letters, award certificates, association records, correspondence, publisher confirmations, exhibition catalogues, and organizational records.
+
+Testimonial evidence includes:
+- letters from employers, supervisors, clients, collaborators, experts, organizers, publishers, or institutional representatives with direct knowledge of the beneficiary’s achievements, role, contribution, or recognition.
+
+Secondary evidence includes:
+- screenshots;
+- online publications;
+- media coverage;
+- traffic data;
+- rankings;
+- web archives;
+- photographs;
+- explanatory notes;
+- public source excerpts.
+
+II. Primary and Secondary Evidence
+
+Primary evidence directly establishes the factual claim. Examples include:
+- award diploma and official confirmation from award organizer;
+- membership certificate and bylaws;
+- judging invitation and judging protocol;
+- employment contract and employer letter;
+- salary certificate and tax / pension / bank documents;
+- publisher certificate confirming title, date, author, publication and editorial nature;
+- intellectual property registration or implementation contract;
+- exhibition catalogue and invitation.
+
+Secondary evidence supports context. Examples include:
+- media coverage showing public recognition of an award or exhibition;
+- traffic or audience metrics showing that a publication is major media or major trade media;
+- screenshots from official websites;
+- rankings confirming the reputation of an organization, media outlet, award, or event;
+- explanatory notes summarizing foreign institutions or documents unfamiliar to USCIS.
+
+III. Screenshots and Website Links
+
+Some website links may become unavailable due to website maintenance, domain changes, regional restrictions, content updates, or platform redesign. Temporary inaccessibility does not necessarily undermine the authenticity of the evidence if the record also contains screenshots, translations, publisher or organizer confirmations, archived materials, or other corroborating documentation.
+
+The screenshots and online materials submitted in this response are used to support and contextualize primary evidence. They are not submitted as a substitute for primary documentation where primary documentation is available.
+
+IV. Explanatory Notes
+
+The explanatory notes are submitted to help interpret foreign documents, organizations, media outlets, awards, events, and professional contexts. They are not presented as independent primary evidence unless expressly supported by cited source documents. Their function is explanatory and navigational.
+
+V. Conclusion for General Matters
+
+Accordingly, the record should be assessed as a whole. The key facts are supported by primary documents, while secondary materials provide context regarding public recognition, professional significance, audience reach, organizational reputation, or field relevance.
+
+[LLM INSTRUCTIONS]
+- Do not include this section in every RFE. Use it only when RFE attacks reliability or evidence type.
+- Do not overdefend screenshots. Explain their purpose.
+- If RFE says open-source platform = unreliable, distinguish between website software and editorial reliability.
+- If RFE says links are inaccessible, attach screenshots, archived copies, official confirmations, and translations where possible.
+- If RFE attacks explanatory notes, say they are context, not primary proof.
+
+================================================================================
+6. SECTION A – CONTINUED WORK AND PROSPECTIVE SUBSTANTIAL BENEFIT
+================================================================================
+
+Use Section A when RFE questions:
+- intent to continue work in the United States;
+- absence of prearranged commitments;
+- whether intended work is in the same field;
+- whether entry will substantially benefit the United States;
+- whether the U.S. plan is speculative;
+- whether the proposed work fits the claimed area of expertise.
+
+--------------------------------------------------------------------------------
+A.1. Continued Work
+--------------------------------------------------------------------------------
+
+HEADING:
+Section A – Evidence of My Intent to Continue Professional Activities in the United States
+A.1. Continued Work
+
+As follows from the RFE:
+“[INSERT EXACT RFE QUOTE: continued work / prearranged commitments / plans / same field].”
+
+In response to these remarks, please find the following evidence:
+
+Part 1. Resubmitted evidence
+1.0. [Evidence category from initial filing]
+1.0.1. [Document title]
+1.0.2. [Document title]
+1.0.3. [Document title]
+
+Part 2. New evidence
+1.1. [New evidence category]
+1.1.1. [Document title]
+1.1.2. [Document title]
+1.1.3. [Document title]
+
+RFE STATEMENT:
+“[INSERT SHORT EXACT RFE STATEMENT].”
+
+[Choose relevant response type.]
+
+TYPE 1 – U.S. company / startup:
+
+Please kindly pay attention to the fact that in the previously submitted petition I provided evidence of the establishment and operational preparation of [U.S. COMPANY], including [corporate registration documents / business plan / ownership documents / financing documents / accelerator applications / investor correspondence / IP documents]. These documents constitute concrete evidence of my intent and practical ability to continue working in [SPECIALIZATION] in the United States.
+
+For clarity, I reiterate that I established [U.S. COMPANY], a [STATE] [ENTITY TYPE], on [DATE]. The company was established to [describe business purpose directly connected to specialization]. This U.S.-based work is directly within my field of extraordinary ability because [explain field continuity].
+
+New evidence:
+I am submitting additional documents that further clarify the operational status of [U.S. COMPANY] and the steps I have already taken toward implementation:
+- [EIN / IRS confirmation]
+- [Stock certificate / ownership documents]
+- [83(b) election / tax compliance]
+- [IP assignment / CIIAA]
+- [technical white paper]
+- [business plan / investor deck]
+- [accelerator / investor applications]
+- [correspondence with U.S. experts or potential partners]
+- [contracts / LOIs / pilot commitments]
+
+These records demonstrate that [U.S. COMPANY] is not a speculative idea, but an operational corporate vehicle with [ownership / tax standing / IP framework / product documentation / market engagement / implementation roadmap].
+
+TYPE 2 – prospective employment / employer letter:
+
+The initial petition already included documentation demonstrating that I will continue working in [FIELD] in the United States, including [letter of intent / employment offer / prospective employer letter / employment contract / collaboration agreement]. To eliminate any doubt, I resubmit [DOCUMENT] and provide additional evidence regarding [U.S. EMPLOYER / COLLABORATOR] and its relevance to my field.
+
+[EMPLOYER / COLLABORATOR] is a [describe entity] located in [CITY, STATE]. The proposed role of [ROLE] is directly aligned with my field of extraordinary ability because it involves [duties tied to specialization]. The proposed work includes [specific duties], which are the same type of work through which I gained recognition in [FIELD].
+
+TYPE 3 – independent professional / consulting / contracts:
+
+The record demonstrates that I intend to continue my work in [FIELD] in the United States through [consulting / independent practice / professional services / business development / artistic practice / research / product development]. The attached documentation includes [contracts / letters from prospective clients / statements of work / business plan / professional license steps / portfolio / U.S. market engagement], showing concrete arrangements rather than a general aspiration.
+
+SUMMARY CONCLUSION:
+
+These documented actions clearly demonstrate my concrete plans to continue working in my field of extraordinary ability in the United States. The intended U.S. work is within the same area in which I have received national or international recognition, namely [SPECIALIZATION].
+
+[LLM INSTRUCTIONS]
+- Tie every U.S. plan to the original field of acclaim.
+- Avoid vague "I will work in business" if the field is "IT Governance and Digital Transformation."
+- Use concrete U.S. steps: company, EIN, ownership, contracts, offer, LOI, accelerator, investor, product, pilots, clients.
+- For startup cases, show the company is operational enough: registration + IP + product + market engagement.
+- For employment cases, show employer legitimacy + role duties + field alignment.
+- If RFE says "no job offer," remind that EB-1A does not require a job offer but requires clear evidence of continued work.
+
+--------------------------------------------------------------------------------
+A.2. Prospective Substantial Benefit to the United States
+--------------------------------------------------------------------------------
+
+HEADING:
+A.2. My Entry Will Substantially Benefit Prospectively the United States
+
+As follows from the RFE:
+“[INSERT EXACT RFE QUOTE ABOUT SUBSTANTIAL BENEFIT].”
+
+My work directly addresses [identify concrete U.S. problem / market need / institutional need / industry inefficiency]. The prospective benefit to the United States follows from the mechanism by which my work will [improve / develop / commercialize / scale / teach / create / implement] [specific result].
+
+Use one of the following benefit theories:
+
+1. Economic benefit:
+My work will contribute to [business growth / productivity / cost reduction / job creation / tax base / capital allocation / U.S. competitiveness] through [specific mechanism].
+
+2. Innovation / technology benefit:
+My work introduces [methodology / technology / platform / framework] that enables [industry users / companies / institutions] to [specific function].
+
+3. Regulatory / institutional benefit:
+My work supports [compliance / transparency / auditability / reporting / governance / safety / quality] in [field], which is relevant to U.S. institutions because [reason].
+
+4. Labor market / workforce benefit:
+My work helps [employers / workers / institutions] address [skills gaps / training / workforce valuation / retention / productivity] through [specific method].
+
+5. Cultural / artistic / design benefit:
+My work will contribute to [U.S. cultural sector / design innovation / architectural practice / exhibitions / public recognition / professional exchange] through [specific U.S. activity].
+
+6. Education / knowledge transfer:
+My work will benefit U.S. [students / professionals / organizations] through [teaching / workshops / publications / professional training / methodology dissemination].
+
+Suggested drafting block:
+
+The prospective benefit to the United States is both practical and field-specific. First, [BENEFIT 1]. Second, [BENEFIT 2]. Third, [BENEFIT 3]. Finally, because [U.S. company / employer / project / collaboration] is located in the United States, the development and implementation of this work will occur within the U.S. professional ecosystem.
+
+Endorsed / validated by relevant experts:
+The practical relevance of my work is also supported by [letters / correspondence / statements / pilot interest] from [recognized U.S. experts / industry leaders / academic specialists / investors / institutions]. These materials show that my U.S. work has been reviewed by individuals with relevant expertise and is not merely speculative.
+
+Conclusion:
+In sum, my work addresses [problem] by introducing [solution]. Given [scale of field / U.S. market relevance / regulatory need / professional demand], my continued work in the United States will substantially benefit the United States prospectively.
+
+[LLM INSTRUCTIONS]
+- Do not import NIW-style "national importance" language mechanically. EB-1A asks whether entry will substantially benefit the U.S. prospectively.
+- It is acceptable to explain the practical importance of the specialization, but connect it to the applicant’s own work.
+- Avoid saying "substantial benefit" just because the field is useful. Show how this beneficiary’s entry creates the benefit.
+- Use reports and third-party sources only where they support the problem statement.
+- Use expert letters or correspondence where they support U.S. demand, relevance, implementation, or scale.
+- For startup cases, link benefit to product execution in the U.S.
+- For employment cases, link benefit to the proposed role and U.S. employer’s work.
+
+================================================================================
+7. SECTION B – CRITERIA RESPONSE TEMPLATE
+================================================================================
+
+Use this structure for each contested or unclear criterion.
+
+GENERAL HEADING:
+
+[B.[criterion number]] [Full criterion name]
+
+As follows from the RFE:
+“[INSERT EXACT RFE QUOTE. If the RFE is long, quote the key passages and summarize the rest accurately.]”
+
+RFE issue summary:
+USCIS appears to have raised the following concerns:
+1. [Concern 1]
+2. [Concern 2]
+3. [Concern 3]
+
+In response to these remarks, please find the following evidence:
+
+Part 1. Resubmitted evidence
+[Attachment / Exhibit X.1] [Document title] – [short purpose]
+[Attachment / Exhibit X.2] [Document title] – [short purpose]
+
+Part 2. New evidence
+[Attachment X.3] [Document title] – [short purpose]
+[Attachment X.4] [Document title] – [short purpose]
+
+[Direct response begins.]
+
+RFE STATEMENT 1:
+“[Exact RFE statement].”
+
+Response:
+[Answer directly. Explain whether the statement overlooks initial evidence, misunderstands the document, applies an incorrect element, or identifies a real gap cured by new evidence.]
+
+[Evidence reference.]
+
+RFE STATEMENT 2:
+“[Exact RFE statement].”
+
+Response:
+[Answer directly.]
+
+[Evidence reference.]
+
+Mini-conclusion:
+The evidence establishes that [criterion element 1], [criterion element 2], and [criterion element 3]. Accordingly, this criterion is satisfied.
+
+Summary of Supporting Evidence for Criterion [number]
+Please refer to Attachment [X], pages [XX–XX].
+
+Primary Evidence:
+- [Document title] ([why it directly proves the criterion])
+- [Document title] ([why it directly proves the criterion])
+
+Secondary Evidence:
+- [Document title] ([what context it provides])
+- [Document title] ([what context it provides])
+
+New Evidence:
+- [Document title] ([what RFE defect it cures])
+- [Document title] ([what RFE defect it cures])
+
+[LLM INSTRUCTIONS]
+- Do not simply list evidence. Explain what each document proves.
+- If RFE says evidence missing but it was filed, say so respectfully and cite the original exhibit.
+- If RFE identifies a genuine gap, say the new evidence is submitted to address that concern.
+- Use mini-headings A, B, C inside each criterion when RFE has multiple objections.
+- End each criterion with a direct conclusion.
+- Do not overclaim a weak criterion. If it is optional and weaker, preserve credibility.
+
+================================================================================
+8. CRITERION-SPECIFIC RESPONSE MODULES
+================================================================================
+
+--------------------------------------------------------------------------------
+Criterion (i): Nationally or Internationally Recognized Prizes or Awards for Excellence
+--------------------------------------------------------------------------------
+
+Use when RFE says:
+- award is not nationally/internationally recognized;
+- award did not recognize excellence;
+- recipient not proven;
+- organizer not official;
+- website links unreliable;
+- no media coverage;
+- award recognition comes only from awarding entity;
+- no direct URL or confirmation from organizer.
+
+RFE response checklist:
+1. Prove the beneficiary received the award.
+2. Prove the award is in the field.
+3. Prove the award was for excellence.
+4. Prove national or international recognition.
+5. Prove selection was competitive / merit-based.
+6. Prove organizer, jury, criteria, and official source.
+7. If requested, provide direct URLs and organizer correspondence.
+8. Use media coverage and rankings to show award visibility.
+
+Suggested headings:
+A. The record directly confirms that I received the award.
+B. The award relates to my field of [FIELD].
+C. The award is granted for excellence, not participation.
+D. The award has national / international recognition.
+E. The evidence includes official organizer confirmation and direct URLs.
+F. Conclusion.
+
+Drafting block:
+
+The RFE states:
+“[QUOTE].”
+
+In response, I provide the following primary evidence confirming receipt of the award: [award diploma], [official organizer letter], [official winners page], and [award regulations]. The organizer letter confirms that I was the recipient of [AWARD] in the category [CATEGORY] on [DATE]. The award regulations show that winners are selected based on [criteria], which directly concern excellence in [FIELD].
+
+The award’s national / international recognition is supported by [media publications / audience data / rankings / history of award / number of participants / geographic scope / jury composition / institutional partners]. These materials demonstrate recognition beyond the issuing organization.
+
+Conclusion:
+The evidence establishes that [BENEFICIARY] received a nationally / internationally recognized award for excellence in [FIELD]. Therefore, Criterion (i) is satisfied.
+
+--------------------------------------------------------------------------------
+Criterion (ii): Membership in Associations Requiring Outstanding Achievement
+--------------------------------------------------------------------------------
+
+Use when RFE says:
+- membership is general;
+- based on fee, education, years of experience, or employment;
+- no evidence recognized experts judged outstanding achievement;
+- wrong membership level;
+- association not in field.
+
+Checklist:
+1. Prove membership.
+2. Identify membership level.
+3. Prove association is in the field.
+4. Prove membership requires outstanding achievement.
+5. Prove recognized experts judge admission.
+6. Distinguish from fee-based/general membership.
+7. If weak, consider acknowledging and focusing on other criteria.
+
+Suggested headings:
+A. I was admitted as [membership level].
+B. This level of membership requires outstanding achievements.
+C. Admission is judged by recognized experts.
+D. The association is in my field.
+E. Conclusion.
+
+Cautious paragraph for weak criterion:
+
+With regard to this criterion, I respectfully acknowledge the concerns raised in the RFE. If USCIS determines that the current record does not establish that the relevant membership level requires outstanding achievements judged by recognized national or international experts, I understand that this criterion may not be counted. The remainder of this response therefore focuses on the other criteria that independently establish eligibility.
+
+--------------------------------------------------------------------------------
+Criterion (iii): Published Material About the Beneficiary
+--------------------------------------------------------------------------------
+
+Use when RFE says:
+- publications are not about the beneficiary;
+- publications are about employer/product/team, not person;
+- publications are self-promotional or paid;
+- media outlets are not professional/major trade/major media;
+- no title/date/author;
+- no circulation/audience/intended audience;
+- no comparative media data;
+- no editorial oversight.
+
+Checklist:
+1. Title, date, author for every publication.
+2. Show it is about the beneficiary and beneficiary’s work.
+3. Show it is in the field.
+4. Show publication is professional, major trade, or major media.
+5. Provide traffic/circulation/audience/intended audience.
+6. Provide publisher certificate if RFE alleges self-promotion.
+7. Show not paid / editorial interest where possible.
+8. Use comparative data only carefully and explain methodology.
+
+Suggested headings:
+A. The publication is about me and my work in the field.
+B. The article was not paid or self-promotional material.
+C. The outlet qualifies as professional / major trade / major media.
+D. The submitted evidence includes title, date, author, and translation.
+E. Conclusion.
+
+Drafting block:
+
+The RFE states:
+“[QUOTE].”
+
+Respectfully, the submitted publication is about my work in [FIELD]. The article titled “[TITLE]” was published by [PUBLICATION] on [DATE] and authored by [AUTHOR]. It discusses [specific work / methodology / project / achievement] and identifies me in connection with that work.
+
+To address the RFE concern regarding editorial nature, I submit [publisher certificate / editorial confirmation / media registration / author confirmation], which confirms that the article was [editorially selected / written by a professional journalist / published free of charge / not advertising].
+
+The outlet qualifies as [major media / professional publication / major trade publication] because [audience metrics, circulation, rankings, intended audience, industry specialization, registration, editorial profile].
+
+Conclusion:
+The evidence establishes that the published material was about me and my work in [FIELD], and that it appeared in [professional / major trade / major media] publications. Therefore, Criterion (iii) is satisfied.
+
+--------------------------------------------------------------------------------
+Criterion (iv): Judging the Work of Others
+--------------------------------------------------------------------------------
+
+Use when RFE says:
+- only invitation shown, not actual judging;
+- judging not in same or allied field;
+- no evidence of completed review;
+- panel role unclear;
+- judging was internal or not substantive;
+- RFE gives no reason but says not met.
+
+Checklist:
+1. Invitation / appointment.
+2. Actual participation.
+3. Judged work of others.
+4. Same or allied field.
+5. Event/journal/competition significance.
+6. Criteria, protocols, decisions, certificates, thank-you letters.
+7. If RFE gives no reason, resubmit full set and explain status unclear.
+
+Suggested headings:
+A. The RFE does not specify the reason for non-acceptance.
+B. I was formally invited / appointed to judge.
+C. I actually participated in judging.
+D. The judged work was in the same or allied field.
+E. Conclusion.
+
+Drafting block for unclear RFE:
+
+The RFE states only that “[QUOTE]” and does not identify any specific deficiency. Because the RFE does not explain whether USCIS questions the invitation, actual participation, field relationship, or evidentiary documentation, I respectfully resubmit the complete set of documents for this criterion and clarify each element below.
+
+--------------------------------------------------------------------------------
+Criterion (v): Original Contributions of Major Significance
+--------------------------------------------------------------------------------
+
+Use when RFE says:
+- contribution not original;
+- no major significance;
+- only routine work;
+- letters general;
+- no corroboration;
+- no patents, IP, publications, adoption, implementation, citations, use;
+- contribution helped employer only;
+- no field-wide impact.
+
+Checklist:
+1. Identify each original contribution separately.
+2. Prove originality: created/developed by beneficiary.
+3. Prove significance: adoption, implementation, measurable outcomes, citations, commercialization, expert use, teaching, licenses, patents/IP, media, independent letters.
+4. Distinguish contribution from job duties.
+5. Show impact beyond one employer if possible.
+6. Use tables: originality evidence and significance evidence.
+7. Avoid relying only on expert praise.
+
+Suggested structure:
+Contribution 1: [Name]
+A. What I created.
+B. Evidence that it is original.
+C. Evidence that it is of major significance.
+D. Independent corroboration.
+E. Measurable outcomes.
+F. Conclusion.
+
+Drafting block:
+
+My original contributions include [CONTRIBUTION 1], [CONTRIBUTION 2], and [CONTRIBUTION 3]. These are not general job responsibilities. They are specific [methodologies / frameworks / technologies / artistic works / business systems] that I created and that have been implemented, adopted, cited, commercialized, taught, or recognized by independent organizations.
+
+The RFE states:
+“[QUOTE].”
+
+In response, I submit the following new evidence:
+- [IP registration / copyright / patent / certificate]
+- [implementation contract]
+- [letter confirming adoption]
+- [data showing measurable results]
+- [publication about contribution]
+- [evidence of use by third parties]
+- [curriculum / teaching use]
+- [expert letter explaining significance]
+
+Evidence of originality:
+| Contribution | Evidence | What it proves |
+|---|---|---|
+| [Contribution] | [Document] | [Created by beneficiary] |
+
+Evidence of major significance:
+| Contribution | Evidence | Measurable / field significance |
+|---|---|---|
+| [Contribution] | [Document] | [Adoption / impact / results] |
+
+Conclusion:
+The evidence establishes that my contributions were original and of major significance in [FIELD], because they were [adopted / implemented / commercialized / taught / recognized] and produced [measurable results]. Therefore, Criterion (v) is satisfied.
+
+--------------------------------------------------------------------------------
+Criterion (vi): Authorship of Scholarly Articles
+--------------------------------------------------------------------------------
+
+Use when RFE says:
+- article not scholarly;
+- publication not professional/major trade/major media;
+- no proof of authorship;
+- article not in field;
+- missing title/date/author;
+- blog or personal page.
+
+Checklist:
+1. Authorship.
+2. Title/date/publication.
+3. Field relevance.
+4. Scholarly/professional nature.
+5. Publication status and audience.
+6. Translation.
+7. Publisher confirmation if needed.
+
+Suggested headings:
+A. I authored the article.
+B. The article concerns my field.
+C. The publication qualifies under the criterion.
+D. Conclusion.
+
+Drafting block:
+The article “[TITLE]” was authored by me and published in [PUBLICATION] on [DATE]. It concerns [FIELD TOPIC] and addresses [professional / scholarly issue]. The attached [publisher confirmation / publication copy / webpage / certificate] confirms authorship, title, date, and publication.
+
+--------------------------------------------------------------------------------
+Criterion (vii): Display of Work at Artistic Exhibitions or Showcases
+--------------------------------------------------------------------------------
+
+Use when RFE says:
+- no evidence beneficiary’s work was displayed;
+- event not exhibition/showcase;
+- portfolio not enough;
+- no proof of public display;
+- venue not significant;
+- work not in field.
+
+Checklist:
+1. Identify displayed work.
+2. Prove beneficiary created it.
+3. Prove public display at exhibition/showcase.
+4. Provide catalogue, program, invitation, certificate, photos.
+5. Explain exhibition context and professional relevance.
+6. Use media/organizer evidence for event significance.
+
+Suggested headings:
+A. My work was displayed.
+B. The event was an artistic exhibition or showcase.
+C. The displayed work was my work in the field.
+D. Supporting evidence.
+E. Conclusion.
+
+--------------------------------------------------------------------------------
+Criterion (viii): Leading or Critical Role for Distinguished Organizations
+--------------------------------------------------------------------------------
+
+Use when RFE says:
+- distinguished reputation not shown;
+- leading role not shown;
+- no organization chart;
+- role was ordinary employment;
+- letters too general;
+- no impact on organization;
+- contribution did not go beyond department/project;
+- title alone insufficient.
+
+Checklist:
+1. Organization distinguished reputation.
+2. Position in hierarchy.
+3. Scope of authority.
+4. Number of employees / departments / regions / budgets / projects.
+5. Organizational charts and job descriptions.
+6. Employer/supervisor letters with specific outcomes.
+7. Independent corroborating documents.
+8. Impact on organization’s success, standing, operations, revenue, efficiency, crisis response, growth, etc.
+9. If RFE applies national-scale influence as threshold, clarify criterion does not require field-wide influence as an element, but provide scale anyway if available.
+
+Suggested headings:
+A. The organization’s distinguished reputation is established / not disputed.
+B. The organizational chart and hierarchy evidence were submitted.
+C. The official employer letter is detailed and probative.
+D. The role was leading.
+E. The role was critical.
+F. The record includes supporting evidence beyond letters.
+G. The RFE appears to apply a requirement not contained in Criterion (viii), if applicable.
+H. Conclusion.
+
+Drafting block:
+
+The RFE states:
+“[QUOTE].”
+
+Respectfully, this conclusion appears to overlook evidence already submitted with the initial petition. The initial filing included [employment records], [official employer letter], [direct supervisor letter], [organizational chart], [job description], [geographic responsibility map], [internal awards], [project documents], and [publications / third-party materials] confirming the projects and outcomes described.
+
+A. The organizational chart and hierarchy evidence were submitted.
+[Explain position in hierarchy, reporting lines, scope, departments, employees, geography.]
+
+B. The official employer letter was detailed and outcome-based.
+[Summarize specific outcomes, metrics, projects.]
+
+C. The evidence established a leading role.
+[Explain formal leadership authority.]
+
+D. The evidence established a critical role.
+[Explain measurable impact on success / standing / operations.]
+
+Conclusion:
+The evidence establishes that I performed both a leading and critical role for [ORGANIZATION], an organization with a distinguished reputation. Therefore, Criterion (viii) is satisfied.
+
+--------------------------------------------------------------------------------
+Criterion (ix): High Salary or Other Significantly High Remuneration
+--------------------------------------------------------------------------------
+
+Use when RFE says:
+- salary documents not equivalent to W-2/1099;
+- no proof salary was actually paid;
+- salary comparison uses average only;
+- comparator not tied to field, seniority, location, company size, or role;
+- no currency conversion;
+- no evidence salary is high in relation to others.
+
+Checklist:
+1. Prove actual compensation: employer salary certificate, tax, pension, bank statements, payroll, contract.
+2. Reconcile gross and net where possible.
+3. Identify relevant period.
+4. Identify comparable occupation/role.
+5. Match geography, industry, seniority, field.
+6. Use multiple independent benchmarks.
+7. Calculate ratios and percentages.
+8. Explain why available comparator is closest possible if exact comparator unavailable.
+9. Avoid claiming top percentage without data.
+
+Suggested headings:
+A. The salary documents directly prove actual remuneration.
+B. The compensation was actually paid and processed.
+C. The comparison is tied to my actual role, seniority, location, and field.
+D. My remuneration substantially exceeded comparable benchmarks.
+E. Conclusion.
+
+Drafting block:
+
+The RFE states:
+“[QUOTE].”
+
+In response, I provide [salary certificate], [tax / pension / social contribution record], and [bank statements] confirming that my remuneration was both officially reported and actually paid.
+
+The comparison is not based on a generic occupational average. It is tied to [city / country], [industry], [role], and [seniority] because [explain match]. The available benchmark [SOURCE] reports [benchmark]. My documented remuneration was [amount], which is [x times / y% higher] than the benchmark.
+
+Calculation:
+Beneficiary remuneration: [AMOUNT]
+Comparator benchmark: [AMOUNT]
+Difference: [AMOUNT]
+Ratio: [X]
+Percentage above benchmark: [Y%]
+
+Conclusion:
+The evidence establishes that I commanded a high salary / significantly high remuneration in relation to others in the field. Therefore, Criterion (ix) is satisfied.
+
+--------------------------------------------------------------------------------
+Criterion (x): Commercial Success in the Performing Arts
+--------------------------------------------------------------------------------
+
+Use when applicable only. This criterion is narrow.
+
+Checklist:
+1. Performing arts field.
+2. Commercial success.
+3. Box office receipts / sales / streaming / chart data / contracts / royalties / distribution.
+4. Link success to beneficiary’s work.
+
+Drafting block:
+The submitted evidence demonstrates commercial success in the performing arts through [box office receipts / sales / streaming metrics / royalties / ticket sales], directly attributable to [BENEFICIARY]’s work as [ROLE].
+
+================================================================================
+9. FINAL MERITS DETERMINATION TEMPLATE
+================================================================================
+
+Use when RFE says:
+- even if criteria are met, final merits not established;
+- evidence does not show sustained acclaim;
+- beneficiary is competent/respected but not at top of field;
+- recognition limited to acquaintances/employers;
+- letters are general;
+- achievements are local, not national/international.
+
+HEADING:
+Section C – Final Merits Determination
+
+As follows from the RFE:
+“[INSERT EXACT RFE QUOTE ABOUT FINAL MERITS].”
+
+In response, I respectfully submit that the totality of the evidence establishes sustained national or international acclaim and demonstrates that I am among the small percentage who have risen to the top of my field of [FIELD / SPECIALIZATION].
+
+The final merits analysis should consider the evidence collectively, including:
+1. [Awards / prizes]
+2. [Published material about beneficiary]
+3. [Judging]
+4. [Original contributions]
+5. [Authorship]
+6. [Display of work]
+7. [Leading or critical roles]
+8. [High salary]
+9. [Recommendation letters]
+10. [Continued work and U.S. benefit]
+
+A. Sustained acclaim over time
+My recognition is not based on a single isolated event. The record shows recognition across [years] through [awards, media, judging, leadership, publications, salary, contributions]. This demonstrates sustained acclaim in [FIELD].
+
+B. Recognition beyond immediate circle
+The record includes independent evidence beyond letters from acquaintances, including [media, awards, official confirmations, institutional appointments, employer records, third-party adoption, publisher confirmations, objective rankings, salary data]. These materials show recognition beyond personal or professional acquaintances.
+
+C. High level of expertise in the field
+The evidence demonstrates that my work has been recognized through [specific achievements] and that I have performed at a level substantially above ordinary professional competence.
+
+D. Consistency between field of acclaim and intended U.S. work
+My intended work in the United States is [U.S. work plan], which directly continues my recognized work in [SPECIALIZATION].
+
+E. Conclusion
+Considering the record as a whole, including the evidence satisfying at least [NUMBER] regulatory criteria and the additional documentation submitted with this response, the evidence establishes that I meet the EB-1A standard for extraordinary ability.
+
+[LLM INSTRUCTIONS]
+- Do not just repeat criteria summaries. Explain why the whole record shows top-level recognition.
+- Do not rely on recommendation letters alone.
+- Use objective evidence and independent evidence.
+- Show time span.
+- Show field consistency.
+- If USCIS accepted several criteria, use that strategically but do not imply automatic approval.
+- If final merits was not challenged, do not include a huge final merits section unless useful.
+
+================================================================================
+10. CONCLUSION TEMPLATE
+================================================================================
+
+Conclusion
+
+I have provided additional explanations, supporting arguments, and documentary evidence demonstrating that I satisfy the requirements for classification under INA § 203(b)(1)(A) and 8 C.F.R. § 204.5(h).
+
+Specifically, this response:
+- addresses the RFE concerns regarding my intent to continue working in the United States;
+- demonstrates that my entry will substantially benefit the United States prospectively;
+- provides clarifications and evidence for the claimed regulatory criteria;
+- identifies evidence that was already included in the initial filing but appears not to have been fully considered;
+- submits new evidence directly responsive to the issues raised in the RFE;
+- explains how the totality of the record establishes sustained national or international acclaim and extraordinary ability in [FIELD / SPECIALIZATION].
+
+I respectfully request that USCIS review the initial filing together with this response and approve the petition.
+
+Thank you for your time and careful consideration.
+
+Respectfully submitted,
+
+[BENEFICIARY_FULL_NAME]
+[DATE]
+
+[LLM INSTRUCTIONS]
+- Keep the conclusion direct.
+- Do not use overly emotional language.
+- Do not say "with burning heart" or similar language in a final professional version.
+- Do not overstate: if only 4 criteria are strong, say those 4, not all initially claimed.
+
+================================================================================
+11. ATTACHMENT STRUCTURE
+================================================================================
+
+Recommended attachment architecture based on the Serik-style response:
+
+Attachments
+
+Attachment 1. Section A – Evidence of Intent to Continue Professional Activities in the United States
+  Part 1. Resubmitted evidence from the initial filing
+  Part 2. New evidence submitted in response to the RFE
+
+Attachment 2. Criterion [iii] – Published Material About the Beneficiary
+  Part 1. Resubmitted evidence
+  Part 2. New evidence
+
+Attachment 3. Criterion [v] – Original Contributions of Major Significance
+  Part 1. Resubmitted evidence
+  Part 2. New evidence
+
+Attachment 4. Criterion [viii] – Leading or Critical Role
+  Part 1. Resubmitted evidence
+  Part 2. New evidence
+
+Attachment 5. Criterion [ix] – High Salary or Remuneration
+  Part 1. Resubmitted evidence
+  Part 2. New evidence
+
+Attachment 6. Criterion [iv] – Judging the Work of Others
+  Part 1. Resubmitted evidence
+  Part 2. New evidence, if any
+
+Attachment 7. Final Merits Evidence, if separate
+  Part 1. Summary chart
+  Part 2. Additional recommendation letters / independent evidence, if any
+
+[LLM INSTRUCTIONS]
+- Do not create attachment numbers before deciding the response structure.
+- Keep numbering consistent.
+- If old filing used Exhibits, decide whether to preserve old Exhibit numbers in citations and use Attachments only for RFE.
+- Example: "Please, kindly refer to Exhibit 7, page 881 of the initial filing..." for old evidence; "New Evidence, Attachment 4.2, page 102..." for new evidence.
+- If evidence is resubmitted, preserve initial exhibit numbering inside the label where useful.
+
+================================================================================
+12. TECHNICAL SEPARATOR PAGES
+================================================================================
+
+Use technical separator pages before each attachment and sometimes before large sub-parts.
+
+--------------------------------------------------------------------------------
+SEPARATOR PAGE TEMPLATE – MAIN ATTACHMENT
+--------------------------------------------------------------------------------
+
+Attachment [X]
+
+[SECTION / CRITERION NAME]
+
+Evidence addressing:
+[RFE issue / criterion]
+
+Status:
+[Resubmitted evidence from the initial filing / New evidence submitted in response to the RFE / Mixed evidence]
+
+Page range:
+[XX–XX]
+
+Purpose of this attachment:
+This attachment contains documentary evidence submitted to address the RFE concern that [summarize concern]. The documents are organized to show [what they prove].
+
+Contents:
+[X.1] [Document title] – [short explanation]
+[X.2] [Document title] – [short explanation]
+[X.3] [Document title] – [short explanation]
+
+Please see next page.
+
+--------------------------------------------------------------------------------
+SEPARATOR PAGE TEMPLATE – RESUBMITTED EVIDENCE
+--------------------------------------------------------------------------------
+
+Attachment [X], Part 1
+
+Resubmitted evidence from the initial filing
+
+All evidence included in this Part was previously submitted with the initial filing. It is resubmitted for the officer’s convenience because the RFE [does not appear to address this documentation / states that such evidence was not provided / gives no specific reasoning regarding this criterion / requests additional clarification].
+
+Original exhibit reference:
+[Exhibit X, pages XX–XX of the initial filing]
+
+Preserved numbering:
+[Yes / No]
+
+Please see next pages.
+
+--------------------------------------------------------------------------------
+SEPARATOR PAGE TEMPLATE – NEW EVIDENCE
+--------------------------------------------------------------------------------
+
+Attachment [X], Part 2
+
+New evidence submitted in response to the RFE
+
+The following evidence is submitted specifically in response to the RFE concern that [quote or summarize]. This evidence was not included in the initial filing and is provided to clarify, corroborate, or supplement the record.
+
+Contents:
+[X.2.1] [Document title]
+[X.2.2] [Document title]
+[X.2.3] [Document title]
+
+Please see next pages.
+
+--------------------------------------------------------------------------------
+SEPARATOR PAGE TEMPLATE – INDIVIDUAL DOCUMENT
+--------------------------------------------------------------------------------
+
+Attachment [X].[Y]
+
+[DOCUMENT TITLE]
+
+Evidence status:
+[New evidence / Resubmitted evidence / Evidence from initial filing]
+
+Source:
+[Employer / organizer / publisher / government authority / media outlet / applicant / third party]
+
+Date:
+[DATE]
+
+Language:
+[Original language + English translation / English]
+
+Purpose:
+This document is submitted to prove that [specific fact].
+
+Relevant RFE issue:
+“[RFE quote or short summary].”
+
+Please see next page.
+
+[LLM INSTRUCTIONS]
+- The separator page should explain why the document is there.
+- Avoid empty decorative divider pages.
+- The separator is a navigation and evidentiary-purpose page.
+- If a document is a translation, label it clearly.
+- If document is a screenshot, state source, URL, access date if known.
+
+================================================================================
+13. RFE RESPONSE QUALITY CONTROL CHECKLIST
+================================================================================
+
+Before finalizing, the LLM must check:
+
+1. Did we quote every key RFE objection before answering it?
+2. Did every section answer the objection directly?
+3. Did we distinguish resubmitted evidence from new evidence?
+4. Did we cite initial filing evidence with original exhibit/page references?
+5. Did we explain what each document proves?
+6. Did we avoid repeating the original petition without addressing RFE wording?
+7. Did we avoid unsupported claims like "clearly national importance" without evidence?
+8. Did we show field continuity for continued work?
+9. Did we explain prospective benefit as a mechanism, not as a slogan?
+10. Did we include final merits only if useful or challenged?
+11. Did we remove weak criteria or acknowledge uncertainty where strategically better?
+12. Did we avoid emotional language?
+13. Did we keep page numbers consistent after final assembly?
+14. Did every attachment have a separator page?
+15. Did every long evidence block have a short evidence summary?
+16. Did we avoid relying on recommendation letters without corroboration?
+17. Did we avoid calling marketing content "published material" unless we have editorial evidence?
+18. Did we provide title/date/author for publications?
+19. Did salary analysis use comparable field, geography, seniority, and period?
+20. Did leading/critical role analysis include hierarchy + specific outcomes?
+21. Did original contribution analysis include originality + major significance?
+22. Did judging analysis prove actual judging, not mere invitation?
+23. Did award analysis prove receipt + excellence + national/international recognition?
+24. Did membership analysis prove outstanding achievement judged by experts?
+25. Did the conclusion reflect what is actually proven?
+
+================================================================================
+14. SHORT MASTER SKELETON
+================================================================================
+
+RFE RESPONSE
+Case No. [CASE_NO]
+Beneficiary: [NAME]
+Area: [AREA]
+Specialization: [SPECIALIZATION]
+
+Dear USCIS Officer:
+
+[Cover letter: procedural intro, criteria claimed, what RFE accepted/disputed, structure of response, evidence labels.]
+
+Section A – Evidence of Intent to Continue Professional Activities in the United States
+A.1. Continued Work
+RFE statement: “[QUOTE]”
+Response:
+- old evidence submitted;
+- new evidence submitted;
+- direct explanation of continued work;
+- field continuity;
+- conclusion.
+
+A.2. Prospective Substantial Benefit
+RFE statement: “[QUOTE]”
+Response:
+- U.S. problem / need;
+- applicant’s solution;
+- implementation path;
+- expert / market / institutional validation;
+- concrete benefit mechanism;
+- conclusion.
+
+Section B – Additional Evidence and Clarifications for Claimed Criteria
+
+B.[criterion] [criterion name]
+RFE statement: “[QUOTE]”
+Evidence:
+Part 1 – Resubmitted evidence
+Part 2 – New evidence
+Response:
+A. [RFE issue 1]
+B. [RFE issue 2]
+C. [RFE issue 3]
+Conclusion.
+
+[Repeat for each criterion.]
+
+Section C – Final Merits Determination
+RFE statement: “[QUOTE]”
+Response:
+- criteria satisfied;
+- sustained acclaim;
+- independent recognition;
+- top of field;
+- field continuity;
+- totality conclusion.
+
+Conclusion
+
+Attachments
+Attachment 1 – Continued Work / Substantial Benefit
+Attachment 2 – Criterion [x]
+Attachment 3 – Criterion [x]
+Attachment 4 – Criterion [x]
+Attachment 5 – Final Merits, if any
+
+================================================================================
+15. EXAMPLE MICRO-PROMPT FOR LLM
+================================================================================
+
+Use this prompt when drafting a case-specific RFE response:
+
+"Analyze the RFE and the initial petition evidence. First, create an RFE issue matrix. Identify which criteria or statutory elements USCIS accepted, disputed, ignored, or left unclear. Then draft an EB-1A RFE response in English using the following structure: Cover Letter; Section A for Continued Work and Prospective Substantial Benefit if challenged; Section B for criteria responses; Section C for Final Merits if challenged; Conclusion; Attachments list. For each RFE issue, quote the exact RFE language, respond directly, identify resubmitted evidence and new evidence, explain what each document proves, and end with a concise conclusion. Do not merely repeat the original petition. Do not invent facts. Preserve exact exhibit/page references where provided. Use placeholders [XX] where page numbers are not yet known."
+
+================================================================================
+END OF TEMPLATE
+================================================================================

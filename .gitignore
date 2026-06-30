@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+dist/
+build/
+*.egg-info/
+
+# Real case workspaces may contain personal and confidential records.
+case_workspace/*
+!case_workspace/_template/
+!case_workspace/_template/**
+
+# Human case examples may also contain names and confidential case material.
+examples/

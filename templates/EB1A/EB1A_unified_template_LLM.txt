@@ -1,0 +1,1517 @@
+EB-1A PETITION TEMPLATE
+Unified template based on: (1) working EB-1A structure/notes, (2) actual EB-1A case, (3) USCIS Policy Manual, Vol. 6, Part F, Ch. 2 - Extraordinary Ability.
+
+Purpose:
+This template is designed for two audiences at once:
+1) a human drafter who needs a clean, repeatable EB-1A petition structure;
+2) an LLM agent that must generate a consistent petition without inventing facts, scattering exhibits randomly, or producing a 300-page swamp with decorative citations. Humanity’s gift to bureaucracy continues.
+
+LANGUAGE RULE:
+- The petition text submitted to USCIS should be drafted in English.
+- Internal drafting comments/rules in this template are in Russian.
+- Placeholders are written as __PLACEHOLDER__.
+- Remove all drafting comments before final filing.
+
+============================================================
+0. MASTER SETTINGS FOR EACH CASE
+============================================================
+
+Before drafting, define these variables. The LLM must use them consistently.
+
+__BENEFICIARY_FULL_NAME__ = [Full legal name]
+__BENEFICIARY_SHORT_NAME__ = [Mr./Ms. Surname]
+__BENEFICIARY_SURNAME__ = [Surname]
+__MR_MS__ = [Mr./Ms.]
+__HE_SHE__ = [he/she]
+__HIS_HER__ = [his/her]
+__HIM_HER__ = [him/her]
+__PETITION_DATE__ = [DD Month YYYY or MM/DD/YYYY]
+__BENEFICIARY_ADDRESS__ = [Full address]
+__USCIS_LOCKBOX_ADDRESS__ = [Current filing address for I-140 / Premium Processing]
+__FIELD__ = [Sciences / Arts / Education / Business / Athletics]
+__SPECIALIZATION__ = [Narrow professional specialization]
+__SOC_CODE__ = [Optional SOC code if useful]
+__CONTINUING_WORK_PLAN__ = [U.S. employment / company / consulting / research / artistic practice / etc.]
+__CRITERIA_CLAIMED_NUMBERS__ = [i, ii, iii, iv, v, vi, vii, viii, ix, x]
+__CRITERIA_CLAIMED_COUNT__ = [number]
+__EXHIBIT_LABEL__ = [Exhibit / Annex / Appendix; choose one and use consistently]
+__LETTER_LABEL__ = [Recommendation Letters / Letters of Recommendation / Support Letters; choose one and use consistently]
+__REFERENCE_FORMAT__ = [selected format below]
+__CITATION_STYLE__ = [short / full / full with recommender description]
+
+Recommended style:
+- Font: Times New Roman 14 or Arial 12/14. Use one font only.
+- Line spacing: 1.15 or 1.5. Use one spacing only.
+- Criteria numbering: Roman numerals in headings: [B.i], [B.ii], etc.
+- Exhibits: “Exhibit” is preferable because it is common in U.S. immigration filings.
+- Recommendation letters: choose “Support letters from experts in the field” or “Letters of Recommendation” and use it consistently.
+
+Reference formats:
+Option A:
+(Please, kindly refer to Exhibit __EXHIBIT_NO__, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Option B:
+(Please refer to Exhibit __EXHIBIT_NO__, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Option C:
+(Exhibit __EXHIBIT_NO__, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Use one format for the whole petition. Do not oscillate between “please kindly refer,” “see,” and “according to,” unless the goal is to make the officer wonder whether the petition was assembled by six raccoons.
+
+Quote format:
+“__QUOTE__.” __RECOMMENDER_NAME__ - __BRIEF_DESCRIPTION__ (Please, kindly refer to Exhibit 0-1, page __PAGE__: __LETTER_TITLE__, explanatory note.)
+
+Rule:
+Every exhibit reference must support a specific factual proposition. Do not dump lists of exhibits without a thesis. The document is not a storage inventory; it is an argument supported by evidence.
+
+============================================================
+1. SOURCE RULES FROM USCIS POLICY MANUAL
+============================================================
+
+Use these inserts as drafting anchors. They may be quoted directly in the petition or used as internal instructions. Use only the relevant inserts in the final petition.
+
+1.1. Basic eligibility insert
+
+POLICY MANUAL INSERT:
+“Eligibility for Extraordinary Ability Classification
+The person has extraordinary ability in the sciences, arts, education, business, or athletics, which has been demonstrated by sustained national or international acclaim, and whose achievements have been recognized in the field through extensive documentation.
+The person seeks to enter the United States to continue work in the area of extraordinary ability.
+The person's entry into the United States will substantially benefit the United States in the future.”
+
+Drafting rule:
+The petition must prove three things:
+1) sustained national or international acclaim + achievements recognized through extensive documentation;
+2) continued work in the same area of extraordinary ability;
+3) prospective substantial benefit to the United States.
+
+1.2. Self-petition insert
+
+POLICY MANUAL INSERT:
+“A petition filed on behalf of a person with extraordinary ability does not need to be supported by a job offer; therefore, anyone can file the petition on behalf of the person, including the alien who may file as a self-petitioner.”
+
+POLICY MANUAL INSERT:
+“The person must still demonstrate, however, that he or she intends to continue work in the area of his or her extraordinary ability and that his or her work will substantially benefit the United States in the future.”
+
+Drafting rule:
+Do not overstate “no job offer required” as if nothing else is required. USCIS still expects a concrete, credible work plan.
+
+1.3. Sustained acclaim insert
+
+POLICY MANUAL INSERT:
+“When filing a petition for a person with extraordinary ability, the petitioner must submit evidence that the person has sustained national or international acclaim and that the person's achievements have been recognized in the field of expertise.”
+
+POLICY MANUAL INSERT:
+“In determining whether the beneficiary has enjoyed ‘sustained’ national or international acclaim, the officer should consider that such acclaim must be maintained. However, the term sustained does not imply an age limit on the beneficiary. A beneficiary may be very young or early in his or her career and still be able to show sustained acclaim. There is also no definitive time frame on what constitutes sustained.”
+
+Drafting rule:
+Final merits must show a timeline, not one isolated bright moment. Awards, media, judging, leading role, salary, publications, contributions, and letters should be arranged to show recognition over time.
+
+1.4. Evidence and two-step analysis insert
+
+POLICY MANUAL INSERT:
+“This initial evidence must include either evidence of a one-time achievement (for example, a major internationally recognized award, such as the Nobel Prize) or at least three of the types of evidence listed in the regulations.”
+
+POLICY MANUAL INSERT:
+“The evidence provided in support of the petition need not specifically use the words ‘extraordinary.’ Rather, the material should be such that it is readily apparent that the person's contributions to the field are qualifying.”
+
+POLICY MANUAL INSERT:
+“On the other hand, the submission of voluminous documentation may not contain sufficient persuasive evidence to establish the beneficiary’s eligibility.”
+
+POLICY MANUAL INSERT:
+“Officers should use a two-step analysis to evaluate the evidence submitted with the petition to demonstrate eligibility for classification as a person with extraordinary ability.”
+
+POLICY MANUAL INSERT:
+“Step 1 Assess whether evidence meets regulatory criteria: Determine, by a preponderance of the evidence, which evidence submitted by the petitioner objectively meets the parameters of the regulatory description that applies to that type of evidence.”
+“Step 2 Final merits determination: Evaluate all the evidence together when considering the petition in its entirety for the final merits determination, in the context of the high level of expertise required for this immigrant classification.”
+
+Drafting rule:
+Section 1[B] proves the claimed regulatory criteria. The final conclusion synthesizes everything and argues sustained acclaim / top of field. Do not turn the criteria sections into final merits essays too early. USCIS performs both steps; the petition should make both easy.
+
+1.5. Final merits insert
+
+POLICY MANUAL INSERT:
+“The evidence provided in support of the petition must ultimately establish that the beneficiary ‘is one of that small percentage who have risen to the very top of the field of endeavor.’”
+
+Drafting rule:
+Final merits should not repeat every exhibit. It should explain why the record, viewed together, places the beneficiary at the top level of the field.
+
+============================================================
+2. EVIDENCE MAP AND EXHIBIT ARCHITECTURE
+============================================================
+
+Default exhibit architecture:
+
+Exhibit 0. General documents: CV, education, professional certificates, identity-related general materials.
+Exhibit 0-1. Support letters from experts in the field, explanatory notes.
+Exhibit 1. Criterion i. Awards.
+Exhibit 2. Criterion ii. Memberships.
+Exhibit 3. Criterion iii. Published material about the beneficiary.
+Exhibit 4. Criterion iv. Judging.
+Exhibit 5. Criterion v. Original contributions of major significance.
+Exhibit 6. Criterion vi. Scholarly articles.
+Exhibit 7. Criterion vii. Artistic exhibitions or showcases.
+Exhibit 8. Criterion viii. Leading or critical role.
+Exhibit 9. Criterion ix. High salary or remuneration.
+Exhibit 10. Criterion x. Commercial success in the performing arts.
+Exhibit 11. Documents regarding prospective U.S. benefit / employment plan.
+Optional Exhibit 12. Additional evidence that does not fit cleanly elsewhere.
+
+Rule:
+If a criterion is not claimed, remove it from:
+- cover letter criteria list;
+- Table of Contents;
+- Section 1[B];
+- List of Exhibits;
+- technical separator pages.
+
+Rule:
+Do not renumber criteria in a way that breaks the regulatory numbering. For example, if awards are absent but membership is claimed, membership should still be [B.ii], not [B.i]. Exhibit numbers may remain sequential, but criterion labels must track the regulation.
+
+Recommended exhibit numbering:
+- Keep regulatory criterion numbering aligned where possible:
+  Exhibit 1 = Criterion i
+  Exhibit 2 = Criterion ii
+  etc.
+This makes the file easier to review. Apparently officers prefer not needing a treasure map.
+
+Document cluster rule:
+Within each criterion, group documents by legal thesis, not by random upload order.
+
+Example:
+1.1. All-Russian “Business Breakthrough 2024” Award
+1.1.1. Award diploma, English translation, photos with award, explanatory note.
+1.1.2. Official competition website listing beneficiary as winner, English translation.
+1.1.3. Competition regulations / official rules and criteria, English translation.
+1.1.4. Official confirmation letter from organizer, English translation.
+1.1.5. Media publications about beneficiary receiving the award, English translation.
+1.1.6. Media publications about the award itself confirming national significance, English translation.
+
+Principle:
+One document cluster = one evidentiary episode or one legal argument.
+
+Translations:
+Every foreign-language document must have:
+- original;
+- English translation;
+- translator certification, if used in the filing practice;
+- explanatory note if context is not obvious.
+
+Explanatory notes:
+Use explanatory notes where the officer needs context:
+- about an award;
+- about an association;
+- about a media outlet;
+- about a company;
+- about a competition/jury process;
+- about a publication/journal;
+- about salary data;
+- about U.S. employer/company/work plan.
+
+============================================================
+3. PACKET TABLE OF CONTENTS
+============================================================
+
+__BENEFICIARY_FULL_NAME__
+__BENEFICIARY_ADDRESS__
+
+Petition for Permanent Residence under Extraordinary Ability (EB-1A)
+
+Table of Contents:
+
+1. G-1145 E-Notification of Application/Petition Acceptance
+2. I-140 Immigrant Petition for Alien Worker, with filing fee
+3. I-907 Request for Premium Processing, with filing fee [if applicable]
+4. Photocopies of passport
+5. Petition for Permanent Residence under Extraordinary Ability (EB-1A)
+   5.1. Cover letter
+   5.2. Section 1. Initial Evidence of Extraordinary Ability
+        [A] General information about the beneficiary and __HIS_HER__ professional biography, overview of achievements, recommendations, and education
+        [B] Evidence of eligibility (EB-1A Criteria)
+   5.3. Section 2. Beneficiary’s entry into the United States will substantially benefit prospectively the United States
+   5.4. Conclusions / Final Merits
+6. Beneficiary’s Statement on Work Plans in the United States
+7. List of Exhibits
+8. Exhibits
+
+Drafting rule:
+Use real page numbers only after final PDF assembly. Until then use __PAGE__ placeholders. Do not “estimate” page numbers unless you enjoy manufacturing future defects.
+
+============================================================
+4. COVER LETTER TEMPLATE
+============================================================
+
+Permanent residence petition for __MR_MS__ __BENEFICIARY_SURNAME__ as an alien of extraordinary ability
+
+__PETITION_DATE__
+
+To:
+__USCIS_LOCKBOX_ADDRESS__
+
+From:
+__MR_MS__ __BENEFICIARY_FULL_NAME__
+__BENEFICIARY_ADDRESS__
+
+RE: EB-1 immigrant petition under INA §203(b)(1)(A) - Alien of Extraordinary Ability
+
+Petitioner/Beneficiary: __MR_MS__ __BENEFICIARY_FULL_NAME__
+Classification Sought: INA 203(b)(1)(A)
+Type of Petition: I-140
+
+Dear Immigration Officer,
+
+The following evidence is submitted in support of __MR_MS__ __BENEFICIARY_FULL_NAME__’s application to qualify as an alien of extraordinary ability. The evidence presented demonstrates that __MR_MS__ __BENEFICIARY_FULL_NAME__ meets the criteria of section 203(b)(1)(A) of the Immigration and Nationality Act [8 U.S.C. 1153] as a person of extraordinary ability for the following reasons:
+
+1) __MR_MS__ __BENEFICIARY_SURNAME__ has extraordinary ability in __FIELD__, especially in __SPECIALIZATION__, as proven by national and/or international accomplishments in this field, which have been extensively documented. (See Section 1.)
+
+2) __MR_MS__ __BENEFICIARY_SURNAME__ has experience indicating that __HE_SHE__ is an outstanding professional in __SPECIALIZATION__, whose achievements and contributions to the field are exceptional. (See Section 1[A] and Section 1[B].)
+
+3) __MR_MS__ __BENEFICIARY_SURNAME__ has provided evidence that __HE_SHE__ meets __CRITERIA_CLAIMED_COUNT__ (__CRITERIA_CLAIMED_NUMBERS__) of the ten criteria listed in 8 CFR section 204.5(h)(3), namely:
+
+[KEEP ONLY CLAIMED CRITERIA]
+
+(i) Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s receipt of nationally or internationally recognized prizes or awards for excellence. (Please refer to Section 1[B.i].)
+
+(ii) Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s membership in associations in the field which demand outstanding achievement of their members. (Please refer to Section 1[B.ii].)
+
+(iii) Evidence of published material about __MR_MS__ __BENEFICIARY_SURNAME__ in professional or major trade publications or other major media. (Please refer to Section 1[B.iii].)
+
+(iv) Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s participation, either individually or on a panel, as a judge of the work of others in the same or an allied field. (Please refer to Section 1[B.iv].)
+
+(v) Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s original scientific, scholarly, artistic, athletic, or business-related contributions of major significance to the field. (Please refer to Section 1[B.v].)
+
+(vi) Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s authorship of scholarly articles in the field, in professional or major trade publications, or other major media. (Please refer to Section 1[B.vi].)
+
+(vii) Evidence of the display of __MR_MS__ __BENEFICIARY_SURNAME__’s work in the field at artistic exhibitions or showcases. (Please refer to Section 1[B.vii].)
+
+(viii) Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s performance of a leading or critical role in distinguished organizations. (Please refer to Section 1[B.viii].)
+
+(ix) Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s high salary or other significantly high remuneration in relation to others in the field. (Please refer to Section 1[B.ix].)
+
+(x) Evidence of commercial successes in the performing arts, as shown by box office receipts or record, cassette, compact disk, or video sales. (Please refer to Section 1[B.x].)
+
+4) __MR_MS__ __BENEFICIARY_SURNAME__’s work will be of significant benefit to the United States. (Please refer to Section 2.)
+
+5) In the United States, __MR_MS__ __BENEFICIARY_SURNAME__ plans to continue __HIS_HER__ work in this area. (Please refer to the Beneficiary Statement on Work Plans in the United States.)
+
+Citing 8 CFR section 204.5(h)(1), __MR_MS__ __BENEFICIARY_SURNAME__ may file Form I-140, Immigrant Petition for Alien Worker, to be classified under section 203(b)(1)(A) of the Act as an alien of extraordinary ability on __HIS_HER__ own behalf.
+
+Under 8 CFR section 204.5(h)(5), neither an offer of employment in the United States nor a labor certification is required for this classification.
+
+[OPTIONAL NAME VARIATION PARAGRAPH]
+In the attached documents, __MR_MS__ __BENEFICIARY_FULL_NAME__’s name may appear in different transliterations or formats, including __NAME_VARIANT_1__, __NAME_VARIANT_2__, and __NAME_VARIANT_3__. These variations refer to the same person, __MR_MS__ __BENEFICIARY_FULL_NAME__. Where applicable, patronymic or middle-name differences result from standard transliteration and naming conventions in __COUNTRY__ documents.
+
+Respectfully,
+
+__MR_MS__ __BENEFICIARY_FULL_NAME__
+__PETITION_DATE__
+
+============================================================
+5. SECTION 1[A] - GENERAL INFORMATION
+============================================================
+
+Section 1. Initial Evidence of Extraordinary Ability
+
+[A] General information about the beneficiary and __HIS_HER__ professional biography, overview of achievements, recommendations, and education
+
+5.1. Overview
+
+Purpose:
+This is the first substantive section the officer reads. It should answer:
+- Who is the beneficiary?
+- What is the field and specialization?
+- Why does this person matter?
+- What are the strongest achievements?
+- What is the through-line connecting the evidence?
+
+Template:
+
+__MR_MS__ __BENEFICIARY_FULL_NAME__ is a __PROFESSIONAL_TITLE__ and __SPECIALIZATION__ specialist with over __YEARS__ years of professional experience in __INDUSTRY_OR_FIELD__. __HE_SHE_CAP__ has achieved national and/or international recognition through __TOP_ACHIEVEMENT_1__, __TOP_ACHIEVEMENT_2__, and __TOP_ACHIEVEMENT_3__. __HIS_HER_CAP__ work has been recognized by __AWARDS_MEDIA_INSTITUTIONS_OR_ORGANIZATIONS__, and __HE_SHE__ has been invited to __JUDGE_REVIEW_LEAD_CONTRIBUTE__ in contexts requiring professional authority in the field.
+
+__MR_MS__ __BENEFICIARY_SURNAME__’s professional profile is centered on __CORE_SPECIALIZATION_DESCRIPTION__. Across __HIS_HER__ career, __HE_SHE__ has demonstrated __MEASURABLE_RESULT_1__, __MEASURABLE_RESULT_2__, and __MEASURABLE_RESULT_3__, supported by documentary evidence and independent expert letters.
+
+(Please, kindly refer to Exhibit 0, pages __PAGE__ - __PAGE__: __MR_MS__ __BENEFICIARY_SURNAME__’s general documents: CV, education, and professional certificates.)
+
+Within the Exhibit, the following documents are attached:
+0.1. CV of __MR_MS__ __BENEFICIARY_SURNAME__
+0.2. Diploma of __DEGREE_1__, English translation
+0.3. Diploma/Certificate of __DEGREE_OR_CERTIFICATE_2__, English translation
+0.4. Professional development certificates, English translation
+0.5. [Other general document]
+0.6. [Other general document]
+
+Drafting rule:
+Write this section last, after all criteria are drafted. Otherwise the overview will either overpromise or miss the actual strongest evidence. Predictive drafting, another proud human error.
+
+5.2. Specialization
+
+Template:
+
+Specialization:
+__SOC_CODE_IF_USED__
+The beneficiary is a __PROFESSIONAL_ROLE__ specializing in __SPECIALIZATION__. __HIS_HER_CAP__ expertise lies in __SPECIALIZATION_COMPONENT_1__, __SPECIALIZATION_COMPONENT_2__, and __SPECIALIZATION_COMPONENT_3__. __HE_SHE_CAP__ has demonstrated sustained success in __PRACTICAL_APPLICATION_OF_SPECIALIZATION__, producing measurable results such as __RESULTS_LIST__.
+
+Drafting rule:
+The specialization must be narrow enough to connect the evidence, but not so narrow that Section 2 and work plans become impossible. “Business” is too broad. “Growth and Operations Executive specializing in business scaling, multi-region expansion, and operational transformation” is usable.
+
+5.3. Education
+
+Use only if education supports the specialization. EB-1A is not an education visa, so do not inflate a diploma into evidence of acclaim unless the diploma itself is extraordinary.
+
+Template:
+
+Education
+
+__DEGREE_1__, __UNIVERSITY_1__ - __YEAR__
+__UNIVERSITY_DESCRIPTION__. __MR_MS__ __BENEFICIARY_SURNAME__’s training in __AREA__ developed __RELEVANT_SKILL_1__, __RELEVANT_SKILL_2__, and __RELEVANT_SKILL_3__, which later supported __HIS_HER__ professional work in __SPECIALIZATION__.
+(Please, kindly refer to Exhibit 0, page __PAGE__: __DOCUMENT_TITLE__.)
+
+__DEGREE_2__, __UNIVERSITY_2__ - __YEAR__
+[Same structure.]
+
+5.4. Professional Biography
+
+Purpose:
+Narrate the career chronologically. Show progression, responsibility, recognition, and increasing impact.
+
+Template:
+
+Professional Biography of __MR_MS__ __BENEFICIARY_SURNAME__
+(Please, kindly refer to Exhibit 0, page __PAGE__: CV of __MR_MS__ __BENEFICIARY_SURNAME__.)
+
+__ORGANIZATION_1__ - __POSITION__, __DATES__
+__ORGANIZATION_DESCRIPTION__. In this role, __MR_MS__ __BENEFICIARY_SURNAME__ __DUTIES_AND_SCOPE__. This stage established __CAREER_RELEVANCE__. [Cite employment documents, certificates, awards, or CV.]
+
+__ORGANIZATION_2__ - __POSITION__, __DATES__
+[Repeat.]
+
+For each major role include:
+- organization name and reputation if relevant;
+- position and dates;
+- duties tied to specialization;
+- scale: budget, team, geography, clients, users, revenue, publications, audience, etc.;
+- measurable achievements;
+- documentary support.
+
+Drafting rule:
+Do not cite every CV line. Cite when a claim matters: promotion, senior title, project, award, measurable outcome, appointment, publication, or leadership scope.
+
+5.5. Overview of achievements and recommendation letters
+
+Purpose:
+This bridges general biography into criteria. Use the strongest achievements and independent expert validation.
+
+Template:
+
+Overview of __MR_MS__ __BENEFICIARY_SURNAME__’s achievements, list of recommendations, and general quotes from the letters
+
+__MR_MS__ __BENEFICIARY_SURNAME__’s national and/or international recognition is reflected in __HIS_HER__ __TOP_EVIDENCE_TYPES__: __AWARDS__, __MEDIA__, __JUDGING__, __CONTRIBUTIONS__, __LEADING_ROLES__, __SALARY__, and __PUBLICATIONS__. Taken together, this evidence demonstrates a sustained pattern of professional recognition in __SPECIALIZATION__.
+
+__MR_MS__ __BENEFICIARY_SURNAME__’s recognition is also evident from the letters supporting __HIS_HER__ petition received from __NUMBER__ distinguished professionals: __CATEGORIES_OF_RECOMMENDERS__.
+(Please, kindly refer to Exhibit 0-1, pages __PAGE__ - __PAGE__: __MR_MS__ __BENEFICIARY_SURNAME__’s Support letters from experts in the field and explanatory notes.)
+
+Within the Exhibit, the following documents are attached:
+0-1.1. Recommendation Letter from __NAME_1__, explanatory note
+0-1.2. Recommendation Letter from __NAME_2__, explanatory note
+0-1.3. Recommendation Letter from __NAME_3__, explanatory note
+0-1.4. Recommendation Letter from __NAME_4__, explanatory note
+0-1.5. Recommendation Letter from __NAME_5__, explanatory note
+[Continue.]
+
+Below is brief information about them:
+(1) __NAME_1__ - __BRIEF_DESCRIPTION_AND_AUTHORITY__ (Please, kindly refer to Exhibit 0-1, page __PAGE__: 0-1.1. Recommendation Letter from __NAME_1__, explanatory note.)
+(2) __NAME_2__ - __BRIEF_DESCRIPTION_AND_AUTHORITY__ (Please, kindly refer to Exhibit 0-1, page __PAGE__: 0-1.2. Recommendation Letter from __NAME_2__, explanatory note.)
+[Continue.]
+
+Selected quotes from letters of recommendation:
+
+“__QUOTE_1__.”
+__NAME_1__ - __BRIEF_DESCRIPTION__ (Please, kindly refer to Exhibit 0-1, page __PAGE__: 0-1.1. Recommendation Letter from __NAME_1__, explanatory note.)
+
+“__QUOTE_2__.”
+__NAME_2__ - __BRIEF_DESCRIPTION__ (Please, kindly refer to Exhibit 0-1, page __PAGE__: 0-1.2. Recommendation Letter from __NAME_2__, explanatory note.)
+
+Drafting rule:
+If there are 12-15 letters, do not quote every letter in this section. Select 5-7 strongest quotes that prove:
+- field recognition;
+- originality/significance;
+- top-level standing;
+- prospective U.S. benefit;
+- independent validation.
+Other letters remain in Exhibit 0-1 and can be cited in relevant criteria.
+
+============================================================
+6. SECTION 1[B] - EB-1A CRITERIA
+============================================================
+
+[B] Evidence of eligibility (EB-1A Criteria)
+
+Global rule for every criterion:
+1) Start with a short legal/evidentiary summary.
+2) List documents attached within the criterion.
+3) For each evidentiary episode:
+   - state the fact;
+   - explain why it meets the regulatory criterion;
+   - cite the document;
+   - explain the authority/reputation/significance of the award/media/organization/event/source;
+   - conclude.
+4) End each criterion with a conclusion explicitly tracking the USCIS standard.
+
+------------------------------------------------------------
+[B.i] Awards
+------------------------------------------------------------
+
+Heading:
+[B.i] Evidence of receipt of nationally or internationally recognized prizes or awards for excellence.
+
+POLICY MANUAL INSERT:
+“First, USCIS determines if the person was the recipient of prizes or awards.”
+
+POLICY MANUAL INSERT:
+“Second, USCIS determines whether the award is a lesser nationally or internationally recognized prize or award which the person received for excellence in the field of endeavor.”
+
+POLICY MANUAL INSERT:
+“Relevant considerations regarding whether the basis for granting the prizes or awards was excellence in the field include, but are not limited to:
+The criteria used to grant the awards or prizes;
+The national or international significance of the awards or prizes in the field;
+The number of awardees or prize recipients; and
+Limitations on competitors.”
+
+Drafting checklist:
+- Did the beneficiary personally receive the award?
+- Was it for excellence in the field?
+- Is it nationally or internationally recognized?
+- Is the award connected to the claimed specialization?
+- Are rules/criteria included?
+- Are the selection process and jury explained?
+- Is media coverage or institutional recognition included?
+- If team award: prove beneficiary was one of the recipients.
+
+Opening template:
+
+__MR_MS__ __BENEFICIARY_FULL_NAME__ has received nationally and/or internationally recognized professional awards for excellence in __FIELD_OR_SPECIALIZATION__. In particular, __HE_SHE__ received __AWARD_1__, __AWARD_2__, and __AWARD_3__, each granted based on professional achievement, expert evaluation, and recognition in the field.
+(Please, kindly refer to Exhibit 1, pages __PAGE__ - __PAGE__: Criterion i. Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s receipt of nationally or internationally recognized prizes or awards for excellence.)
+
+Within the criterion, the following documents are attached:
+1.1. __AWARD_1__ ........................................................................ p. __PAGE__
+1.1.1. Award diploma/certificate, English translation, photos, explanatory note.
+1.1.2. Official website listing __MR_MS__ __BENEFICIARY_SURNAME__ as winner, English translation.
+1.1.3. Award regulations / official rules and criteria, English translation.
+1.1.4. Official confirmation letter from organizer, English translation.
+1.1.5. Media publications about __MR_MS__ __BENEFICIARY_SURNAME__ receiving the award, English translation.
+1.1.6. Media publications about the award itself confirming national/international significance, English translation.
+1.2. __AWARD_2__ ........................................................................ p. __PAGE__
+[Repeat.]
+
+Episode template:
+
+1. The “__AWARD_NAME__” Award
+
+On __DATE__, __MR_MS__ __BENEFICIARY_SURNAME__ received a major __NATIONAL_OR_INTERNATIONAL__ award in the field of __FIELD__, namely __AWARD_FULL_NAME__, which __HE_SHE__ was granted for __BASIS_FOR_AWARD__. The award ceremony/announcement took place __EVENT_CONTEXT__.
+(Please, kindly refer to Exhibit 1, page __PAGE__: 1.1.1. __DOCUMENT_TITLE__.)
+
+Professional relevance of the award to __MR_MS__ __BENEFICIARY_SURNAME__’s field
+The award directly relates to __MR_MS__ __BENEFICIARY_SURNAME__’s professional field because __EXPLAIN_CONNECTION_TO_SPECIALIZATION__.
+(Please, kindly refer to Exhibit 1, page __PAGE__: __DOCUMENT_TITLE__.)
+
+National/international significance of the award
+The __AWARD_NAME__ is __DESCRIPTION_OF_SCALE__: __COUNTRIES_OR_REGIONS__, __NUMBER_OF_PARTICIPANTS__, __EVENT_LEVEL__, __ORGANIZER_REPUTATION__, __MEDIA_COVERAGE__.
+(Please, kindly refer to Exhibit 1, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Basis for granting the award: excellence in the field
+The award is granted based on professional excellence. According to the official rules, candidates are evaluated under the following criteria:
+- __CRITERION_1__
+- __CRITERION_2__
+- __CRITERION_3__
+- __CRITERION_4__
+(Please, kindly refer to Exhibit 1, page __PAGE__: __AWARD_RULES_DOCUMENT__.)
+
+Rules of participation and jury evaluation
+Participation requires __APPLICATION_REQUIREMENTS__. Winners/finalists are selected by __JURY_OR_COMMISSION__, composed of __JURY_DESCRIPTION__. Each application is evaluated based on __EVALUATION_PROCESS__.
+(Please, kindly refer to Exhibit 1, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Media coverage
+__MEDIA_1__ reported on __AWARD_OR_BENEFICIARY__. __MEDIA_1__ is __MEDIA_DESCRIPTION__, with __READERSHIP_OR_REPUTATION__.
+(Please, kindly refer to Exhibit 1, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Conclusion
+Therefore, the evidence shows that __MR_MS__ __BENEFICIARY_SURNAME__ personally received __AWARD_NAME__, a nationally/internationally recognized award granted for professional excellence in __FIELD_OR_SPECIALIZATION__. This satisfies Criterion i.
+
+------------------------------------------------------------
+[B.ii] Memberships
+------------------------------------------------------------
+
+Heading:
+[B.ii] Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s membership in associations in the field which demand outstanding achievement of their members.
+
+POLICY MANUAL INSERT:
+“USCIS determines if the association for which the person claims present or past membership requires that members have outstanding achievements in the field as judged by recognized experts in that field.”
+
+POLICY MANUAL INSERT:
+“The petitioner must show that membership in the association requires outstanding achievements in the field for which classification is sought, as judged by recognized national or international experts.”
+
+POLICY MANUAL INSERT:
+“Associations may have multiple levels of membership. The level of membership afforded to the person must show that in order to obtain that level of membership, recognized national or international experts judged the person as having attained outstanding achievements in the field for which classification is sought.”
+
+POLICY MANUAL INSERT:
+“Relevant factors that may lead to a conclusion that the person's membership in the association(s) was not based on outstanding achievements in the field include, but are not limited to, instances where the person's membership was based solely on the following factors: A level of education or years of experience in a particular field; The payment of a fee or by subscribing to an association's publications; and A requirement, compulsory or otherwise, for employment in certain occupations.”
+
+Drafting checklist:
+- Prove membership.
+- Prove association is in the field.
+- Prove membership level.
+- Prove outstanding achievements are required.
+- Prove recognized experts evaluate candidates.
+- Exclude fee-only / subscription / routine union membership.
+
+Opening template:
+
+__MR_MS__ __BENEFICIARY_SURNAME__ is a member of __NUMBER__ professional associations requiring outstanding achievements from their members:
+(Please, kindly refer to Exhibit 2, pages __PAGE__ - __PAGE__: Criterion ii. __MR_MS__ __BENEFICIARY_SURNAME__’s membership in associations in the field which demand outstanding achievement of their members.)
+
+Within the criterion, the following documents are attached:
+2.1. __ASSOCIATION_1__ ................................................................ p. __PAGE__
+2.1.1. Membership certificate/confirmation, English translation.
+2.1.2. Association bylaws / membership requirements, English translation.
+2.1.3. Information about admission committee / experts, English translation.
+2.1.4. Explanatory note about the association.
+2.2. __ASSOCIATION_2__ ................................................................ p. __PAGE__
+[Repeat.]
+
+Episode template:
+
+1. Membership in __ASSOCIATION_NAME__
+
+__MR_MS__ __BENEFICIARY_SURNAME__ was admitted to __ASSOCIATION_NAME__ on __DATE__ as __MEMBERSHIP_LEVEL__ based on __DECISION_BODY_OR_PROCEDURE__.
+(Please, kindly refer to Exhibit 2, page __PAGE__: __DOCUMENT_TITLE__.)
+
+The association requires outstanding achievements from its members
+According to __ASSOCIATION_RULES__, candidates for __MEMBERSHIP_LEVEL__ must satisfy the following requirements:
+- __REQUIREMENT_1__
+- __REQUIREMENT_2__
+- __REQUIREMENT_3__
+These requirements demonstrate that membership is not based merely on payment, subscription, education, or years of experience, but on recognized professional achievements in __FIELD__.
+(Please, kindly refer to Exhibit 2, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Evaluation by recognized experts
+Candidates are evaluated by __COMMITTEE_OR_BODY__, which includes recognized experts in __FIELD__: __EXPERT_EXAMPLES__. This confirms that membership is judged by recognized national or international experts.
+(Please, kindly refer to Exhibit 2, page __PAGE__: __DOCUMENT_TITLE__.)
+
+About the association
+__ASSOCIATION_NAME__ is __DESCRIPTION__, active in __FIELD__, with __REPUTATION_INDICATORS__: __RANKINGS__, __MEMBER_BASE__, __EVENTS__, __PUBLICATIONS__, __PARTNERS__, __HISTORY__.
+(Please, kindly refer to Exhibit 2, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Conclusion
+Therefore, __MR_MS__ __BENEFICIARY_SURNAME__’s membership in __ASSOCIATION_NAME__ satisfies Criterion ii because the association is in __HIS_HER__ field, the relevant membership level requires outstanding achievements, and admission is judged by recognized experts.
+
+------------------------------------------------------------
+[B.iii] Published material about the beneficiary
+------------------------------------------------------------
+
+Heading:
+[B.iii] Evidence of published material about __MR_MS__ __BENEFICIARY_SURNAME__ in professional or major trade publications or other major media.
+
+POLICY MANUAL INSERT:
+“First, USCIS determines whether the published material was related to the person and the person's specific work in the field for which classification is sought.”
+
+POLICY MANUAL INSERT:
+“The published material should be about the person, relating to the person’s work in the field, and not just about the person’s employer and the employer’s work or about another organization and that organization’s work.”
+
+POLICY MANUAL INSERT:
+“Marketing materials created for the purpose of selling the person's products or promoting the person’s services are not generally considered to be published material about the person.”
+
+POLICY MANUAL INSERT:
+“However, the person and the person’s work need not be the only subject of the material; published material that covers a broader topic but includes a substantial discussion of the person’s work in the field and mentions the person in connection to the work may be considered material about the person relating to the person’s work.”
+
+POLICY MANUAL INSERT:
+“Second, USCIS determines whether the publication qualifies as a professional publication, major trade publication, or major media publication.”
+
+Drafting checklist:
+- Title, date, author must be included.
+- Include full text/translation.
+- Show material is about beneficiary and beneficiary’s work.
+- Show media qualifies as professional / major trade / major media.
+- Include circulation/readership/viewership/intended audience.
+- Avoid paid promotional material unless independently credible and clearly not just marketing.
+
+Opening template:
+
+__MR_MS__ __BENEFICIARY_SURNAME__’s outstanding contributions to __SPECIALIZATION__ have received significant attention from professional and/or major media. __HE_SHE_CAP__ has been the subject of __NUMBER__ publications in __MEDIA_TYPES__, confirming that __HIS_HER__ work has been publicly recognized beyond __HIS_HER__ own organizations.
+(Please, kindly refer to Exhibit 3, pages __PAGE__ - __PAGE__: Criterion iii. Evidence of published material about __MR_MS__ __BENEFICIARY_SURNAME__ in professional or major trade publications or other major media.)
+
+Within the criterion, the following documents are attached:
+3.1. Publication “__TITLE__” in __MEDIA_NAME__, English translation, explanatory note and media information ................................................................ p. __PAGE__
+3.2. Publication “__TITLE__” in __MEDIA_NAME__, English translation, explanatory note and media information ................................................................ p. __PAGE__
+[Repeat.]
+
+Publication episode template:
+
+1. Publication about __MR_MS__ __BENEFICIARY_SURNAME__ in __MEDIA_NAME__
+
+The publication “__TITLE__” by __AUTHOR__ was published in/on __MEDIA_NAME__ on __DATE__. The material discusses __MR_MS__ __BENEFICIARY_SURNAME__ and __HIS_HER__ work in __SPECIALIZATION__, including __SPECIFIC_DISCUSSION_OF_WORK__.
+(Please, kindly refer to Exhibit 3, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Information about the publication:
+Title: “__TITLE__”
+Media: __MEDIA_NAME__
+Author: __AUTHOR__
+Date of publication: __DATE__
+Link: __URL__
+Format: __PRINT_ONLINE_VIDEO_AUDIO__
+Language: __LANGUAGE__; English translation attached.
+
+Short overview of the publication:
+The article/video/interview focuses on __SUMMARY__. It is relevant because it discusses __BENEFICIARY_WORK__, rather than merely mentioning the beneficiary or __HIS_HER__ employer.
+
+About the media:
+__MEDIA_NAME__ is __DESCRIPTION__. Its intended audience is __AUDIENCE__. Its circulation/readership/viewership is __METRICS__. It is recognized as __REPUTATION_INDICATORS__.
+(Please, kindly refer to Exhibit 3, page __PAGE__: __MEDIA_EXPLANATORY_NOTE_OR_RATINGS__.)
+
+Conclusion
+This publication qualifies under Criterion iii because it is published material about __MR_MS__ __BENEFICIARY_SURNAME__ and __HIS_HER__ work in __FIELD__, and __MEDIA_NAME__ qualifies as __PROFESSIONAL_PUBLICATION_MAJOR_TRADE_PUBLICATION_MAJOR_MEDIA__.
+
+------------------------------------------------------------
+[B.iv] Judging
+------------------------------------------------------------
+
+Heading:
+[B.iv] Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s participation, either individually or on a panel, as a judge of the work of others in the same or an allied field.
+
+POLICY MANUAL INSERT:
+“USCIS determines whether the person has acted as the judge of the work of others in the same or an allied field of specification.”
+
+POLICY MANUAL INSERT:
+“The petitioner must show that the person has not only been invited to judge the work of others, but also that the person actually participated in the judging of the work of others in the same or allied field of specialization.”
+
+Drafting checklist:
+- Invitation alone is insufficient.
+- Show actual completed judging.
+- Explain whose work was judged.
+- Explain field connection.
+- Include evaluation criteria, screenshots, protocols, reviewed papers, jury lists, certificates, emails.
+- If judging was confidential, include permissible confirmation letter.
+
+Opening template:
+
+__MR_MS__ __BENEFICIARY_SURNAME__ has repeatedly participated as a judge/evaluator/reviewer of the work of others in __FIELD_OR_ALLIED_FIELD__. These appointments demonstrate that independent institutions relied on __HIS_HER__ professional expertise to evaluate other professionals, applicants, projects, publications, or students.
+(Please, kindly refer to Exhibit 4, pages __PAGE__ - __PAGE__: Criterion iv. Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s participation as a judge of the work of others.)
+
+Within the criterion, the following documents are attached:
+4.1. __JUDGING_EPISODE_1__ ......................................................... p. __PAGE__
+4.1.1. Official invitation / email, English translation.
+4.1.2. Jury list / reviewer profile / committee appointment, English translation.
+4.1.3. Evidence of actual participation: scores, screenshots, review forms, protocols, certificates, English translation.
+4.1.4. Rules/evaluation criteria, English translation.
+4.1.5. Explanatory note about the event/journal/institution.
+4.2. __JUDGING_EPISODE_2__ ......................................................... p. __PAGE__
+
+Episode template:
+
+1. Participation of __MR_MS__ __BENEFICIARY_SURNAME__ in the judging process of __EVENT_OR_INSTITUTION__
+
+On __DATE__, __MR_MS__ __BENEFICIARY_SURNAME__ was appointed/invited to serve as __JUDGE_ROLE__ for __EVENT_OR_INSTITUTION__, in recognition of __HIS_HER__ expertise in __FIELD__.
+(Please, kindly refer to Exhibit 4, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Actual participation in judging
+__MR_MS__ __BENEFICIARY_SURNAME__ actually participated in the evaluation process by __DESCRIBE_ACTIONS__: reviewing __NUMBER__ submissions/candidates/articles/projects, applying __CRITERIA__, and submitting __SCORES_RECOMMENDATIONS_DECISIONS__.
+(Please, kindly refer to Exhibit 4, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Evaluation process and criteria
+The evaluated works included __WORKS_EVALUATED__. The evaluation criteria included:
+- __CRITERION_1__
+- __CRITERION_2__
+- __CRITERION_3__
+This confirms that the judged work was in the same or an allied field.
+(Please, kindly refer to Exhibit 4, page __PAGE__: __RULES_OR_PROTOCOL__.)
+
+About the event/journal/institution
+__EVENT_OR_INSTITUTION__ is __DESCRIPTION__, with __REPUTATION_INDICATORS__.
+(Please, kindly refer to Exhibit 4, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Conclusion
+Therefore, __MR_MS__ __BENEFICIARY_SURNAME__ satisfies Criterion iv because __HE_SHE__ actually judged the work of others in the same or an allied field.
+
+------------------------------------------------------------
+[B.v] Original contributions of major significance
+------------------------------------------------------------
+
+Heading:
+[B.v] Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s original scientific, scholarly, artistic, athletic, or business-related contributions of major significance to the field.
+
+POLICY MANUAL INSERT:
+“First, USCIS determines whether the person has made original contributions in the field.”
+
+POLICY MANUAL INSERT:
+“Second, USCIS determines whether the original contributions are of major significance to the field.”
+
+POLICY MANUAL INSERT:
+“Evidence that the person’s work was funded, patented, or published, while potentially demonstrating the work’s originality, will not necessarily establish, on its own, that the work is of major significance to the field.”
+
+POLICY MANUAL INSERT:
+“Detailed letters from experts in the field explaining the nature and significance of the person’s contribution may also provide valuable context for evaluating the claimed original contributions of major significance, particularly when the record includes documentation corroborating the claimed significance.”
+
+Drafting checklist:
+- Separate originality from major significance.
+- Original = new method/product/research/artistic approach/business system/technology etc.
+- Major significance = impact beyond beneficiary/employer.
+- Corroborate letters with objective evidence.
+- Show adoption, citations, media, awards, commercial use, licenses, standards, industry influence, expert validation.
+- Avoid “important to employer” only. USCIS wants significance to the field.
+
+Opening template:
+
+__MR_MS__ __BENEFICIARY_SURNAME__ has made original __SCIENTIFIC_SCHOLARLY_ARTISTIC_ATHLETIC_BUSINESS_RELATED__ contributions of major significance to __FIELD__, including __CONTRIBUTION_1__ and __CONTRIBUTION_2__. These contributions are original because __ORIGINALITY_SUMMARY__, and they are significant to the field because __MAJOR_SIGNIFICANCE_SUMMARY__.
+(Please, kindly refer to Exhibit 5, pages __PAGE__ - __PAGE__: Criterion v. __MR_MS__ __BENEFICIARY_SURNAME__’s original contributions of major significance to the field.)
+
+Within the criterion, the following documents are attached:
+5.1. __CONTRIBUTION_1__ ............................................................. p. __PAGE__
+5.1.1. Formal documentation of contribution: patent/software certificate/manual/publication/standard/methodology, English translation.
+5.1.2. Evidence of implementation/commercial use/adoption/licensing.
+5.1.3. Media publications about the contribution.
+5.1.4. Awards recognizing the contribution.
+5.1.5. Expert letters discussing contribution and significance.
+5.1.6. Explanatory note.
+5.2. __CONTRIBUTION_2__ ............................................................. p. __PAGE__
+
+Contribution template:
+
+1. __CONTRIBUTION_NAME__
+
+Description and originality
+__CONTRIBUTION_NAME__ is __DESCRIPTION__. It was developed by __MR_MS__ __BENEFICIARY_SURNAME__ in __DATE_OR_PERIOD__ to solve __PROBLEM__. The contribution is original because __NOVEL_FEATURES__, which differ from existing approaches by __DIFFERENTIATION__.
+(Please, kindly refer to Exhibit 5, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Major significance to the field
+The contribution is significant beyond __MR_MS__ __BENEFICIARY_SURNAME__’s own employment because __IMPACT_BEYOND_EMPLOYER__.
+
+Evidence of major significance includes:
+
+1) Adoption / implementation
+__DESCRIPTION_OF_ADOPTION_BY_COMPANIES_INSTITUTIONS_USERS__.
+(Please, kindly refer to Exhibit 5, page __PAGE__: __DOCUMENT_TITLE__.)
+
+2) Commercial use / licensing / market use
+__DESCRIPTION_OF_LICENSES_CONTRACTS_REVENUE_USERS__.
+(Please, kindly refer to Exhibit 5, page __PAGE__: __DOCUMENT_TITLE__.)
+
+3) Media attention
+__DESCRIPTION_OF_MEDIA_ATTENTION__.
+(Please, kindly refer to Exhibit 5, page __PAGE__: __DOCUMENT_TITLE__.)
+
+4) Awards or independent recognition
+__DESCRIPTION_OF_AWARDS_RECOGNITION__.
+(Please, kindly refer to Exhibit 5, page __PAGE__: __DOCUMENT_TITLE__.)
+
+5) Citations / scholarly influence / standards / derivative work
+__DESCRIPTION_OF_CITATIONS_STANDARDS_DERIVATIVE_WORK__.
+(Please, kindly refer to Exhibit 5, page __PAGE__: __DOCUMENT_TITLE__.)
+
+6) Expert validation
+“__QUOTE_SPECIFIC_TO_CONTRIBUTION_AND_SIGNIFICANCE__.”
+__EXPERT_NAME__ - __BRIEF_DESCRIPTION__ (Please, kindly refer to Exhibit 0-1, page __PAGE__: __LETTER_TITLE__.)
+
+Conclusion
+The evidence establishes both originality and major significance. __CONTRIBUTION_NAME__ is an original contribution in __FIELD__ and has affected the field through __SUMMARY_OF_FIELD_LEVEL_IMPACT__. Therefore, it satisfies Criterion v.
+
+------------------------------------------------------------
+[B.vi] Scholarly articles
+------------------------------------------------------------
+
+Heading:
+[B.vi] Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s authorship of scholarly articles in the field, in professional or major trade publications, or other major media.
+
+POLICY MANUAL INSERT:
+“First, USCIS determines whether the person has authored scholarly articles in the field.”
+
+POLICY MANUAL INSERT:
+“As defined in the academic arena, a scholarly article reports on original research, experimentation, or philosophical discourse. It is written by a researcher or expert in the field who is often affiliated with a college, university, or research institution.”
+
+POLICY MANUAL INSERT:
+“For other fields, a scholarly article should be written for learned persons in that field.”
+
+POLICY MANUAL INSERT:
+“Second, USCIS determines whether the publication qualifies as a professional publication, major trade publication, or major media publication.”
+
+Drafting checklist:
+- Prove authorship.
+- Show article is scholarly or for learned persons in the field.
+- Show publication qualifies.
+- Include title, issue, authors, date, link, translation.
+- Include journal/expert publication info: peer review, indexing, ISSN, audience, circulation/readership, impact factor if available.
+- For non-academic fields, explain why the article is for learned persons.
+
+Opening template:
+
+__MR_MS__ __BENEFICIARY_SURNAME__ has authored __NUMBER__ scholarly/professional articles in __FIELD__, published in __PUBLICATION_TYPES__. These articles address __TOPICS__ and are directed to learned persons and professionals in __FIELD__.
+(Please, kindly refer to Exhibit 6, pages __PAGE__ - __PAGE__: Criterion vi. Scholarly articles authored by __MR_MS__ __BENEFICIARY_SURNAME__.)
+
+Within the criterion, the following documents are attached:
+6.0. __MR_MS__ __BENEFICIARY_SURNAME__’s profile on Google Scholar / ORCID / publication list [if applicable] ................................ p. __PAGE__
+6.1. Publications in __JOURNAL_OR_PUBLICATION_1__ ......................... p. __PAGE__
+6.1.1. Article “__TITLE__”, certificate/confirmation, English translation.
+6.1.2. Explanatory note about __JOURNAL_OR_PUBLICATION_1__.
+6.2. Publication in __JOURNAL_OR_PUBLICATION_2__ ......................... p. __PAGE__
+
+Article template:
+
+1. The scholarly article “__ARTICLE_TITLE__” published in __JOURNAL_OR_PUBLICATION__
+
+In __DATE__, the article titled “__ARTICLE_TITLE__,” authored by __MR_MS__ __BENEFICIARY_SURNAME__, was published in __JOURNAL_OR_PUBLICATION__.
+(Please, kindly refer to Exhibit 6, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Basic information about the article:
+Issue: __ISSUE__
+Author(s): __AUTHORS__
+Date: __DATE__
+Link: __URL__
+Language: __LANGUAGE__; English translation attached.
+
+Short information about the article:
+The article analyzes __SUMMARY__, addresses __PROFESSIONAL_OR_SCHOLARLY_PROBLEM__, and contributes to discussion among learned persons in __FIELD__ by __CONTRIBUTION_OF_ARTICLE__.
+
+Why the article is scholarly / for learned persons
+The article is scholarly/professional because __REASONS__: methodology, original analysis, professional terminology, data, citations, bibliography, expert audience, peer review, editorial standards.
+(Please, kindly refer to Exhibit 6, page __PAGE__: __DOCUMENT_TITLE__.)
+
+About the journal/publication
+__JOURNAL_OR_PUBLICATION__ is __DESCRIPTION__. It has __INDEXING__, __ISSN__, __PEER_REVIEW__, __AUDIENCE__, __CIRCULATION_OR_READERSHIP__, __IMPACT_FACTOR_OR_REPUTATION__.
+(Please, kindly refer to Exhibit 6, page __PAGE__: __EXPLANATORY_NOTE__.)
+
+Conclusion
+Therefore, this article supports Criterion vi because __MR_MS__ __BENEFICIARY_SURNAME__ authored a scholarly/professional article in __FIELD__, published in a qualifying professional or major publication.
+
+------------------------------------------------------------
+[B.vii] Artistic exhibitions or showcases
+------------------------------------------------------------
+
+Heading:
+[B.vii] Evidence of the display of __MR_MS__ __BENEFICIARY_SURNAME__’s work in the field at artistic exhibitions or showcases.
+
+POLICY MANUAL INSERT:
+“First, USCIS determines whether the work that was displayed is the person's work product.”
+
+POLICY MANUAL INSERT:
+“Second, USCIS determines whether the venues (virtual or otherwise) where the person's work was displayed were artistic exhibitions or showcases.”
+
+POLICY MANUAL INSERT:
+“USCIS only considers non-artistic exhibitions or showcases as part of a properly supported claim of comparable evidence.”
+
+Drafting checklist:
+- Use mainly for arts/design/architecture/film/etc.
+- Prove work displayed was beneficiary’s own work product.
+- Prove venue/event was artistic exhibition/showcase.
+- Include event pages, catalogues, invitations, photos, organizer info, media coverage.
+- If non-artistic trade show: consider comparable evidence, not direct Criterion vii.
+
+Opening template:
+
+__MR_MS__ __BENEFICIARY_SURNAME__’s works have been displayed at __NUMBER__ artistic exhibitions/showcases, including __EXHIBITION_1__, __EXHIBITION_2__, and __EXHIBITION_3__. These displays confirm public recognition of __HIS_HER__ work product in __FIELD__.
+(Please, kindly refer to Exhibit 7, pages __PAGE__ - __PAGE__: Criterion vii. Evidence of the display of __MR_MS__ __BENEFICIARY_SURNAME__’s work in the field at artistic exhibitions or showcases.)
+
+Within the criterion, the following documents are attached:
+7.1. __EXHIBITION_OR_SHOWCASE_1__ .............................................. p. __PAGE__
+7.1.1. Event catalogue / website / official page showing the work, English translation.
+7.1.2. Proof that displayed work was created by __MR_MS__ __BENEFICIARY_SURNAME__.
+7.1.3. Photos/screenshots of display.
+7.1.4. Information about organizer/venue.
+7.1.5. Media coverage.
+7.2. __EXHIBITION_OR_SHOWCASE_2__ .............................................. p. __PAGE__
+
+Episode template:
+
+1. Display of __MR_MS__ __BENEFICIARY_SURNAME__’s work at __EXHIBITION_OR_SHOWCASE_NAME__
+
+The project/work “__WORK_TITLE__,” created by __MR_MS__ __BENEFICIARY_SURNAME__, was displayed at __EXHIBITION_OR_SHOWCASE_NAME__ on __DATE_OR_PERIOD__.
+(Please, kindly refer to Exhibit 7, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Proof that the displayed work was the beneficiary’s work product
+__EVIDENCE_AND_EXPLANATION__.
+(Please, kindly refer to Exhibit 7, page __PAGE__: __DOCUMENT_TITLE__.)
+
+About the exhibition/showcase
+__EXHIBITION_OR_SHOWCASE_NAME__ is an artistic exhibition/showcase because __EXPLAIN_ARTISTIC_NATURE__. It is organized by __ORGANIZER__, held at __VENUE_OR_PLATFORM__, and recognized through __REPUTATION_INDICATORS__.
+(Please, kindly refer to Exhibit 7, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Media coverage / public recognition
+__MEDIA_OR_PUBLIC_RECOGNITION_DESCRIPTION__.
+(Please, kindly refer to Exhibit 7, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Conclusion
+Therefore, this evidence satisfies Criterion vii because __MR_MS__ __BENEFICIARY_SURNAME__’s own work product was displayed at a qualifying artistic exhibition/showcase.
+
+------------------------------------------------------------
+[B.viii] Leading or critical role
+------------------------------------------------------------
+
+Heading:
+[B.viii] Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s performance of a leading or critical role in distinguished organizations.
+
+POLICY MANUAL INSERT:
+“First, USCIS determines whether the person has performed in a leading or critical role for an organization, establishment, or a division or department of an organization or establishment.”
+
+POLICY MANUAL INSERT:
+“For a leading role, officers look at whether the evidence establishes that the person is (or was) a leader within the organization or establishment or a division or department thereof. A title, with appropriate matching duties, can help to establish that a role is (or was), in fact, leading.”
+
+POLICY MANUAL INSERT:
+“For a critical role, officers look at whether the evidence establishes that the person has contributed in a way that is of significant importance to the outcome of the organization or establishment's activities or those of a division or department of the organization or establishment.”
+
+POLICY MANUAL INSERT:
+“It is not the title of the person's role, but rather the person's performance in the role that determines whether the role is (or was) critical.”
+
+POLICY MANUAL INSERT:
+“Second, USCIS determines whether the organization or establishment, or the department or division for which the person holds or held a leading or critical role, has a distinguished reputation.”
+
+Drafting checklist:
+- Separate role analysis from organization reputation.
+- Leading role: title, hierarchy, authority, decision-making, direct reports, executive responsibilities.
+- Critical role: projects, impact, measurable results, why outcome depended on beneficiary’s work.
+- Distinguished reputation: rankings, awards, size, market position, media, clients, funding, public recognition, government grants, financials.
+- Employer letters are powerful but must be detailed and corroborated.
+
+Opening template:
+
+__MR_MS__ __BENEFICIARY_SURNAME__ has performed a __LEADING_CRITICAL_OR_BOTH__ role as __POSITION__ for __ORGANIZATION__, a distinguished organization in __FIELD_OR_INDUSTRY__. __HIS_HER_CAP__ role was leading because __LEADING_SUMMARY__ and/or critical because __CRITICAL_SUMMARY__.
+(Please, kindly refer to Exhibit 8, pages __PAGE__ - __PAGE__: Criterion viii. Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s performance of a leading or critical role in distinguished organizations.)
+
+Within the criterion, the following documents are attached:
+8.1. Leading/Critical role for __ORGANIZATION_1__ ......................... p. __PAGE__
+8.1.1. Registration documents / official company information.
+8.1.2. Employment contract / appointment documents / corporate hierarchy.
+8.1.3. Official employer letter.
+8.1.4. Explanatory note about the organization.
+8.1.5. Company rankings, awards, financial data, media coverage.
+8.1.6. Evidence of beneficiary’s projects/results.
+8.2. Leading/Critical role for __ORGANIZATION_2__ ......................... p. __PAGE__
+
+Episode template:
+
+1. Leading/Critical role for __ORGANIZATION_NAME__
+
+Employment / appointment and scope
+__MR_MS__ __BENEFICIARY_SURNAME__ served as __POSITION__ at __ORGANIZATION_NAME__ from __DATE__ to __DATE__. __HIS_HER_CAP__ responsibilities included __DUTIES__, with authority over __TEAM_BUDGET_GEOGRAPHY_OPERATIONS__.
+(Please, kindly refer to Exhibit 8, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Leading role
+__MR_MS__ __BENEFICIARY_SURNAME__ held a leading role because __HE_SHE__ __LEADERSHIP_EVIDENCE__: reported to __REPORTING_LINE__, supervised __TEAM__, had decision-making authority over __AREAS__, signed/approved __DOCUMENTS__, led __DIVISION_OR_PROJECT__.
+(Please, kindly refer to Exhibit 8, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Critical role
+__MR_MS__ __BENEFICIARY_SURNAME__ also performed a critical role because __HE_SHE__ contributed in a way that was significant to the outcome of __ORGANIZATION_OR_DIVISION__’s activities. Specifically, __HE_SHE__:
+- __PROJECT_OR_RESULT_1__
+- __PROJECT_OR_RESULT_2__
+- __PROJECT_OR_RESULT_3__
+These results affected __BUSINESS_UNIT_FIELD_OR_ORGANIZATION__ by __IMPACT__.
+(Please, kindly refer to Exhibit 8, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Distinguished reputation of __ORGANIZATION_NAME__
+__ORGANIZATION_NAME__ has a distinguished reputation as shown by:
+1) Rankings / market position: __DETAILS__.
+2) Awards / recognitions: __DETAILS__.
+3) Scale: __CLIENTS_REVENUE_USERS_GEOGRAPHY_EMPLOYEES__.
+4) Media coverage: __DETAILS__.
+5) Partnerships / major clients / government contracts / funding: __DETAILS__.
+(Please, kindly refer to Exhibit 8, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Conclusion
+Therefore, __MR_MS__ __BENEFICIARY_SURNAME__ satisfies Criterion viii because __HE_SHE__ performed a leading and/or critical role for __ORGANIZATION_NAME__, which has a distinguished reputation.
+
+------------------------------------------------------------
+[B.ix] High salary / remuneration
+------------------------------------------------------------
+
+Heading:
+[B.ix] Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s high salary or other significantly high remuneration in relation to others in the field.
+
+POLICY MANUAL INSERT:
+“USCIS determines whether the person's salary or remuneration is high relative to the compensation paid to others working in the field.”
+
+POLICY MANUAL INSERT:
+“USCIS does not interpret the phrase ‘has commanded’ to mean that the person must have already earned such salary or remuneration in order to meet the criterion. Rather, a credible contract or job offer showing prospective salary or remuneration may establish that the person has been able to command such compensation.”
+
+POLICY MANUAL INSERT:
+“Evidence relevant to demonstrating high remuneration may include, but is not limited to: Tax returns, pay statements, or other evidence of past salary or remuneration for services; Contract, job offer letter, or other evidence of prospective salary or remuneration for services; and Comparative wage or remuneration data for the person’s field, such as geographical or position-appropriate compensation surveys.”
+
+POLICY MANUAL INSERT:
+“When evaluating whether a comparison between the beneficiary’s documented remuneration and the remuneration in the survey is accurate, the following considerations, among others, may be relevant: The description of the occupation; The validity of the survey; Location and currency; and Salary rate being measured.”
+
+Drafting checklist:
+- Identify beneficiary’s actual occupation and comparable occupation.
+- Use country/location-specific salary data for foreign employment.
+- Avoid converting foreign salary to U.S. salary and comparing it to U.S. wages unless the work location is U.S.
+- Use credible sources: official statistics, salary surveys, industry reports, contracts, tax records.
+- Explain currency conversion date/source if used.
+- For entrepreneurs: consider equity, distributions, contracts, funding, credible compensation.
+
+Opening template:
+
+__MR_MS__ __BENEFICIARY_SURNAME__ has commanded a high salary/significantly high remuneration in relation to others in __HIS_HER__ field. In __YEAR__, __HIS_HER__ documented remuneration was __AMOUNT_LOCAL__ (__AMOUNT_USD__), which exceeded comparable compensation data for __COMPARABLE_OCCUPATION__ in __LOCATION__ by __MULTIPLIER_OR_PERCENTAGE__.
+(Please, kindly refer to Exhibit 9, pages __PAGE__ - __PAGE__: Criterion ix. Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s high salary or other significantly high remuneration in relation to others in the field.)
+
+Within the criterion, the following documents are attached:
+9.1. Salary/remuneration documents for __YEAR_OR_PERIOD__ .............. p. __PAGE__
+9.1.1. Employment contract / tax return / pay statements / bank records, English translation.
+9.1.2. Currency conversion source.
+9.1.3. Comparative salary data source 1.
+9.1.4. Comparative salary data source 2.
+9.1.5. Explanatory note on comparison methodology.
+
+Salary template:
+
+The amount of salary/remuneration received by __MR_MS__ __BENEFICIARY_SURNAME__
+__MR_MS__ __BENEFICIARY_SURNAME__ was employed as __POSITION__ at __ORGANIZATION__ during __PERIOD__. This position corresponds to __HIS_HER__ field and specialization because __EXPLAIN_POSITION_MATCH__.
+(Please, kindly refer to Exhibit 9, page __PAGE__: __DOCUMENT_TITLE__.)
+
+According to __DOCUMENTS__, __MR_MS__ __BENEFICIARY_SURNAME__ received __MONTHLY_OR_ANNUAL_AMOUNT__ in __YEAR__. In U.S. dollars, this equals approximately __USD_AMOUNT__ using __CONVERSION_SOURCE_AND_DATE__.
+(Please, kindly refer to Exhibit 9, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Analysis of salaries in the same field
+The closest comparable occupation is __COMPARABLE_OCCUPATION__ because __MATCH_EXPLANATION__.
+
+Source 1 - __SOURCE_NAME__
+According to __SOURCE_NAME__, the __AVERAGE_MEDIAN_75TH_90TH_PERCENTILE__ salary for __COMPARABLE_OCCUPATION__ in __LOCATION__ was __COMPARATIVE_AMOUNT__.
+(Please, kindly refer to Exhibit 9, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Comparison
+__MR_MS__ __BENEFICIARY_SURNAME__’s remuneration was __MULTIPLIER__ times higher than __COMPARISON_LEVEL__, or __PERCENTAGE__ higher than __COMPARISON_LEVEL__.
+
+Source 2 - __SOURCE_NAME__
+[Repeat if useful.]
+
+Conclusion
+Therefore, __MR_MS__ __BENEFICIARY_SURNAME__ commanded high salary/significantly high remuneration in relation to others in the field, satisfying Criterion ix.
+
+------------------------------------------------------------
+[B.x] Commercial success in the performing arts
+------------------------------------------------------------
+
+Heading:
+[B.x] Evidence of commercial successes in the performing arts, as shown by box office receipts or record, cassette, compact disk, or video sales.
+
+POLICY MANUAL INSERT:
+“USCIS determines whether the person has enjoyed commercial successes in the performing arts.”
+
+POLICY MANUAL INSERT:
+“This criterion focuses on volume of sales and box office receipts as a measure of the person's commercial success in the performing arts.”
+
+POLICY MANUAL INSERT:
+“The mere fact that a person has recorded and released musical compilations or performed in theatrical, motion picture, or television productions would be insufficient, in and of itself, to meet this criterion.”
+
+Drafting checklist:
+- Use only for performing arts.
+- Prove commercial success with receipts/sales/box office/streaming equivalents if argued as comparable.
+- Compare success to similar performers/projects.
+- Include third-party data where possible.
+
+Opening template:
+
+__MR_MS__ __BENEFICIARY_SURNAME__ has achieved commercial success in the performing arts through __PROJECTS__, as demonstrated by __BOX_OFFICE_RECEIPTS_SALES_STREAMING_REVENUE_OTHER_METRICS__.
+(Please, kindly refer to Exhibit 10, pages __PAGE__ - __PAGE__: Criterion x. Evidence of commercial successes in the performing arts.)
+
+Within the criterion, the following documents are attached:
+10.1. __PROJECT_1__ commercial success evidence ............................ p. __PAGE__
+10.1.1. Box office receipts / sales records / distribution reports.
+10.1.2. Third-party rankings / charts / industry reports.
+10.1.3. Contracts / royalty statements.
+10.1.4. Explanatory note.
+
+Episode template:
+The project __PROJECT_NAME__ achieved __COMMERCIAL_RESULT__, including __METRICS__. Compared with __COMPARABLE_PROJECTS_OR_MARKET_DATA__, this result demonstrates commercial success in the performing arts.
+(Please, kindly refer to Exhibit 10, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Conclusion:
+Therefore, __MR_MS__ __BENEFICIARY_SURNAME__ satisfies Criterion x.
+
+------------------------------------------------------------
+Comparable evidence
+------------------------------------------------------------
+
+POLICY MANUAL INSERT:
+“Comparable evidence to establish the person's eligibility if the standards do not readily apply to the person's occupation.”
+
+POLICY MANUAL INSERT:
+“When evaluating such comparable evidence, officers must consider whether the regulatory criteria are readily applicable to the person's occupation and, if not, whether the evidence provided is truly comparable to the criteria listed in that regulation.”
+
+POLICY MANUAL INSERT:
+“A general unsupported assertion that the listed evidentiary criterion does not readily apply to the petitioner’s occupation is not probative.”
+
+Drafting rule:
+Use comparable evidence only when a criterion does not readily apply to the occupation. Explain:
+1) why the regular criterion does not readily apply;
+2) what comparable evidence is submitted;
+3) why it is truly comparable in significance.
+
+Template:
+Although Criterion __CRITERION__ does not readily apply to __BENEFICIARY_SURNAME__’s occupation as __OCCUPATION__ because __REASON__, the attached evidence is comparable in significance. Specifically, __COMPARABLE_EVIDENCE__ demonstrates __COMPARABLE_RECOGNITION_OR_IMPACT__.
+(Please, kindly refer to Exhibit __EXHIBIT__, page __PAGE__: __DOCUMENT_TITLE__.)
+
+============================================================
+7. SECTION 2 - PROSPECTIVE SUBSTANTIAL BENEFIT TO THE UNITED STATES
+============================================================
+
+Section 2. Beneficiary’s entry into the United States will substantially benefit prospectively the United States.
+
+POLICY MANUAL INSERT:
+“To qualify as a person with extraordinary ability, the person’s entry must substantially benefit the United States in the future.”
+
+POLICY MANUAL INSERT:
+“Although neither the statute nor the regulations specifically define the statutory phrase ‘substantially benefit,’ it has been interpreted broadly.”
+
+Drafting purpose:
+This is not NIW, but it still must be concrete. Do not write abstract patriotic weather. Tie the beneficiary’s specialization and U.S. plan to economic, scientific, artistic, cultural, technological, educational, health, infrastructure, workforce, or industry benefit.
+
+Recommended structure:
+
+2.1. __SPECIALIZATION__ is an area of intrinsic merit / importance in the United States
+
+Defining the specialization
+__SPECIALIZATION__ is __DEFINITION__. In the U.S. context, this specialization matters because __WHY_FIELD_MATTERS__.
+
+Economic / social / cultural / scientific / technological significance
+Use credible sources where possible:
+- U.S. government sources;
+- industry reports;
+- recognized professional bodies;
+- academic research;
+- market data.
+
+Template:
+__SPECIALIZATION__ contributes to the United States by __BENEFIT_1__, __BENEFIT_2__, and __BENEFIT_3__. U.S. institutions and industry sources consistently identify __PROBLEM_OR_NEED__ as important because __EXPLANATION__.
+Source: __SOURCE_NAME__, __URL_OR_DOCUMENT__.
+
+Conclusion for 2.1:
+Therefore, __SPECIALIZATION__ is an area of substantial importance in the United States because it supports __SUMMARY_OF_NATIONAL_OR_FIELD_BENEFITS__.
+
+2.2. __MR_MS__ __BENEFICIARY_SURNAME__’s work will ultimately benefit the United States
+
+Template:
+__MR_MS__ __BENEFICIARY_SURNAME__’s planned work in the United States will provide concrete benefits through __U.S._PLAN_OR_COMPANY_OR_EMPLOYMENT__. __HE_SHE_CAP__ will continue applying __HIS_HER__ expertise in __SPECIALIZATION__ by __ACTIVITIES__.
+
+The benefits to the United States arise in several measurable ways.
+
+First, __BENEFIT_1_TITLE__.
+__EXPLANATION_AND_EVIDENCE__.
+
+Second, __BENEFIT_2_TITLE__.
+__EXPLANATION_AND_EVIDENCE__.
+
+Third, __BENEFIT_3_TITLE__.
+__EXPLANATION_AND_EVIDENCE__.
+
+Fourth, __BENEFIT_4_TITLE__.
+__EXPLANATION_AND_EVIDENCE__.
+
+Finally, __MR_MS__ __BENEFICIARY_SURNAME__’s long-term presence and permanent residence will allow __HIM_HER__ to __LONG_TERM_BENEFIT__: expand operations, pursue research, create jobs, train professionals, develop products, perform artistic work, contribute to U.S. institutions, etc.
+
+Conclusion:
+__MR_MS__ __BENEFICIARY_SURNAME__’s entry into the United States will substantially benefit the United States because __SUMMARY__. This benefit is concrete, prospective, and directly connected to __HIS_HER__ area of extraordinary ability.
+
+============================================================
+8. CONCLUSIONS / FINAL MERITS
+============================================================
+
+Heading:
+Conclusions / Final Merits
+
+Purpose:
+This section is Step 2. It should synthesize the evidence and argue that the beneficiary is one of the small percentage at the top of the field. It should not merely list criteria again. Lists are where thought goes to die.
+
+Recommended structure:
+1) Short profile statement.
+2) Sustained acclaim over time.
+3) Strongest evidence clusters.
+4) Independent recognition.
+5) Field-level impact.
+6) Continued U.S. work and benefit.
+7) Legal conclusion.
+
+Template:
+
+__MR_MS__ __BENEFICIARY_FULL_NAME__ is a __PROFESSIONAL_TITLE__, __SPECIALIZATION__ expert, and recognized professional whose record places __HIM_HER__ among the small percentage of individuals who have risen to the very top of __HIS_HER__ field. __HIS_HER_CAP__ professional standing is demonstrated through sustained achievements, independent recognition, documented impact, and extensive evidence submitted with this petition.
+
+__MR_MS__ __BENEFICIARY_SURNAME__’s career reflects sustained national and/or international acclaim. Over __PERIOD__, __HE_SHE__ has achieved __AWARDS__, received media attention from __MEDIA__, served as __JUDGE_REVIEWER__, performed leading/critical roles for __DISTINGUISHED_ORGANIZATIONS__, authored __PUBLICATIONS__, and made __CONTRIBUTIONS__. This record is not based on a single isolated achievement; it shows maintained recognition across multiple independent forms of evidence.
+
+A defining element of __MR_MS__ __BENEFICIARY_SURNAME__’s record is __CORE_CONTRIBUTION_OR_CAREER_THEME__. This is supported by __DOCUMENTED_EVIDENCE__, including __EXAMPLES__. The significance of this work has been recognized by __EXPERTS_OR_INSTITUTIONS__ and corroborated through __OBJECTIVE_EVIDENCE__.
+
+Independent experts in the field confirm __MR_MS__ __BENEFICIARY_SURNAME__’s standing. Their letters are not generic endorsements; they identify specific achievements, explain the basis of the experts’ knowledge, and connect __HIS_HER__ work to recognized professional impact. [Optionally insert 1-2 decisive quotes.]
+
+In the United States, __MR_MS__ __BENEFICIARY_SURNAME__ will continue working in __SPECIALIZATION__ through __U.S._PLAN__. This work is a direct continuation of __HIS_HER__ area of extraordinary ability and will substantially benefit the United States by __BENEFIT_SUMMARY__.
+
+Based on the cumulative record, __MR_MS__ __BENEFICIARY_SURNAME__ satisfies the evidentiary requirements for EB-1A classification and meets the final merits determination. __HE_SHE_CAP__ has demonstrated sustained national and/or international acclaim, achievements recognized in the field through extensive documentation, intent to continue work in the area of extraordinary ability, and prospective substantial benefit to the United States.
+
+Respectfully,
+
+__MR_MS__ __BENEFICIARY_FULL_NAME__
+__PETITION_DATE__
+
+============================================================
+9. BENEFICIARY STATEMENT ON WORK PLANS IN THE UNITED STATES
+============================================================
+
+Statement of Beneficiary on Work Plans in the United States
+
+Date: __PETITION_DATE__
+
+My name is __BENEFICIARY_FULL_NAME__. I am the beneficiary of this I-140 Immigrant Petition for Alien Worker, seeking classification under the EB-1A category. I intend to continue my professional activity in the United States in __SPECIALIZATION__. My planned work represents a direct continuation of my established expertise in __FIELD_OR_SPECIALIZATION__, including __CORE_EXPERIENCE_SUMMARY__.
+
+(Please, kindly refer to Exhibit 11, pages __PAGE__ - __PAGE__: Documents regarding the employment/work plan.)
+
+Within the section, the following documents are attached:
+11.1. __U.S._COMPANY_OR_EMPLOYMENT_DOCUMENTS__
+11.2. __BUSINESS_PLAN_OR_PROJECT_PLAN__
+11.3. __CONTRACTS_OR_LETTERS_OF_INTENT__
+11.4. __MARKET_OR_INDUSTRY_EVIDENCE__
+11.5. __FINANCIAL_OR_OPERATIONAL_DOCUMENTS__
+11.6. __OTHER_SUPPORTING_DOCUMENTS__
+
+Current professional activity / U.S. foundation
+[If the beneficiary already has a U.S. company/job/contracts:]
+I currently __DESCRIBE_CURRENT_U.S._ACTIVITY__. This work is based on __CORPORATE_FILINGS_CONTRACTS_CLIENTS_LICENSES_AUTHORIZATIONS__.
+(Please, kindly refer to Exhibit 11, page __PAGE__: __DOCUMENT_TITLE__.)
+
+Field and role
+My work in the United States will focus on __ACTIVITIES__, including:
+- __ACTIVITY_1__
+- __ACTIVITY_2__
+- __ACTIVITY_3__
+- __ACTIVITY_4__
+
+Why these plans continue the same area of extraordinary ability
+These plans are a direct continuation of my work in __SPECIALIZATION__ because __CONNECTION_TO_PRIOR_ACHIEVEMENTS__.
+
+Concrete plan
+During Year 1, I plan to __YEAR_1_PLAN__.
+During Year 2, I plan to __YEAR_2_PLAN__.
+During Year 3, I plan to __YEAR_3_PLAN__.
+During Years 4-5, I plan to __YEAR_4_5_PLAN__.
+
+Expected U.S. benefit
+My planned work will benefit the United States by __BENEFIT_1__, __BENEFIT_2__, and __BENEFIT_3__. These benefits are concrete because __EVIDENCE_AND_MECHANISM__.
+
+Conclusion
+My plans to continue working in the United States are concrete, ongoing, and supported by verifiable documentation. Permanent residence in the United States will allow me to execute these plans more effectively by maintaining stable long-term presence, strengthening professional relationships, expanding operational capacity, and continuing to contribute to __U.S._FIELD_OR_INDUSTRY__.
+
+Respectfully,
+
+__BENEFICIARY_FULL_NAME__
+__PETITION_DATE__
+
+============================================================
+10. LIST OF EXHIBITS TEMPLATE
+============================================================
+
+List of Exhibits
+
+Exhibit 0. __MR_MS__ __BENEFICIARY_SURNAME__’s general documents: CV and education ........................................ p. __PAGE__
+Exhibit 0-1. __MR_MS__ __BENEFICIARY_SURNAME__’s Support letters from experts in the field and explanatory notes .......... p. __PAGE__
+
+[KEEP ONLY CLAIMED CRITERIA]
+
+Exhibit 1. Criterion i. Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s receipt of nationally or internationally recognized prizes or awards for excellence ........................................ p. __PAGE__
+1.1. __AWARD_1__ ........................................................................ p. __PAGE__
+1.2. __AWARD_2__ ........................................................................ p. __PAGE__
+
+Exhibit 2. Criterion ii. Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s membership in associations in the field which demand outstanding achievement of their members ................................. p. __PAGE__
+2.1. __ASSOCIATION_1__ ................................................................ p. __PAGE__
+2.2. __ASSOCIATION_2__ ................................................................ p. __PAGE__
+
+Exhibit 3. Criterion iii. Evidence of published material about __MR_MS__ __BENEFICIARY_SURNAME__ in professional or major trade publications or other major media .......................................... p. __PAGE__
+3.1. Publication “__TITLE__” in __MEDIA_NAME__ ................................ p. __PAGE__
+3.2. Publication “__TITLE__” in __MEDIA_NAME__ ................................ p. __PAGE__
+
+Exhibit 4. Criterion iv. Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s participation as a judge of the work of others ........ p. __PAGE__
+4.1. __JUDGING_EPISODE_1__ ......................................................... p. __PAGE__
+4.2. __JUDGING_EPISODE_2__ ......................................................... p. __PAGE__
+
+Exhibit 5. Criterion v. Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s original contributions of major significance to the field .... p. __PAGE__
+5.1. __CONTRIBUTION_1__ ............................................................. p. __PAGE__
+5.2. __CONTRIBUTION_2__ ............................................................. p. __PAGE__
+
+Exhibit 6. Criterion vi. Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s authorship of scholarly articles ................ p. __PAGE__
+6.1. __ARTICLE_OR_PUBLICATION_GROUP_1__ .................................... p. __PAGE__
+6.2. __ARTICLE_OR_PUBLICATION_GROUP_2__ .................................... p. __PAGE__
+
+Exhibit 7. Criterion vii. Evidence of display of __MR_MS__ __BENEFICIARY_SURNAME__’s work at artistic exhibitions or showcases .... p. __PAGE__
+7.1. __EXHIBITION_1__ .................................................................. p. __PAGE__
+7.2. __EXHIBITION_2__ .................................................................. p. __PAGE__
+
+Exhibit 8. Criterion viii. Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s performance of a leading or critical role in distinguished organizations ............................................................. p. __PAGE__
+8.1. Leading/Critical role for __ORGANIZATION_1__ ........................... p. __PAGE__
+8.2. Leading/Critical role for __ORGANIZATION_2__ ........................... p. __PAGE__
+
+Exhibit 9. Criterion ix. Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s high salary or remuneration in relation to others in the field ................................................................................. p. __PAGE__
+9.1. __SALARY_PERIOD_OR_SOURCE_GROUP__ ................................... p. __PAGE__
+
+Exhibit 10. Criterion x. Evidence of commercial successes in the performing arts ..................................................... p. __PAGE__
+10.1. __PROJECT_1__ .................................................................... p. __PAGE__
+
+Exhibit 11. Documents regarding employment/work plan in the United States ........................................................ p. __PAGE__
+11.1. __DOCUMENT_GROUP_1__ ....................................................... p. __PAGE__
+11.2. __DOCUMENT_GROUP_2__ ....................................................... p. __PAGE__
+
+============================================================
+11. TECHNICAL SEPARATOR PAGES
+============================================================
+
+Purpose:
+After the List of Exhibits, insert technical pages so the compiled packet is easy to assemble. These pages are not argumentative sections. They are dividers and document checklists.
+
+Global separator format:
+
+------------------------------------------------------------
+EXHIBIT __EXHIBIT_NO__
+__EXHIBIT_TITLE__
+
+List of documents attached:
+
+__EXHIBIT_NO__.1. __DOCUMENT_GROUP_TITLE__
+__EXHIBIT_NO__.1.1. __DOCUMENT_TITLE__
+__EXHIBIT_NO__.1.2. __DOCUMENT_TITLE__
+__EXHIBIT_NO__.1.3. __DOCUMENT_TITLE__
+
+__EXHIBIT_NO__.2. __DOCUMENT_GROUP_TITLE__
+__EXHIBIT_NO__.2.1. __DOCUMENT_TITLE__
+__EXHIBIT_NO__.2.2. __DOCUMENT_TITLE__
+
+Please, see the next page.
+------------------------------------------------------------
+
+Sub-separator format:
+
+------------------------------------------------------------
+EXHIBIT __EXHIBIT_NO__.__GROUP_NO__
+__GROUP_TITLE__
+
+This exhibit contains documents supporting the following proposition:
+__ONE_SENTENCE_EVIDENTIARY_THESIS__.
+
+Documents attached:
+__EXHIBIT_NO__.__GROUP_NO__.1. __DOCUMENT_TITLE__
+__EXHIBIT_NO__.__GROUP_NO__.2. __DOCUMENT_TITLE__
+__EXHIBIT_NO__.__GROUP_NO__.3. __DOCUMENT_TITLE__
+
+Please, see the next page.
+------------------------------------------------------------
+
+Examples:
+
+------------------------------------------------------------
+EXHIBIT 1
+Criterion i. Evidence of __MR_MS__ __BENEFICIARY_SURNAME__’s receipt of nationally or internationally recognized prizes or awards for excellence
+
+List of documents attached:
+
+1.1. __AWARD_NAME__
+1.1.1. Award diploma, English translation, photos of __MR_MS__ __BENEFICIARY_SURNAME__ with award, explanatory note about the award.
+1.1.2. Official award website listing __MR_MS__ __BENEFICIARY_SURNAME__ as winner, English translation.
+1.1.3. Award regulations and evaluation criteria, English translation.
+1.1.4. Official confirmation letter from organizing committee, English translation.
+1.1.5. Examples of media publications about __MR_MS__ __BENEFICIARY_SURNAME__ receiving the award, English translation.
+
+Please, see the next page.
+------------------------------------------------------------
+
+------------------------------------------------------------
+EXHIBIT 3
+Criterion iii. Evidence of published material about __MR_MS__ __BENEFICIARY_SURNAME__ in professional or major trade publications or other major media
+
+List of documents attached:
+
+3.1. Publication “__TITLE__” in __MEDIA_NAME__
+3.1.1. Full text of publication, English translation.
+3.1.2. Screenshot/archive of publication page.
+3.1.3. Explanatory note about __MEDIA_NAME__, including readership/circulation/rankings.
+3.1.4. Author/date/title confirmation if not visible in the publication.
+
+Please, see the next page.
+------------------------------------------------------------
+
+Technical separator rules:
+- Each separator title must match the List of Exhibits exactly.
+- Document titles must match in-text references exactly.
+- Use “Please, see the next page.” consistently or remove it everywhere.
+- Do not create separator pages for documents that are not actually included.
+- After pagination, update every page reference. No page XX should survive final review unless civilization has fully collapsed.
+
+============================================================
+12. LLM DRAFTING PROTOCOL
+============================================================
+
+When using this template with an LLM agent, give the agent this instruction:
+
+LLM TASK:
+You are drafting an EB-1A petition based only on the facts and documents provided. Do not invent awards, dates, publications, numbers, page references, credentials, rankings, media metrics, employment details, or legal authorities. If information is missing, insert [MISSING: specify exact missing item]. Maintain consistent terminology, exhibit numbering, pronouns, and citation format throughout the petition.
+
+Required output:
+1) Identify claimed EB-1A criteria.
+2) Build evidence map by criterion.
+3) Draft Section 1[A] only after the criteria are mapped.
+4) Draft each claimed criterion using:
+   - opening legal/evidentiary summary;
+   - list of attached documents;
+   - factual episode analysis;
+   - criterion conclusion.
+5) Draft Section 2 with concrete U.S. benefit.
+6) Draft Final Merits as synthesis, not a document dump.
+7) Draft Beneficiary Statement.
+8) Draft List of Exhibits.
+9) Draft technical separator pages.
+10) Run consistency audit.
+
+Consistency audit:
+- Beneficiary name and pronouns are consistent.
+- Field and specialization are consistent.
+- Claimed criteria match the cover letter, table of contents, sections, and exhibits.
+- Every exhibit cited in the text exists in the List of Exhibits.
+- Every document in the List of Exhibits appears in the separator pages.
+- Every foreign-language document has English translation noted.
+- Page references are either correct or marked __PAGE__.
+- No unclaimed criterion remains in the petition.
+- No factual claim lacks documentary support.
+- No generic recommender quote is used to prove a specific criterion unless tied to a specific achievement.
+- Final merits addresses sustained acclaim and top-of-field standard.
+- U.S. work plan is concrete and directly connected to the area of extraordinary ability.
+
+============================================================
+13. COMMON FAILURE MODES
+============================================================
+
+1. The petition claims too many criteria weakly.
+Fix: Claim fewer criteria if the record is stronger. Three strong criteria plus strong final merits can be cleaner than eight criteria held together with office tape and optimism.
+
+2. Awards section proves the award exists but not that it is nationally/internationally recognized.
+Fix: Add rules, scale, organizer reputation, media, number of competitors, selection criteria, jury.
+
+3. Membership section proves membership but not outstanding achievement.
+Fix: Add membership level, admission standards, expert evaluation, and proof that payment/experience alone is insufficient.
+
+4. Media section lists publications that are really PR.
+Fix: Show independent editorial material about the person and their work. Include title, date, author, media metrics.
+
+5. Judging section proves invitation but not actual judging.
+Fix: Add evidence of completed reviews/evaluations/scores/protocols.
+
+6. Contributions section proves originality but not major significance.
+Fix: Add adoption, industry use, citations, licenses, media, awards, standards, corroborated expert letters.
+
+7. Leading role section describes job duties but not distinguished organization.
+Fix: Add company rankings, awards, media, clients, financials, funding, institutional recognition.
+
+8. Salary section compares foreign salary to U.S. wages.
+Fix: Compare to salary data for the relevant country/location and occupation, unless the salary is U.S.-based.
+
+9. Section 2 sounds like NIW fan fiction.
+Fix: Tie U.S. benefit to actual work plans, documents, company, contracts, role, industry need, and credible sources.
+
+10. Final merits repeats all criteria.
+Fix: Synthesize. Explain why the combined evidence shows sustained acclaim and top-of-field standing.
+
+============================================================
+14. MINI-PROMPT FOR FUTURE CASES
+============================================================
+
+Use this when starting a new EB-1A case:
+
+“Analyze the beneficiary’s documents and build an EB-1A evidence map under 8 CFR 204.5(h)(3) and USCIS Policy Manual two-step review. Identify which criteria are strong, moderate, weak, or unavailable. For each claimed criterion, list supporting documents, missing documents, risks, and the legal thesis. Then draft the petition using the unified EB-1A template, preserving exhibit architecture and citation format. Do not invent facts. Mark missing facts as [MISSING].”
+
+============================================================
+END OF TEMPLATE
+============================================================

@@ -1,0 +1,1285 @@
+O-1B NONIMMIGRANT VISA PETITION TEMPLATE
+Arts / Motion Picture or Television
+LLM-FRIENDLY STRUCTURE, DRAFTING RULES, PLACEHOLDERS, AND EXHIBIT DIVIDERS
+
+Template date: 26 June 2026
+Use case: first O-1B petition, extension, amended petition, or petition through U.S. employer / U.S. agent.
+Primary sources: USCIS Policy Manual, Volume 2, Part M, Chapter 4; USCIS Policy Manual, Volume 2, Part M, Chapter 7; 8 CFR 214.2(o); user-provided working O-1 template and notes.
+
+IMPORTANT: This is a drafting template. Before filing, verify current USCIS forms, editions, filing addresses, fees, premium processing rules, consultation organization requirements, and any updated USCIS Policy Manual guidance.
+
+================================================================================
+0. CORE CONCEPT: WHAT AN O-1B PETITION MUST PROVE
+================================================================================
+
+O-1B is not EB-1A and should not be drafted as EB-1A with a different cover page.
+
+There are two possible O-1B tracks:
+
+1. O-1B Arts
+The petitioner must establish that the beneficiary:
+- has extraordinary ability in the arts demonstrated by sustained national or international acclaim;
+- has achievements recognized in the field through extensive documentation;
+- is coming to the United States to work in the area of extraordinary ability.
+
+For O-1B Arts, extraordinary ability means “distinction.” In practical drafting terms, prove that the beneficiary is prominent, renowned, leading, or well-known in the field of arts.
+
+2. O-1B Motion Picture or Television (MPTV)
+The petitioner must establish that the beneficiary:
+- has demonstrated a record of extraordinary achievement in motion picture or television productions;
+- is coming to continue work in such productions.
+
+For O-1B MPTV, extraordinary achievement means a very high level of accomplishment in the motion picture or television industry. In practical drafting terms, prove that the beneficiary is recognized as outstanding, notable, or leading in the MPTV field.
+
+LLM INSTRUCTION:
+Before drafting anything, classify the case:
+[ ] O-1B Arts
+[ ] O-1B Motion Picture or Television
+[ ] Borderline case requiring explanation why the work is Arts rather than MPTV, or MPTV rather than general Arts
+
+Do not use O-1A language such as “one of the small percentage who have arisen to the very top of the field” for an O-1B Arts petition unless quoting or contrasting law. For O-1B Arts, use distinction / prominent / renowned / leading / well-known. For O-1B MPTV, use extraordinary achievement / outstanding / notable / leading.
+
+Do not use EB-1A language such as “petition for permanent residence,” “Form I-140,” “prospective substantial benefit,” or “final merits determination.” O-1B is a nonimmigrant petition filed on Form I-129. It has a totality review, but not the EB-1A final merits framework.
+
+================================================================================
+1. PRE-DRAFTING CASE MAP FOR LLM
+================================================================================
+
+Fill this table before drafting. If a field is missing, use [TO BE PROVIDED] and do not invent facts.
+
+Beneficiary full legal name: [NAME SURNAME]
+Beneficiary stage name / professional name, if any: [STAGE NAME]
+Nationality: [COUNTRY]
+Current residence: [COUNTRY / CITY]
+Passport: [PASSPORT DETAILS OR EXHIBIT REFERENCE]
+
+Petitioner type:
+[ ] U.S. employer
+[ ] U.S. agent as actual employer
+[ ] U.S. agent representing multiple employers
+[ ] U.S. agent for foreign employer
+[ ] Other: [EXPLAIN]
+
+Petitioner name: [PETITIONER LEGAL NAME]
+Petitioner address: [ADDRESS]
+Petitioner authorized signatory: [NAME / TITLE]
+Petitioner relationship to beneficiary: [EMPLOYER / AGENT / REPRESENTATIVE]
+
+O-1B track:
+[ ] Arts
+[ ] MPTV
+
+Field of arts / MPTV industry segment: [FIELD]
+Specialization: [SPECIALIZATION]
+Examples: contemporary dance, interior design, film directing, costume design, sound design, visual art, fashion design, production design, animation, music performance, documentary filmmaking.
+
+Requested validity period: [START DATE] to [END DATE]
+Requested total period: [UP TO 3 YEARS / SHORTER]
+Basis for requested period: [CONTRACT / ITINERARY / PROJECT PLAN / ENGAGEMENTS]
+
+U.S. work:
+Position / role: [ROLE]
+Employer(s) / client(s): [NAMES]
+Events / activities / productions: [LIST]
+Locations: [CITY / STATE / REMOTE / MULTIPLE LOCATIONS]
+Compensation: [SALARY / PROJECT FEE / HOURLY / DAILY / ROYALTY / OTHER]
+Contract evidence: [EXHIBIT]
+Itinerary evidence: [EXHIBIT]
+
+Consultation/advisory opinion:
+[ ] Advisory opinion obtained
+[ ] Letter of no objection obtained
+[ ] Peer expert letters used because no appropriate organization exists
+[ ] Evidence of attempts to obtain consultation attached
+[ ] Prior consultation waiver requested for Arts readmission within 2 years
+Consultation source: [ORGANIZATION / PEER GROUP / LABOR OR MANAGEMENT ORGANIZATION]
+Exhibit: [EXHIBIT]
+
+Eligibility path:
+[ ] Significant national or international award / nomination path
+[ ] At least 3 of 6 O-1B criteria
+[ ] Comparable evidence for O-1B Arts only
+[ ] Comparable evidence not available because case is MPTV
+
+Criteria claimed:
+[ ] Criterion 1: Lead/starring participant in distinguished productions/events
+[ ] Criterion 2: National/international recognition through published materials
+[ ] Criterion 3: Lead/starring/critical role for distinguished organizations/establishments
+[ ] Criterion 4: Major commercial or critically acclaimed successes
+[ ] Criterion 5: Significant recognition from organizations, critics, government agencies, or recognized experts
+[ ] Criterion 6: High salary or substantial remuneration
+[ ] Comparable evidence for Arts: [EXPLAIN]
+
+Document language:
+[ ] All documents are in English
+[ ] Translations attached
+[ ] Certificates of translation attached
+
+================================================================================
+2. GLOBAL DRAFTING RULES FOR LLM
+================================================================================
+
+2.1. Evidence-first writing
+Every factual claim must be tied to evidence. Do not write “the beneficiary is internationally recognized” unless the next sentence explains who recognized the beneficiary, for what work, when, and where the evidence is located.
+
+Preferred structure for every claim:
+1. Thesis: [Beneficiary] achieved [recognition/result/role].
+2. Fact: On [date], [event/publication/organization] did [specific action].
+3. Evidence: This is shown by [document type].
+4. Citation: (Please kindly refer to Exhibit [X], page [XX]: [document name]).
+5. Legal relevance: This supports [criterion element].
+
+2.2. Use O-1B terms precisely
+Use “distinction” for O-1B Arts.
+Use “extraordinary achievement” for O-1B MPTV.
+Use “area of extraordinary ability” for O-1B Arts.
+Use “area of extraordinary achievement” for O-1B MPTV.
+Use “coming temporarily to the United States” and “events or activities.”
+
+Avoid:
+- “permanent residence”
+- “I-140”
+- “EB-1A”
+- “national interest”
+- “prospective substantial benefit”
+- “labor certification is not required” unless needed for comparison, which is usually unnecessary
+- “one of the small percentage at the very top” in an O-1B Arts petition
+
+2.3. Distinguish three different things
+Do not merge:
+- production/event reputation under Criterion 1;
+- organization/establishment reputation under Criterion 3;
+- publication/media recognition under Criterion 2 or 4.
+
+These are different evidentiary concepts. USCIS enjoys this kind of taxonomy because apparently ordinary human suffering was insufficient.
+
+2.4. Past and future evidence
+Criteria 1 and 3 expressly require both past and prospective work:
+- Criterion 1: performed and will perform services as lead/starring participant in productions or events;
+- Criterion 3: performed and will perform in lead/starring/critical role for distinguished organizations/establishments.
+
+LLM INSTRUCTION:
+For Criteria 1 and 3, always include:
+[Past evidence]
+[Prospective U.S. evidence]
+[Bridge explaining continuity]
+
+If there is no prospective evidence, mark the criterion as risky and do not pretend the requirement disappears because the record is aesthetically pleasing.
+
+2.5. Recommendation letters are not magic dust
+For Criterion 5, testimonial letters may be the main evidence. For Criterion 3, detailed letters may help prove critical role. For Criterion 1, unpublished testimonial or recommendation letters are generally not enough because the listed evidence is limited to critical reviews, advertisements, publicity releases, publications, contracts, or endorsements.
+
+2.6. Translations
+For every non-English document, include English translation and, where required, a certificate of translation. In the exhibit list, write:
+[Document name], English translation, certificate of translation.
+
+2.7. Formatting
+Use one exhibit naming system consistently:
+Option A: Exhibits
+Option B: Attachments
+Option C: Annexes
+Recommended: Exhibits.
+
+Recommended numbering:
+Exhibit 0: General beneficiary documents
+Exhibit 0-1: Recommendation / testimonial letters
+Exhibit 1: Petitioner and agent documents
+Exhibit 2: Consultation / advisory opinion
+Exhibit 3: Employment, contracts, itinerary
+Exhibit 4: Criterion 1
+Exhibit 5: Criterion 2
+Exhibit 6: Criterion 3
+Exhibit 7: Criterion 4
+Exhibit 8: Criterion 5
+Exhibit 9: Criterion 6
+Exhibit 10: Comparable evidence, if used
+
+2.8. Page references
+Do not leave page references as “XX” in the final version. If page references are unavailable at drafting stage, keep [PAGE XX] placeholders and add a production note: “Update after PDF assembly.”
+
+================================================================================
+3. STANDARD TABLE OF CONTENTS
+================================================================================
+
+[NAME SURNAME]
+[PETITIONER ADDRESS]
+Nonimmigrant O-1B Visa Petition
+
+Table of Contents
+
+1. Form I-129, Petition for a Nonimmigrant Worker, and O and P Classification Supplement to Form I-129
+2. Filing fee checks / payment evidence [VERIFY CURRENT FEES]
+3. Premium Processing Form I-907 and fee, if applicable [VERIFY CURRENT FEE]
+4. Photocopies of beneficiary’s passport and immigration documents, if applicable
+5. Nonimmigrant O-1B Visa Petition on behalf of [NAME SURNAME]
+   5.1. Cover Letter
+   5.2. Section I. Petitioner / U.S. Agent
+   5.3. Section II. Consultation / Advisory Opinion
+   5.4. Section III. Eligibility for O-1B Classification
+        [A] General information about the beneficiary, field, professional biography, achievements, and expert recognition
+        [B] Evidence of O-1B eligibility
+            Criterion 1. Lead or starring participant in distinguished productions or events
+            Criterion 2. National or international recognition through published materials
+            Criterion 3. Lead, starring, or critical role for distinguished organizations or establishments
+            Criterion 4. Major commercial or critically acclaimed successes
+            Criterion 5. Significant recognition from organizations, critics, government agencies, or recognized experts
+            Criterion 6. High salary or substantial remuneration
+            Comparable evidence, if applicable to O-1B Arts
+        [C] Totality conclusion: distinction / extraordinary achievement
+   5.5. Section IV. Employment, Contracts, and Itinerary
+6. List of Exhibits
+7. Exhibits
+
+================================================================================
+4. COVER LETTER TEMPLATE
+================================================================================
+
+Nonimmigrant O-1B Visa Petition on behalf of [MR./MS. NAME SURNAME]
+
+[DATE]
+
+To:
+USCIS [SERVICE CENTER / LOCKBOX / ADDRESS — VERIFY CURRENT FILING ADDRESS]
+[ADDRESS]
+
+From:
+[PETITIONER NAME]
+[PETITIONER ADDRESS]
+[AUTHORIZED SIGNATORY]
+
+RE: Nonimmigrant O-1B Visa Petition on behalf of [MR./MS. NAME SURNAME]
+Petitioner: [PETITIONER LEGAL NAME]
+Beneficiary: [MR./MS. NAME SURNAME]
+Classification Sought: O-1B under INA § 101(a)(15)(O)(i)
+Type of Petition: Form I-129
+Requested Validity Period: [START DATE] to [END DATE]
+Requested Processing: [REGULAR / PREMIUM PROCESSING]
+
+Dear USCIS Officer:
+
+Submitted on Form I-129 and the O and P Classification Supplement, please find this O-1B petition filed by [PETITIONER NAME] [as U.S. employer / U.S. agent / U.S. agent representing multiple employers / U.S. agent for a foreign employer] on behalf of [MR./MS. NAME SURNAME].
+
+[MR./MS. SURNAME] is qualified for O-1B nonimmigrant classification because [he/she/they] [has extraordinary ability in the arts demonstrated by distinction / has demonstrated a record of extraordinary achievement in motion picture or television productions], specifically in [FIELD / SPECIALIZATION].
+
+[MR./MS. SURNAME] is coming temporarily to the United States to work in [his/her/their] area of [extraordinary ability / extraordinary achievement]. [He/She/They] will perform services as [POSITION / ROLE] for [PETITIONER / EMPLOYER / PROJECT / PRODUCTIONS] during the requested period from [START DATE] to [END DATE]. The proposed work includes [BRIEF DESCRIPTION OF EVENTS, PROJECTS, PRODUCTIONS, OR ACTIVITIES].
+
+The enclosed evidence demonstrates that [MR./MS. SURNAME] satisfies the requirements for O-1B classification for the following reasons:
+
+1. [For O-1B Arts] [MR./MS. SURNAME] has extraordinary ability in the arts, demonstrated by distinction, including a level of skill and recognition substantially above that ordinarily encountered in [FIELD].
+
+   [For O-1B MPTV] [MR./MS. SURNAME] has demonstrated a record of extraordinary achievement in motion picture or television productions, including a very high level of accomplishment in [MPTV FIELD].
+
+2. [MR./MS. SURNAME] has sustained national or international recognition for [his/her/their] achievements, as shown by extensive documentation including [AWARDS / REVIEWS / PUBLICATIONS / CRITICAL RECOGNITION / DISTINGUISHED PRODUCTIONS / ROLES / EXPERT TESTIMONIALS / SALARY EVIDENCE].
+
+3. [MR./MS. SURNAME] is coming to the United States to continue work in the same area of [extraordinary ability / extraordinary achievement], as demonstrated by [CONTRACTS / OFFER LETTERS / ITINERARY / PROJECT AGREEMENTS / STATEMENT FROM PETITIONER].
+
+4. [MR./MS. SURNAME] satisfies at least three of the six evidentiary criteria listed at 8 CFR 214.2(o)(3)(iv) [for Arts] / 8 CFR 214.2(o)(3)(v) [for MPTV], namely:
+
+   (1) Evidence that [MR./MS. SURNAME] has performed, and will perform, services as a lead or starring participant in productions or events with distinguished reputations. Please refer to Section III[B][1].
+
+   (2) Evidence that [MR./MS. SURNAME] has achieved national or international recognition for achievements through critical reviews or other published materials by or about [him/her/them]. Please refer to Section III[B][2].
+
+   (3) Evidence that [MR./MS. SURNAME] has performed, and will perform, in a lead, starring, or critical role for organizations or establishments with distinguished reputations. Please refer to Section III[B][3].
+
+   (4) Evidence that [MR./MS. SURNAME] has a record of major commercial or critically acclaimed successes. Please refer to Section III[B][4].
+
+   (5) Evidence that [MR./MS. SURNAME] has received significant recognition for achievements from organizations, critics, government agencies, or recognized experts. Please refer to Section III[B][5].
+
+   (6) Evidence that [MR./MS. SURNAME] has commanded, or will command, a high salary or other substantial remuneration in relation to others in the field. Please refer to Section III[B][6].
+
+[If using significant award path]
+Alternatively / additionally, [MR./MS. SURNAME] has [received / been nominated for] [SIGNIFICANT NATIONAL OR INTERNATIONAL AWARD], which independently supports [his/her/their] eligibility for O-1B classification. Please refer to Section III[B][0].
+
+[If using comparable evidence for O-1B Arts]
+Where a listed criterion is not readily applicable to [MR./MS. SURNAME]’s occupation, the petition includes comparable evidence with a specific explanation of why the listed criterion does not readily apply and why the submitted evidence is comparable. Please refer to Section III[B][Comparable Evidence].
+
+[If MPTV]
+Because this petition concerns motion picture or television productions, comparable evidence is not used.
+
+Based on the totality of the enclosed evidence, [MR./MS. SURNAME] qualifies for O-1B classification and is eligible to enter the United States temporarily to perform the proposed work in [his/her/their] field.
+
+Respectfully submitted,
+
+[PETITIONER NAME]
+By: [AUTHORIZED SIGNATORY]
+Title: [TITLE]
+Date: [DATE]
+
+================================================================================
+5. SECTION I. PETITIONER / U.S. AGENT
+================================================================================
+
+Purpose of this section:
+Identify who is filing the petition and why that petitioner is allowed to file. This section should be short, factual, and document-based.
+
+LLM INSTRUCTION:
+Do not let this section become a biography of the beneficiary. The question is: who is the petitioner, what is the petitioner’s legal capacity, what work is offered, and what documents prove it?
+
+Template:
+
+Section I. Petitioner / U.S. Agent
+
+[PETITIONER NAME] is [a U.S. company / a U.S. individual agent / a U.S. agent acting on behalf of multiple employers / a U.S. agent acting on behalf of a foreign employer] located at [ADDRESS]. [PETITIONER NAME] files this O-1B petition on behalf of [MR./MS. NAME SURNAME] in connection with [his/her/their] proposed work as [ROLE] in [FIELD / PROJECT / PRODUCTIONS / EVENTS].
+
+[Describe petitioner briefly: formation, business activity, industry relevance, relation to beneficiary, and reason for hiring/representing beneficiary.]
+
+The petitioner is authorized to file this petition because [choose one]:
+- [PETITIONER NAME] will directly employ [MR./MS. SURNAME] during the requested period.
+- [PETITIONER NAME] is a U.S. agent authorized to represent [BENEFICIARY / MULTIPLE EMPLOYERS / FOREIGN EMPLOYER] for the proposed U.S. engagements.
+- [PETITIONER NAME] will act as the beneficiary’s actual employer and will control the terms and conditions of employment.
+
+The following documents establish the petitioner’s identity and filing capacity:
+
+(Please kindly refer to Exhibit 1, pages [XX-XX]: Petitioner / U.S. Agent documents.)
+
+Within Exhibit 1, the following documents are attached:
+1.1. [Petitioner formation documents / registration documents]
+1.2. [Petitioner business license / proof of active status]
+1.3. [Agent authorization agreement, if applicable]
+1.4. [Contracts or offer letters with employers/clients, if agent case]
+1.5. [Petitioner statement explaining need for beneficiary]
+1.6. [Evidence of petitioner’s business activity / website / portfolio / contracts]
+
+Petitioner statement block:
+
+[PETITIONER NAME] seeks [MR./MS. SURNAME]’s services because [EXPLAIN SPECIFIC NEED]. The proposed role requires [SPECIALIZED ARTISTIC / CREATIVE / MPTV SKILLS] that are directly connected to [MR./MS. SURNAME]’s recognized achievements in [FIELD]. [He/She/They] will perform [DUTIES], including [DUTY 1], [DUTY 2], and [DUTY 3]. These duties are within [his/her/their] area of [extraordinary ability / extraordinary achievement] because [EXPLAIN SHARED SKILLSETS, INDUSTRY, AND PRIOR ACCLAIM].
+
+================================================================================
+6. SECTION II. CONSULTATION / ADVISORY OPINION
+================================================================================
+
+Purpose of this section:
+Show that the petition includes the required written consultation/advisory opinion or a legally supported explanation for its absence.
+
+Core rule:
+Consultation with an appropriate U.S. peer group, labor organization, management organization, or qualified expert source is generally mandatory before O-1 approval.
+
+For O-1B Arts:
+The consultation should come from an appropriate peer group, labor organization, management organization, or person/persons with expertise in the field.
+
+For O-1B MPTV:
+Consultation must generally involve the appropriate union representing occupational peers and a management organization in the beneficiary’s area.
+
+LLM INSTRUCTION:
+This section is not a recommendation-letter dump. It should prove that the consultation source is appropriate and that the opinion addresses the beneficiary’s qualifications and proposed U.S. work.
+
+Template:
+
+Section II. Consultation / Advisory Opinion
+
+The petitioner submits a written advisory opinion from [ORGANIZATION / PEER GROUP / LABOR ORGANIZATION / MANAGEMENT ORGANIZATION / RECOGNIZED EXPERT(S)] with expertise in [FIELD]. The advisory opinion supports this petition and confirms that [MR./MS. SURNAME] has [extraordinary ability in the arts / extraordinary achievement in motion picture or television] and that the proposed U.S. work is within [his/her/their] area of [extraordinary ability / extraordinary achievement].
+
+(Please kindly refer to Exhibit 2, pages [XX-XX]: Consultation / Advisory Opinion.)
+
+Within Exhibit 2, the following documents are attached:
+2.1. Advisory Opinion from [ORGANIZATION], dated [DATE]
+2.2. Evidence of [ORGANIZATION]’s expertise and relevance to [FIELD]
+2.3. Evidence of author’s authority to issue the opinion
+2.4. Correspondence requesting consultation, if useful
+2.5. Evidence of attempts to obtain consultation, if no appropriate organization was available
+2.6. Expert letters used as consultation evidence, if applicable
+2.7. Prior consultation and waiver request, if applicable
+
+The advisory opinion identifies the parties and context: [SUMMARY]. It describes [MR./MS. SURNAME]’s ability and achievements in [FIELD], including [ACHIEVEMENT 1], [ACHIEVEMENT 2], and [ACHIEVEMENT 3]. It also describes the nature of the proposed U.S. duties, including [DUTIES], and states that [the position requires / the proposed services involve] [a person of O-1B caliber / the services of an alien of extraordinary ability / extraordinary achievement].
+
+If the advisory opinion is a letter of no objection:
+[ORGANIZATION] issued a letter of no objection to the approval of this petition. The letter confirms that the organization has no objection to [MR./MS. SURNAME] performing the proposed work in the United States.
+
+If no appropriate organization exists:
+The petitioner was unable to obtain a formal advisory opinion because [EXPLAIN SPECIFICALLY]. The petitioner therefore submits [letters from recognized U.S. experts / evidence of attempts / proof that no appropriate peer group exists]. These materials establish that the consultation requirement should be evaluated on the record.
+
+Advisory Opinion checklist:
+[ ] Letterhead
+[ ] Date
+[ ] Signature
+[ ] Author title and authority
+[ ] Organization or expert’s field relevance
+[ ] Beneficiary identified correctly
+[ ] Proposed U.S. role identified correctly
+[ ] Achievements described factually
+[ ] Duties described
+[ ] Opinion states whether beneficiary qualifies / whether role requires O-1 caliber services
+[ ] No exaggerated, unsupported, or emotional language
+
+================================================================================
+7. SECTION III[A]. GENERAL INFORMATION ABOUT BENEFICIARY
+================================================================================
+
+Purpose of this section:
+Give the officer a controlled, coherent overview before the criteria. This is where the field, specialization, career arc, achievements, and expert recognition are introduced.
+
+LLM INSTRUCTION:
+Write this section after reviewing all criteria evidence. The overview must preview the strongest evidence, not merely summarize the CV.
+
+Section III. Eligibility for O-1B Classification
+[A] General information about the beneficiary, field, professional biography, achievements, and expert recognition
+
+Overview
+
+[MR./MS. NAME SURNAME] is a [PROFESSION / ROLE] specializing in [SPECIALIZATION] within the field of [FIELD]. [He/She/They] has [NUMBER] years of professional experience and has built a record of distinction through [KEY ACHIEVEMENT TYPES: lead roles, critically recognized projects, awards, publications, distinguished organizations, expert recognition, commercial success, high remuneration].
+
+[Write 1-2 paragraphs summarizing the strongest facts. Use dates, names, and outcomes. Avoid empty praise.]
+
+(Please kindly refer to Exhibit 0, pages [XX-XX]: General documents of [MR./MS. SURNAME].)
+
+Within Exhibit 0, the following documents are attached:
+0.1. CV of [MR./MS. NAME SURNAME]
+0.2. Passport biographical page
+0.3. Degrees / diplomas / certificates, if relevant
+0.4. Portfolio / selected works list
+0.5. Professional biography / resume
+0.6. [Other general documents]
+
+Field and specialization
+
+The beneficiary’s field is [FIELD]. [Explain why this field falls within “arts” or MPTV.]
+
+For O-1B Arts:
+The beneficiary’s specialization is [SPECIALIZATION], which is a field of creative activity or endeavor involving [CREATIVE SKILLSETS]. [MR./MS. SURNAME]’s work includes [DUTIES / WORK TYPES], which require [ARTISTIC / CREATIVE / DESIGN / PERFORMANCE / TECHNICAL-CREATIVE] expertise.
+
+For O-1B MPTV:
+The beneficiary’s specialization is [SPECIALIZATION] within the motion picture or television industry. [MR./MS. SURNAME]’s work includes [PRODUCTION WORK TYPES], and the proposed U.S. work will continue within MPTV productions.
+
+Professional biography
+
+[Write chronologically. For each stage, include: organization/project, dates, role, field relevance, achievements, and evidence.]
+
+[PERIOD] — [ORGANIZATION / PROJECT] — [ROLE]
+[MR./MS. SURNAME] [describe role]. This stage is relevant to the O-1B petition because [explain connection to field, recognition, distinction, or MPTV achievement].
+(Please kindly refer to Exhibit [X], page [XX]: [DOCUMENT].)
+
+Education and training, if relevant
+
+[MR./MS. SURNAME] received [DEGREE / TRAINING] from [INSTITUTION] in [YEAR]. This education supports [his/her/their] work in [FIELD] because [SPECIFIC CONNECTION].
+(Please kindly refer to Exhibit 0, page [XX]: [DOCUMENT].)
+
+Support letters / testimonials overview
+
+[MR./MS. SURNAME]’s recognition is also supported by testimonials from [NUMBER] recognized professionals / organizations / critics / government agencies / experts in [FIELD]. These letters are submitted primarily under Criterion 5 and, where relevant, also support Criterion 3 by explaining the significance of [his/her/their] roles for distinguished organizations or establishments.
+
+(Please kindly refer to Exhibit 0-1, pages [XX-XX]: Testimonial letters and explanatory notes.)
+
+Within Exhibit 0-1, the following documents are attached:
+0-1.1. Testimonial letter from [NAME], [TITLE / ORGANIZATION], explanatory note
+0-1.2. Testimonial letter from [NAME], [TITLE / ORGANIZATION], explanatory note
+0-1.3. Testimonial letter from [NAME], [TITLE / ORGANIZATION], explanatory note
+0-1.4. Testimonial letter from [NAME], [TITLE / ORGANIZATION], explanatory note
+
+Brief information about the authors:
+(1) [NAME] — [2-3 sentence explanation of authority, field relevance, and basis of knowledge].
+(Please kindly refer to Exhibit 0-1, page [XX]: [DOCUMENT].)
+
+Selected quotes:
+Quote only 4-7 strongest passages. Do not paste every compliment. Select quotes that identify a concrete achievement and explain why it matters.
+
+“[QUOTE: concrete recognition of a specific achievement].”
+— [NAME], [AUTHORITY], [BASIS OF KNOWLEDGE]
+(Please kindly refer to Exhibit 0-1, page [XX]: [DOCUMENT].)
+
+================================================================================
+8. SECTION III[B]. EVIDENCE OF O-1B ELIGIBILITY
+================================================================================
+
+Before writing criteria, select the eligibility path.
+
+Path 1: Significant national or international award / nomination
+Use if the beneficiary received or was nominated for a truly significant national or international award in the field, comparable in status to major field-recognized awards.
+
+Path 2: At least three of six criteria
+Use in most cases.
+
+Path 3: Comparable evidence
+Use only for O-1B Arts when a listed criterion does not readily apply to the occupation and the proposed substitute evidence is genuinely comparable.
+Do not use comparable evidence for O-1B MPTV.
+
+================================================================================
+8.0. SIGNIFICANT NATIONAL OR INTERNATIONAL AWARD PATH
+================================================================================
+
+Use only if strong. A weak award is better analyzed under Criterion 2, 4, or 5 if evidence permits.
+
+Template:
+
+[B.0] Evidence of receipt of or nomination for a significant national or international award or prize in the particular field
+
+[MR./MS. SURNAME] has [received / been nominated for] [AWARD NAME], a significant [national / international] award in [FIELD]. This award recognizes [TYPE OF ACHIEVEMENT] and is granted by [AWARDING BODY] based on [SELECTION CRITERIA].
+
+(Please kindly refer to Exhibit [X], pages [XX-XX]: Evidence of [AWARD NAME].)
+
+Within this exhibit, the following documents are attached:
+[X].1. Award certificate / nomination confirmation
+[X].2. Official award rules and criteria
+[X].3. Official website listing recipient / nominee
+[X].4. Evidence of national or international significance of the award
+[X].5. Jury / selection body information
+[X].6. Media coverage / critical coverage of award, if available
+[X].7. Prior recipients / institutional reputation, if useful
+
+1. Fact of award or nomination
+On [DATE], [MR./MS. SURNAME] [received / was nominated for] [AWARD] for [WORK / ACHIEVEMENT].
+(Please kindly refer to Exhibit [X], page [XX]: [DOCUMENT].)
+
+2. Award significance
+[AWARD] is significant in [FIELD] because [explain scale, history, national/international reach, jury, prestige, prior recipients, industry recognition].
+(Please kindly refer to Exhibit [X], page [XX]: [DOCUMENT].)
+
+3. Basis for recognition
+The award recognizes excellence in [FIELD] because [selection criteria]. The submitted rules show that candidates are evaluated based on [CRITERIA].
+(Please kindly refer to Exhibit [X], page [XX]: [DOCUMENT].)
+
+Conclusion
+This evidence establishes that [MR./MS. SURNAME] has [received / been nominated for] a significant [national / international] award in [FIELD].
+
+================================================================================
+8.1. CRITERION 1 — LEAD OR STARRING PARTICIPANT IN DISTINGUISHED PRODUCTIONS OR EVENTS
+================================================================================
+
+Regulatory focus:
+The beneficiary has performed, and will perform, services as a lead or starring participant in productions or events with distinguished reputations.
+
+LLM ELEMENTS TO PROVE:
+1. Past production/event existed.
+2. Past production/event had distinguished reputation.
+3. Beneficiary’s role was lead or starring.
+4. Evidence is in accepted form: critical reviews, advertisements, publicity releases, publications, contracts, or endorsements.
+5. Prospective production/event exists or is planned.
+6. Beneficiary will perform lead or starring services prospectively.
+7. The prospective event/production is distinguished or is reasonably supported by advance publicity, endorsements, reputation of organizers, or similar past productions/events.
+
+Classic examples:
+- principal artist in a performance;
+- leading actor / singer / dancer / performer;
+- headliner at a festival;
+- featured artist in a major exhibition;
+- principal designer / creative director of a public show;
+- key curator or art director where the event is built around their creative concept;
+- lead visual / sound / set / costume designer when public materials highlight the role.
+
+Do not use only unpublished recommendation letters here. For this criterion, public-facing evidence matters.
+
+Template:
+
+[B.1] Criterion 1: Evidence that the beneficiary has performed, and will perform, services as a lead or starring participant in productions or events with distinguished reputations
+
+[MR./MS. SURNAME] has performed, and will perform, services as a [lead / starring] participant in distinguished [productions / events] in [FIELD]. The evidence below demonstrates both [his/her/their] past qualifying roles and [his/her/their] prospective U.S. role.
+
+(Please kindly refer to Exhibit 4, pages [XX-XX]: Criterion 1 evidence.)
+
+Within Exhibit 4, the following documents are attached:
+4.1. [Past production/event 1] — [documents]
+4.2. [Past production/event 2] — [documents]
+4.3. [Prospective U.S. production/event] — [contract / itinerary / publicity / endorsement]
+4.4. [Evidence of distinguished reputation]
+
+1. Past lead or starring role in [PRODUCTION / EVENT]
+
+[PRODUCTION / EVENT] was [description]. It took place on [DATE] at [LOCATION] and involved [organizer / venue / participants / audience].
+
+[MR./MS. SURNAME] performed as [ROLE]. This was a [lead / starring] role because [explain prominence: named in title, featured in program, principal credit, central creative responsibility, solo role, headliner status, contractual role, top billing].
+(Please kindly refer to Exhibit 4, page [XX]: [contract/program/advertisement/publicity/review].)
+
+The distinguished reputation of [PRODUCTION / EVENT] is shown by [critical reviews / high attendance / major venue / organizer reputation / commercial success / media coverage / awards / public significance].
+(Please kindly refer to Exhibit 4, page [XX]: [DOCUMENT].)
+
+2. Prospective lead or starring role in [U.S. PRODUCTION / EVENT]
+
+In the United States, [MR./MS. SURNAME] will perform services as [ROLE] in [PRODUCTION / EVENT / PROJECT]. The role is [lead / starring] because [specific duties and prominence].
+(Please kindly refer to Exhibit 3, page [XX]: [contract / offer / itinerary].)
+
+The prospective event/production has a distinguished reputation or strong evidence of anticipated significance because [advance publicity / organizer reputation / previous editions / venue / collaborators / endorsements].
+(Please kindly refer to Exhibit 4, page [XX]: [DOCUMENT].)
+
+Conclusion
+This evidence establishes that [MR./MS. SURNAME] has performed, and will perform, services as a [lead / starring] participant in distinguished [productions / events].
+
+RISK NOTES FOR LLM:
+- If the beneficiary was one of many participants, explain why the role was still lead/starring relative to the production/event.
+- If the event is prestigious but the beneficiary’s role is minor, the criterion is weak.
+- If the role is important but the event is obscure, add stronger evidence of event reputation.
+- If future U.S. work is ordinary employment with no production/event framing, use Section IV carefully and consider whether Criterion 1 should be claimed.
+
+================================================================================
+8.2. CRITERION 2 — NATIONAL OR INTERNATIONAL RECOGNITION THROUGH PUBLISHED MATERIALS
+================================================================================
+
+Regulatory focus:
+The beneficiary has achieved national or international recognition for achievements, evidenced by critical reviews or other published materials by or about the beneficiary in major newspapers, trade journals, magazines, or other publications.
+
+LLM ELEMENTS TO PROVE:
+1. There is a published material.
+2. It is by or about the beneficiary.
+3. It discusses or reflects achievements, not mere biography or advertising.
+4. It appears in a qualifying publication.
+5. The publication’s status supports national or international recognition.
+6. Include title, date, author, and translation if needed.
+
+The publication need not be solely about the beneficiary. It can be about a broader exhibition, production, project, or field topic if it discusses the beneficiary or the beneficiary’s work/achievement and connects the beneficiary to that work.
+
+Template:
+
+[B.2] Criterion 2: Evidence that the beneficiary has achieved national or international recognition for achievements through critical reviews or published materials
+
+[MR./MS. SURNAME] has achieved [national / international] recognition for [his/her/their] achievements in [FIELD], as evidenced by [critical reviews / interviews / articles / catalog texts / professional publications / major media materials] by or about [him/her/them].
+
+(Please kindly refer to Exhibit 5, pages [XX-XX]: Criterion 2 evidence.)
+
+Within Exhibit 5, the following documents are attached:
+5.1. Article / review “[TITLE]” in [PUBLICATION], dated [DATE], by [AUTHOR], English translation
+5.2. Evidence of [PUBLICATION]’s circulation / readership / audience / reputation
+5.3. Article / review “[TITLE]” in [PUBLICATION], dated [DATE], by [AUTHOR], English translation
+5.4. Evidence of [PUBLICATION]’s status
+
+Publication 1: [TITLE], [PUBLICATION]
+
+On [DATE], [PUBLICATION] published [ARTICLE / REVIEW / INTERVIEW] titled “[TITLE]” by [AUTHOR]. The material discusses [MR./MS. SURNAME]’s work [WORK / ACHIEVEMENT] and recognizes [specific achievement].
+(Please kindly refer to Exhibit 5, page [XX]: [ARTICLE].)
+
+The material is about [MR./MS. SURNAME] and [his/her/their] achievements because [explain discussion, quotes, review, analysis, credits, evaluation]. It is not merely a listing or self-promotional portfolio page.
+
+[PUBLICATION] qualifies as [major newspaper / trade journal / magazine / other publication] because [audience, circulation, readership, viewership, industry role, editorial nature, ranking].
+(Please kindly refer to Exhibit 5, page [XX]: [MEDIA EXPLANATORY NOTE / TRAFFIC DATA / PUBLICATION PROFILE].)
+
+Publication 2: [repeat]
+
+Conclusion
+The submitted published materials demonstrate [MR./MS. SURNAME]’s [national / international] recognition for achievements in [FIELD].
+
+RISK NOTES FOR LLM:
+- Instagram posts, personal websites, portfolio pages, and press releases are usually weak unless tied to a recognized publication or public-facing endorsement.
+- Do not use publications that only mention the employer unless the beneficiary is mentioned in connection with the work or another document proves the beneficiary’s significant role.
+- For online publications, include evidence of audience or reputation. “It is online” is not a legal argument, despite the internet’s tragic confidence in itself.
+
+================================================================================
+8.3. CRITERION 3 — LEAD, STARRING, OR CRITICAL ROLE FOR DISTINGUISHED ORGANIZATIONS OR ESTABLISHMENTS
+================================================================================
+
+Regulatory focus:
+The beneficiary has performed, and will perform, in a lead, starring, or critical role for organizations or establishments with distinguished reputations.
+
+LLM ELEMENTS TO PROVE:
+1. Past/current organization or establishment exists.
+2. It has a distinguished reputation.
+3. Beneficiary’s role was lead, starring, or critical.
+4. If lead/starring: show hierarchy, prominence, principal role.
+5. If critical: show importance to goals, activities, outcomes, or success.
+6. Prospective U.S. organization/establishment exists.
+7. Beneficiary will perform lead/starring/critical role there.
+8. Prospective organization/establishment has distinguished reputation.
+
+Organization need not have directly employed the beneficiary. A distinguished division or department can qualify if evidence supports its reputation.
+
+Template:
+
+[B.3] Criterion 3: Evidence that the beneficiary has performed, and will perform, in a lead, starring, or critical role for organizations or establishments with distinguished reputations
+
+[MR./MS. SURNAME] has performed, and will perform, in [lead / starring / critical] roles for distinguished [organizations / establishments] in [FIELD].
+
+(Please kindly refer to Exhibit 6, pages [XX-XX]: Criterion 3 evidence.)
+
+Within Exhibit 6, the following documents are attached:
+6.1. Evidence of role at [ORGANIZATION 1]
+6.2. Evidence of [ORGANIZATION 1]’s distinguished reputation
+6.3. Testimonial / employer letter explaining role significance
+6.4. Evidence of prospective U.S. role at [ORGANIZATION 2]
+6.5. Evidence of [ORGANIZATION 2]’s distinguished reputation
+
+1. Past / current role for [ORGANIZATION]
+
+[ORGANIZATION] is a distinguished [organization / establishment] in [FIELD]. Its reputation is shown by [media coverage / awards / longevity / scale / clients / audience / major projects / institutional status / public recognition].
+(Please kindly refer to Exhibit 6, page [XX]: [DOCUMENT].)
+
+[MR./MS. SURNAME] served as [ROLE] from [DATE] to [DATE]. [He/She/They] was responsible for [DUTIES].
+(Please kindly refer to Exhibit 6, page [XX]: [CONTRACT / EMPLOYMENT LETTER / CREDIT / PROGRAM / ORGANIZATIONAL CHART].)
+
+This role was [lead / starring] because [hierarchy, principal authority, top billing, public prominence].
+OR
+This role was critical because [MR./MS. SURNAME] contributed to [ORGANIZATION]’s core activities by [specific contribution], resulting in [measurable or documented outcome].
+(Please kindly refer to Exhibit 6, page [XX]: [LETTER / DOCUMENT].)
+
+2. Prospective U.S. role for [ORGANIZATION]
+
+In the United States, [MR./MS. SURNAME] will serve as [ROLE] for [ORGANIZATION]. [ORGANIZATION] has a distinguished reputation because [evidence].
+(Please kindly refer to Exhibit 6, page [XX]: [DOCUMENT].)
+
+[MR./MS. SURNAME]’s role will be [lead / starring / critical] because [duties, authority, creative control, project dependency, uniqueness of skillset, expected outputs].
+(Please kindly refer to Exhibit 3, page [XX]: [CONTRACT / OFFER / STATEMENT].)
+
+Conclusion
+The evidence establishes that [MR./MS. SURNAME] has performed, and will perform, in [lead / starring / critical] roles for distinguished organizations or establishments.
+
+RISK NOTES FOR LLM:
+- Distinguished organization + ordinary role = weak.
+- Important role + unknown organization = weak unless reputation is proven.
+- For critical role, titles matter less than actual impact.
+- Add organizational charts, credits, contracts, project outcomes, public materials, and detailed letters where available.
+
+================================================================================
+8.4. CRITERION 4 — MAJOR COMMERCIAL OR CRITICALLY ACCLAIMED SUCCESSES
+================================================================================
+
+Regulatory focus:
+The beneficiary has a record of major commercial or critically acclaimed successes, shown by title, rating, standing in the field, box office receipts, motion picture or television ratings, or other occupational achievements reported in trade journals, major newspapers, or other publications.
+
+LLM ELEMENTS TO PROVE:
+1. Identify the success: commercial or critically acclaimed.
+2. Show it is major in the relevant field.
+3. Show the success is the beneficiary’s success, not merely the success of a large project with the beneficiary somewhere in the credits.
+4. Use publications as evidence.
+5. If publication is about production rather than beneficiary, explain attribution to beneficiary’s contribution.
+
+Template:
+
+[B.4] Criterion 4: Evidence of a record of major commercial or critically acclaimed successes
+
+[MR./MS. SURNAME] has a record of [major commercial successes / critically acclaimed successes] in [FIELD], as shown by [ratings / sales / box office / attendance / critical reviews / rankings / awards coverage / professional standing / published occupational achievements].
+
+(Please kindly refer to Exhibit 7, pages [XX-XX]: Criterion 4 evidence.)
+
+Within Exhibit 7, the following documents are attached:
+7.1. Publication reporting success of [WORK / PRODUCTION / PROJECT]
+7.2. Evidence connecting [MR./MS. SURNAME] to the success
+7.3. Ratings / sales / audience / attendance / revenue / ranking data
+7.4. Critical reviews / professional reviews
+7.5. Explanatory note on why success is major in the field
+
+Success 1: [WORK / PROJECT / PRODUCTION]
+
+[WORK / PROJECT / PRODUCTION] achieved [specific commercial or critical success]. This success is documented by [PUBLICATION] in [ARTICLE / REVIEW] dated [DATE].
+(Please kindly refer to Exhibit 7, page [XX]: [DOCUMENT].)
+
+This success is major in [FIELD] because [comparison, ratings, audience, publication praise, industry ranking, major venue, award context].
+(Please kindly refer to Exhibit 7, page [XX]: [DOCUMENT].)
+
+The success represents [MR./MS. SURNAME]’s success because [he/she/they] [created / directed / designed / performed / led / authored / was credited for] [specific contribution], and the record shows that [his/her/their] contribution was significant to the result.
+(Please kindly refer to Exhibit 7, page [XX]: [CREDIT / CONTRACT / REVIEW / LETTER / PUBLICATION].)
+
+Conclusion
+The evidence establishes [MR./MS. SURNAME]’s record of major [commercial / critically acclaimed] successes in [FIELD].
+
+RISK NOTES FOR LLM:
+- Publications are central here. A private letter alone is not enough.
+- Awards may support this criterion if the award is reported in publications and the record explains how it shows critical success.
+- If using commercial metrics, explain field relevance. A number without benchmark is just a lonely number wearing a tie.
+
+================================================================================
+8.5. CRITERION 5 — SIGNIFICANT RECOGNITION FROM ORGANIZATIONS, CRITICS, GOVERNMENT AGENCIES, OR RECOGNIZED EXPERTS
+================================================================================
+
+Regulatory focus:
+The beneficiary has received significant recognition for achievements from organizations, critics, government agencies, or recognized experts in the field. Testimonials must clearly indicate the author’s authority, expertise, and knowledge of the beneficiary’s achievements.
+
+This is often the most important O-1B criterion for arts cases.
+
+LLM ELEMENTS TO PROVE:
+1. The beneficiary has achievements.
+2. Recognition comes from a qualifying source: organization, critic, government agency, or recognized expert.
+3. The source’s authority is established.
+4. The author explains basis of knowledge.
+5. The testimonial describes concrete achievements and their significance.
+6. The letter is not generic praise.
+
+Template:
+
+[B.5] Criterion 5: Evidence of significant recognition for achievements from organizations, critics, government agencies, or recognized experts
+
+[MR./MS. SURNAME] has received significant recognition for [his/her/their] achievements from [organizations / critics / government agencies / recognized experts] in [FIELD]. The submitted testimonials are authored by recognized persons or institutions with direct knowledge of [MR./MS. SURNAME]’s achievements and clearly explain why these achievements are significant.
+
+(Please kindly refer to Exhibit 8, pages [XX-XX]: Criterion 5 evidence.)
+
+Within Exhibit 8, the following documents are attached:
+8.1. Testimonial from [NAME], [TITLE / ORGANIZATION]
+8.2. Evidence of [NAME]’s authority and expertise
+8.3. Testimonial from [ORGANIZATION / GOVERNMENT AGENCY]
+8.4. Evidence of organization’s significance
+8.5. Testimonial from [CRITIC / EXPERT]
+8.6. Explanatory notes about testimonial authors
+
+Recognition 1: [NAME / ORGANIZATION]
+
+[NAME] is a recognized [critic / expert / curator / producer / art director / institutional representative / government agency official] in [FIELD]. [His/Her/Their] authority is shown by [credentials, publications, awards, institutional role, major projects, field reputation].
+(Please kindly refer to Exhibit 8, page [XX]: [EXPLANATORY NOTE / CV / PUBLIC PROFILE].)
+
+[NAME] has direct knowledge of [MR./MS. SURNAME]’s achievements because [basis of knowledge: worked together, curated work, reviewed work, commissioned work, evaluated work, directed organization].
+(Please kindly refer to Exhibit 8, page [XX]: [LETTER].)
+
+In the testimonial, [NAME] recognizes [specific achievement] and explains that [why it is significant].
+(Please kindly refer to Exhibit 8, page [XX]: [LETTER].)
+
+Quote only if useful:
+“[SHORT QUOTE ABOUT SPECIFIC ACHIEVEMENT AND SIGNIFICANCE].”
+(Please kindly refer to Exhibit 8, page [XX]: [LETTER].)
+
+Conclusion
+The submitted testimonials establish significant recognition of [MR./MS. SURNAME]’s achievements by recognized sources in [FIELD].
+
+RISK NOTES FOR LLM:
+- A strong letter describes works and achievements, not personality.
+- The author’s authority must be established. “Friend who likes the art” is not a recognized expert, however emotionally available.
+- If a letter is from an organization, explain the author’s authority to speak for that organization.
+- Government agency recognition can be strong if the agency’s role and connection to the achievement are clear.
+
+Recommended testimonial letter structure:
+1. Author identity and authority.
+2. Relationship to beneficiary and basis of knowledge.
+3. Description of beneficiary’s specific achievements.
+4. Explanation of why achievements are significant in the field.
+5. Explanation of beneficiary’s role in the achievement.
+6. If relevant, connection to proposed U.S. work.
+7. Signature, title, contact details.
+
+================================================================================
+8.6. CRITERION 6 — HIGH SALARY OR SUBSTANTIAL REMUNERATION
+================================================================================
+
+Regulatory focus:
+The beneficiary has commanded, or will command, a high salary or other substantial remuneration for services in relation to others in the field, as evidenced by contracts or other reliable evidence.
+
+LLM ELEMENTS TO PROVE:
+1. Beneficiary’s past or future compensation is documented.
+2. Compensation is for work in the field.
+3. Comparison data is reliable.
+4. Comparison is geographically and occupationally appropriate.
+5. Rate type is consistent: annual, hourly, daily, project-based, royalties, commission, etc.
+6. If artists are project-paid, explain the industry norm and provide calculation method.
+
+Template:
+
+[B.6] Criterion 6: Evidence of high salary or other substantial remuneration
+
+[MR./MS. SURNAME] has commanded / will command [high salary / substantial remuneration] for services in [FIELD] in relation to others in the field.
+
+(Please kindly refer to Exhibit 9, pages [XX-XX]: Criterion 6 evidence.)
+
+Within Exhibit 9, the following documents are attached:
+9.1. Contract / offer letter showing compensation
+9.2. Pay statements / bank records / tax records / invoices, if available
+9.3. Industry wage survey / government wage data / reliable salary report
+9.4. Explanation of occupation comparison
+9.5. Currency conversion and location analysis, if needed
+9.6. Project-rate calculation, if needed
+
+Past compensation:
+From [DATE] to [DATE], [MR./MS. SURNAME] received [AMOUNT] for [SERVICES].
+(Please kindly refer to Exhibit 9, page [XX]: [CONTRACT / PAYMENT RECORD].)
+
+Prospective compensation:
+Under the proposed U.S. [contract / offer / engagement], [MR./MS. SURNAME] will receive [AMOUNT] for [SERVICES] during [PERIOD].
+(Please kindly refer to Exhibit 9, page [XX]: [CONTRACT / OFFER].)
+
+Comparison:
+This compensation is high in relation to others in [FIELD / OCCUPATION] because [reliable data source] shows that comparable professionals in [LOCATION / FIELD] typically earn [COMPARISON AMOUNT].
+(Please kindly refer to Exhibit 9, page [XX]: [WAGE DATA].)
+
+Methodology:
+The comparison is appropriate because [explain occupational match, location, period, rate type, project-based nature of artistic work, number of hours/days if necessary].
+
+Conclusion
+The evidence establishes that [MR./MS. SURNAME] has commanded / will command high salary or substantial remuneration in relation to others in [FIELD].
+
+RISK NOTES FOR LLM:
+- Do not compare Russian salary to U.S. salary by simple currency conversion unless the legal theory is very carefully framed.
+- For foreign past work, compare to local labor market or field-specific evidence.
+- For future U.S. work, contracts/offers are useful, but they must look credible and consistent with the itinerary.
+- User-reported salary websites are weaker unless sample size and methodology are credible.
+
+================================================================================
+9. COMPARABLE EVIDENCE FOR O-1B ARTS ONLY
+================================================================================
+
+Use only when a listed criterion does not readily apply to the beneficiary’s occupation.
+Comparable evidence is not available for O-1B MPTV.
+
+LLM INSTRUCTION:
+Do not use comparable evidence because the beneficiary lacks evidence for a readily applicable criterion. USCIS wants a reason why the criterion is not readily applicable to the occupation, and why the substitute evidence is comparable.
+
+Template:
+
+[B.7] Comparable Evidence [O-1B Arts only]
+
+The petitioner submits comparable evidence because [CRITERION] does not readily apply to [MR./MS. SURNAME]’s occupation as [OCCUPATION]. Specifically, [DETAILED EXPLANATION WHY THE STANDARD EVIDENCE TYPE IS NOT EASILY APPLICABLE IN THIS FIELD].
+
+The submitted evidence is comparable because it demonstrates the same underlying proposition: [recognition / distinction / achievement / role / public success] in a manner appropriate to [FIELD].
+
+(Please kindly refer to Exhibit 10, pages [XX-XX]: Comparable evidence.)
+
+Within Exhibit 10, the following documents are attached:
+10.1. [Comparable document]
+10.2. [Evidence explaining field practice]
+10.3. [Expert explanation, if needed]
+
+Analysis:
+Although [standard criterion evidence] is not readily applicable because [reason], [MR./MS. SURNAME]’s [comparable evidence] shows [legal equivalent]. This evidence is comparable to [CRITERION] because [functional comparison].
+
+Conclusion
+The submitted comparable evidence should be considered under [CRITERION] because it is tailored to the realities of [FIELD] and demonstrates the same type of distinction contemplated by the regulation.
+
+================================================================================
+10. SECTION III[C]. TOTALITY CONCLUSION
+================================================================================
+
+Purpose:
+After at least three criteria or the significant-award path are established, tie the evidence together and show that the beneficiary satisfies the O-1B standard.
+
+This is not EB-1A final merits. Do not call it “final merits determination.” Use “totality of the evidence” or “overall conclusion.”
+
+Template for O-1B Arts:
+
+[C] Totality conclusion: [MR./MS. SURNAME] has extraordinary ability in the arts demonstrated by distinction
+
+Taken together, the evidence establishes that [MR./MS. SURNAME] has extraordinary ability in the arts demonstrated by distinction. [His/Her/Their] record shows a level of achievement and recognition substantially above that ordinarily encountered in [FIELD].
+
+The evidence includes [summarize strongest 5-7 evidence points]:
+1. [Lead/starring roles in distinguished productions/events]
+2. [Published recognition]
+3. [Lead/critical role for distinguished organizations]
+4. [Commercial or critical success]
+5. [Significant recognition from experts/organizations]
+6. [High remuneration]
+7. [Significant award or comparable evidence]
+
+This record demonstrates that [MR./MS. SURNAME] is [prominent / renowned / leading / well-known] in [FIELD]. The evidence is extensive, consistent, and directly connected to [his/her/their] proposed U.S. work.
+
+Template for O-1B MPTV:
+
+[C] Totality conclusion: [MR./MS. SURNAME] has demonstrated extraordinary achievement in motion picture or television
+
+Taken together, the evidence establishes that [MR./MS. SURNAME] has demonstrated a record of extraordinary achievement in motion picture or television productions. [His/Her/Their] record shows a very high level of accomplishment in [MPTV FIELD], evidenced by skill and recognition significantly above that ordinarily encountered.
+
+The evidence includes [summarize strongest 5-7 evidence points].
+
+This record demonstrates that [MR./MS. SURNAME] is recognized as [outstanding / notable / leading] in the motion picture or television field and is coming to the United States to continue work in such productions.
+
+================================================================================
+11. SECTION IV. EMPLOYMENT, CONTRACTS, AND ITINERARY
+================================================================================
+
+Purpose:
+Show that the beneficiary is coming temporarily to the United States to perform actual work in the field and that the requested validity period is supported by contracts, agreements, and itinerary.
+
+Core documents:
+- written contracts between petitioner and beneficiary; or
+- summary of oral agreement if no written contract;
+- explanation of nature of events or activities;
+- beginning and ending dates;
+- itinerary, if applicable.
+
+LLM INSTRUCTION:
+O-1B is employment/project/activity-based. Do not write a beautiful eligibility section and then forget the work. USCIS tends to notice when the alleged job exists only as a mood.
+
+Template:
+
+Section IV. Employment, Contracts, and Itinerary
+
+[MR./MS. SURNAME] is coming temporarily to the United States to work in [his/her/their] area of [extraordinary ability / extraordinary achievement] as [ROLE] for [PETITIONER / EMPLOYER / CLIENT / PRODUCTIONS]. The proposed work will take place from [START DATE] to [END DATE].
+
+(Please kindly refer to Exhibit 3, pages [XX-XX]: Employment, contracts, and itinerary.)
+
+Within Exhibit 3, the following documents are attached:
+3.1. Contract between [PETITIONER] and [BENEFICIARY]
+3.2. Offer letter / employment agreement from [EMPLOYER]
+3.3. Agent agreement, if applicable
+3.4. Employer-client agreements, if agent/multiple employer case
+3.5. Itinerary of events or activities
+3.6. Description of duties
+3.7. Compensation terms
+3.8. Evidence of work locations / venues / productions
+3.9. Evidence of petitioner’s control over employment, if relevant
+
+Nature of activities:
+The proposed U.S. activities include [DESCRIBE ACTIVITIES]. These activities fall within [MR./MS. SURNAME]’s area of [extraordinary ability / extraordinary achievement] because they require [shared skillsets, knowledge, expertise] developed through [his/her/their] prior recognized work in [FIELD].
+
+Duties:
+[MR./MS. SURNAME] will perform the following duties:
+- [DUTY 1]
+- [DUTY 2]
+- [DUTY 3]
+- [DUTY 4]
+
+These duties are connected to [his/her/their] recognized field because [EXPLAIN].
+
+Contract terms:
+The contract / offer provides:
+- Role: [ROLE]
+- Start date: [DATE]
+- End date: [DATE]
+- Compensation: [AMOUNT / STRUCTURE]
+- Work location(s): [LOCATIONS]
+- Employer / client: [NAME]
+- Scope of services: [SCOPE]
+(Please kindly refer to Exhibit 3, page [XX]: [DOCUMENT].)
+
+Itinerary:
+
+Date / Period | Event / Activity | Location | Employer / Client / Venue | Beneficiary Role | Evidence
+[DATE] | [EVENT] | [LOCATION] | [ENTITY] | [ROLE] | Exhibit 3, p. [XX]
+[DATE] | [EVENT] | [LOCATION] | [ENTITY] | [ROLE] | Exhibit 3, p. [XX]
+[DATE] | [EVENT] | [LOCATION] | [ENTITY] | [ROLE] | Exhibit 3, p. [XX]
+
+If the work is a group of related activities:
+The proposed activities constitute a group of related engagements in [FIELD], centered on [PROJECT / PRODUCTION / TOUR / EXHIBITION / DESIGN PROGRAM / CREATIVE SERVICES]. The requested validity period is supported by [contracts / itinerary / project plan] covering [DATE RANGE].
+
+If multiple employers through agent:
+[PETITIONER] files as U.S. agent representing multiple employers. The petition includes a complete itinerary specifying dates of each engagement, names and addresses of actual employers, and names and addresses of establishments, venues, or locations where services will be performed.
+
+If own company:
+[Use carefully]
+[COMPANY] will employ / engage [MR./MS. SURNAME] as [ROLE]. The record establishes that the company has an actual business need for [his/her/their] services, that the proposed work is real and within the field, and that [CONTROL STRUCTURE] will exercise control over the terms and conditions of employment. Evidence includes [board documents / operating agreement / contracts / client engagements / payroll / offer / corporate records].
+
+Conclusion:
+The contracts and itinerary demonstrate that [MR./MS. SURNAME] is coming temporarily to the United States to work in [his/her/their] area of [extraordinary ability / extraordinary achievement] during the requested period.
+
+================================================================================
+12. VALIDITY PERIOD, EXTENSIONS, AMENDMENTS, AND CHANGE OF EMPLOYER — CLIENT-EXPLANATION BLOCK
+================================================================================
+
+Use this outside the petition or in an internal client memo. Do not overfill the USCIS petition with client FAQ unless directly relevant.
+
+Initial validity period:
+O-1 petitions may be approved for the time necessary to accomplish the event or activity, up to 3 years, if supported by contracts and itinerary.
+
+Extension:
+Extensions are generally available in increments of up to 1 year to continue or complete the same event or activity. There is no simple “automatic renewal.” Each extension requires a new filing and updated evidence.
+
+Change of employer:
+A new employer generally must file a new petition. If the original petition was filed by an agent, an amended petition may be needed with evidence relating to the new employer.
+
+Material changes:
+Material changes in the terms and conditions of employment or eligibility may require an amended petition. Additional performances or engagements for artists/entertainers may sometimes be added during validity without amendment if they require O-1 caliber services, but this must be checked case-by-case.
+
+Salary and taxes:
+Compensation should be real and consistent with the contract. Salary may be annual, project-based, hourly, daily, or another industry-appropriate structure. U.S. tax issues must be handled separately with qualified tax advice. Do not create a petition structure that looks fictional just to make the immigration package prettier. Fiction belongs in screenplays, and even there it should have continuity.
+
+Employer responsibility:
+If employment terminates, employer obligations may arise, including return transportation responsibility depending on the circumstances. Avoid fictional arrangements, misleading control structures, or contracts that will not be performed.
+
+================================================================================
+13. LIST OF EXHIBITS TEMPLATE
+================================================================================
+
+List of Exhibits
+
+Exhibit 0. General Beneficiary Documents ........................................ p. [XX]
+0.1. CV of [MR./MS. NAME SURNAME]
+0.2. Passport biographical page
+0.3. Degrees / diplomas / certificates
+0.4. Portfolio / selected works
+0.5. Professional biography
+
+Exhibit 0-1. Testimonial Letters and Explanatory Notes ........................ p. [XX]
+0-1.1. Testimonial letter from [NAME], explanatory note
+0-1.2. Testimonial letter from [NAME], explanatory note
+0-1.3. Testimonial letter from [NAME], explanatory note
+
+Exhibit 1. Petitioner / U.S. Agent Documents ................................... p. [XX]
+1.1. Formation / registration documents of [PETITIONER]
+1.2. Evidence of active business status
+1.3. Agent authorization agreement, if applicable
+1.4. Petitioner statement
+1.5. Evidence of petitioner’s business activity
+
+Exhibit 2. Consultation / Advisory Opinion ..................................... p. [XX]
+2.1. Advisory opinion from [ORGANIZATION]
+2.2. Evidence of organization’s authority and relevance
+2.3. Evidence of author’s authority
+2.4. Consultation request correspondence, if applicable
+2.5. Evidence of attempts / no appropriate organization, if applicable
+
+Exhibit 3. Employment, Contracts, and Itinerary ................................. p. [XX]
+3.1. Contract / offer letter
+3.2. Summary of oral agreement, if applicable
+3.3. Itinerary
+3.4. Description of duties
+3.5. Evidence of events / activities / productions
+3.6. Compensation terms
+
+Exhibit 4. Criterion 1: Lead or Starring Participant in Distinguished Productions or Events .... p. [XX]
+4.1. [Production/Event 1]
+4.2. [Production/Event 2]
+4.3. [Prospective U.S. Production/Event]
+4.4. Evidence of distinguished reputation
+
+Exhibit 5. Criterion 2: National or International Recognition Through Published Materials ...... p. [XX]
+5.1. Article / review / publication 1
+5.2. Evidence of publication status
+5.3. Article / review / publication 2
+5.4. Evidence of publication status
+
+Exhibit 6. Criterion 3: Lead, Starring, or Critical Role for Distinguished Organizations ....... p. [XX]
+6.1. Role evidence for [ORGANIZATION 1]
+6.2. Distinguished reputation evidence for [ORGANIZATION 1]
+6.3. Role evidence for [ORGANIZATION 2]
+6.4. Distinguished reputation evidence for [ORGANIZATION 2]
+6.5. Prospective U.S. role evidence
+
+Exhibit 7. Criterion 4: Major Commercial or Critically Acclaimed Successes ..................... p. [XX]
+7.1. Publications reporting success
+7.2. Ratings / sales / attendance / ranking evidence
+7.3. Evidence connecting beneficiary to success
+7.4. Critical reviews
+
+Exhibit 8. Criterion 5: Significant Recognition From Organizations, Critics, Agencies, Experts .. p. [XX]
+8.1. Testimonial letter from [NAME]
+8.2. Evidence of author’s authority
+8.3. Testimonial letter from [NAME]
+8.4. Evidence of author’s authority
+
+Exhibit 9. Criterion 6: High Salary or Substantial Remuneration ................................. p. [XX]
+9.1. Compensation contract / offer
+9.2. Payment records / invoices / tax documents
+9.3. Wage comparison data
+9.4. Methodology note
+
+Exhibit 10. Comparable Evidence [O-1B Arts only] ............................... p. [XX]
+10.1. Comparable evidence document 1
+10.2. Explanation why listed criterion does not readily apply
+10.3. Explanation why evidence is comparable
+
+================================================================================
+14. TECHNICAL DIVIDER PAGES
+================================================================================
+
+Use divider pages after the List of Exhibits. Each divider should clearly identify the exhibit, criterion, documents inside, and whether translations are included.
+
+Standard divider format:
+
+--------------------------------------------------------------------------------
+EXHIBIT [NUMBER]
+[TITLE]
+
+Petitioner: [PETITIONER NAME]
+Beneficiary: [NAME SURNAME]
+Classification Sought: O-1B
+
+This exhibit contains evidence relating to:
+[SHORT DESCRIPTION]
+
+Documents included:
+[NUMBER].1. [DOCUMENT NAME]
+[NUMBER].2. [DOCUMENT NAME]
+[NUMBER].3. [DOCUMENT NAME]
+
+Translations:
+[ ] Not applicable; documents are in English.
+[ ] English translations are attached.
+[ ] Certificates of translation are attached.
+
+Page range: [XX-XX]
+--------------------------------------------------------------------------------
+
+Criterion divider format:
+
+--------------------------------------------------------------------------------
+EXHIBIT [NUMBER]
+CRITERION [NUMBER]: [CRITERION TITLE]
+
+This exhibit supports the following O-1B criterion:
+[INSERT CRITERION TEXT OR SHORT DESCRIPTION]
+
+Key legal elements addressed:
+1. [ELEMENT 1]
+2. [ELEMENT 2]
+3. [ELEMENT 3]
+
+Documents included:
+[NUMBER].1. [DOCUMENT]
+[NUMBER].2. [DOCUMENT]
+[NUMBER].3. [DOCUMENT]
+
+Page range: [XX-XX]
+--------------------------------------------------------------------------------
+
+================================================================================
+15. LLM PROMPT FOR USING THIS TEMPLATE
+================================================================================
+
+Use the following prompt to draft a case from raw documents:
+
+You are drafting an O-1B nonimmigrant petition for USCIS. First classify the petition as O-1B Arts or O-1B Motion Picture/Television. Do not use EB-1A or O-1A standards unless explicitly explaining why they do not apply. Use the O-1B standard: distinction for Arts, extraordinary achievement for MPTV. Draft in English. Use Russian only for internal notes if needed.
+
+Inputs:
+1. Beneficiary profile
+2. Petitioner/agent profile
+3. Proposed U.S. employment, contracts, and itinerary
+4. Consultation/advisory opinion evidence
+5. Evidence by criteria
+6. Exhibit index with page numbers
+7. Any case-specific strategy notes
+
+Tasks:
+1. Identify the correct O-1B track.
+2. Identify the strongest eligibility path: significant award, at least three criteria, or comparable evidence for Arts only.
+3. Draft the cover letter.
+4. Draft Section I: Petitioner / U.S. Agent.
+5. Draft Section II: Consultation / Advisory Opinion.
+6. Draft Section III[A]: beneficiary overview, field, specialization, biography, and recognition.
+7. Draft only the criteria supported by evidence.
+8. For each criterion, use the structure: legal element → evidence list → fact narrative → legal relevance → criterion conclusion.
+9. Draft Section III[C]: totality conclusion.
+10. Draft Section IV: employment, contracts, and itinerary.
+11. Draft List of Exhibits and technical divider pages.
+12. Mark all uncertain facts as [TO BE CONFIRMED]. Do not invent page numbers, dates, contracts, awards, publications, employers, or compensation.
+
+Quality requirements:
+- Every factual claim must have an exhibit reference.
+- Do not use generic praise.
+- Do not paste entire recommendation letters into the petition.
+- Do not claim future U.S. role under Criteria 1 or 3 unless there is evidence of prospective work.
+- Do not use comparable evidence for MPTV.
+- Do not confuse productions/events with organizations/establishments.
+- Do not rely on social media unless it is contextual secondary evidence.
+- If publication evidence is used, include title, date, author, publication identity, and translation.
+- If salary evidence is used, explain comparison methodology.
+- Verify current USCIS fees, forms, addresses, and consultation requirements before filing.
+
+================================================================================
+16. FINAL QUALITY CONTROL CHECKLIST
+================================================================================
+
+Case classification
+[ ] O-1B Arts or O-1B MPTV clearly selected
+[ ] Correct legal standard used
+[ ] No EB-1A language accidentally included
+[ ] No O-1A “small percentage at the top” standard used for Arts
+
+Petitioner
+[ ] Petitioner is U.S. employer or U.S. agent, or foreign employer through U.S. agent
+[ ] Agent authority documented, if applicable
+[ ] Beneficiary is not self-petitioning
+[ ] Petitioner statement is consistent with contracts and itinerary
+
+Consultation
+[ ] Advisory opinion / no-objection letter attached
+[ ] Consultation source is field-relevant
+[ ] MPTV consultation includes labor and management organization where required
+[ ] Expert alternatives are explained if no organization exists
+
+Employment / itinerary
+[ ] Written contract or oral agreement summary attached
+[ ] Itinerary attached if applicable
+[ ] Dates support requested validity period
+[ ] Work is in area of extraordinary ability / achievement
+[ ] Compensation terms match salary criterion if salary is claimed
+
+Eligibility
+[ ] At least three criteria are clearly supported, unless using significant-award path
+[ ] Criteria 1 and 3 include past and prospective evidence
+[ ] Criterion 2 includes title, date, author, publication status, and achievement discussion
+[ ] Criterion 4 uses publications to show commercial or critical success
+[ ] Criterion 5 letters identify author authority, basis of knowledge, and specific achievements
+[ ] Criterion 6 includes reliable comparison data
+[ ] Comparable evidence is used only for Arts and properly justified
+
+Exhibits
+[ ] Exhibit numbering is consistent
+[ ] Page numbers are updated
+[ ] Translations included
+[ ] Technical divider pages included
+[ ] New, old, and supplemental evidence labels used if relevant
+
+Final review
+[ ] Petition reads as a coherent case, not a pile of documents with a cover letter taped to it
+[ ] No unsupported claims
+[ ] No contradictions between role, field, itinerary, and criteria
+[ ] Filing address and fees verified immediately before filing
+
+END OF TEMPLATE

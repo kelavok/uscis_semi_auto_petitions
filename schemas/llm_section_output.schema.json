@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "llm_section_output.schema.json",
+  "title": "Manual LLM section output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "case_id",
+    "task_type",
+    "step_id",
+    "draft_text",
+    "used_documents",
+    "unsupported_claims",
+    "questions_for_user",
+    "quality_flags",
+    "revision_notes"
+  ],
+  "properties": {
+    "case_id": {"type": "string", "minLength": 1},
+    "task_type": {"type": "string", "minLength": 1},
+    "step_id": {"type": "string", "minLength": 1},
+    "episode_id": {"type": "string", "minLength": 1},
+    "draft_text": {"type": "string", "minLength": 1},
+    "used_documents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["document_id", "document_title", "used_for"],
+        "properties": {
+          "document_id": {"type": "string", "minLength": 1},
+          "document_title": {"type": "string", "minLength": 1},
+          "used_for": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "unsupported_claims": {"type": "array", "items": {"type": "string"}},
+    "questions_for_user": {"type": "array", "items": {"type": "string"}},
+    "quality_flags": {"type": "array", "items": {"type": "string"}},
+    "revision_notes": {"type": "array", "items": {"type": "string"}}
+  }
+}

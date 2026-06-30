@@ -1,0 +1,70 @@
+schema_version: 0.1-draft
+case_id: __CASE_ID__
+task_type: eb1a_petition
+workflow: workflows/eb1a_petition.yaml
+status: intake
+
+beneficiary:
+  full_name: __REQUIRED__
+  preferred_reference: __REQUIRED__
+  gender: __REQUIRED__
+  honorific: __REQUIRED__
+  pronouns:
+    subject: __REQUIRED__
+    object: __REQUIRED__
+    possessive: __REQUIRED__
+
+field: __REQUIRED__
+specialization: __REQUIRED__
+procedural_context: Initial EB-1A petition
+drafting_objective: Prepare EB-1A petition memorandum
+
+llm_provider: manual
+working_memo_file: final_memo/working_memo.md
+source_folder_template: templates/EB1A/case_folders_template
+working_document_template: templates/EB1A/EB1A_working_document_structure.yaml
+
+paths:
+  case_instructions: user_case_instructions.md
+  source_originals: source_documents/originals
+  source_translations: source_documents/translations
+  source_other: source_documents/other
+  extracted_text: extracted_text
+  manual_descriptions: manual_descriptions
+  document_index: indexes/document_index.csv
+  exhibit_index: indexes/exhibit_index.csv
+  generated_prompts: generated_prompts
+  llm_outputs: llm_outputs
+  validated_outputs: validated_outputs
+  draft_sections: draft_sections
+  final_memo: final_memo
+  bundle_root: bundle
+  reports: reports
+
+translation_order: original_then_translation
+exhibit_label: Exhibit
+citation_style: template_controlled
+
+claimed_criteria: []
+enabled_steps: []
+disabled_steps: []
+
+eb1a_folder_roles:
+  identity_cv_education: "!CV, Паспорт,Профиль в соц сетях, Образование"
+  awards: "1. Награды"
+  memberships: "2. Ассоциации"
+  media: "3. СМИ"
+  judging: "4. Судейство"
+  original_contribution: "5. Вклад"
+  scholarly_articles: "6. Научные статьи"
+  exhibitions: "7. Выставки"
+  leading_critical_role: "8. Лид-Крит роль в организации"
+  high_salary: "9. Зарплата"
+  commercial_success: "10. Коммерческий успех"
+  employment_plan: "План трудоустройства"
+  recommendation_letters: "Рекомендательные письма"
+
+approvals:
+  case_config: false
+  document_index: false
+  exhibit_index: false

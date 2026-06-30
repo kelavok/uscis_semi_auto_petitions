@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "petitions"
+version = "0.1.0"
+description = "File-driven immigration memorandum and evidence bundle workflow"
+requires-python = ">=3.11"
+dependencies = ["PyYAML>=6.0,<7"]
+
+[project.optional-dependencies]
+pdf = ["pdfplumber>=0.11,<0.12", "pypdf>=5,<7", "reportlab>=4,<5"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]

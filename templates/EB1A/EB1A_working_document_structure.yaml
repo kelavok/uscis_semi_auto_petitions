@@ -1,0 +1,89 @@
+schema_version: 1
+template_role: deterministic_working_document
+source_reference: case_workspace/kim_test/final_memo/desired_working_memo.docx
+
+document:
+  petition_title: Petition for Permanent Residence under Extraordinary Ability (EB-1A)
+  cover_heading: Permanent residence petition for {preferred_reference} as an alien of extraordinary ability
+  re_line: "RE: EB-1 immigrant petition under INA §203(b)(1)(A) - Alien of Extraordinary Ability"
+  classification: "Classification Sought: INA 203(b)(1)(A)"
+  petition_type: "Type of Petition: I-140"
+  salutation: Dear Immigration Officer
+
+table_of_contents:
+  - ["1. G-1145 E-Notification of Application/Petition Acceptance", ""]
+  - ["2. I-140 Immigrant Petition for Alien Worker, with $715 filing fee + 300 Asylum fee", ""]
+  - ["3. I-907 Request for Premium Processing, with $2805 filing fee", ""]
+  - ["4. Photocopies of passport", ""]
+  - ["5. Petition for Permanent Residence under Extraordinary Ability (EB-1A)", "xx"]
+  - ["5.1. Cover letter", "xx"]
+  - ["5.2. Section 1. Initial Evidence of Extraordinary ability", "xx"]
+  - ["[A] General information about the beneficiary and {possessive_pronoun} professional biography, overview of achievements, recommendations and education", "xx"]
+  - ["[B] EB1A Criteria", "xx"]
+  - ["5.3. Section 2. Beneficiary’s entry into the United States will substantially benefit prospectively the United States.", "xx"]
+  - ["5.4. Conclusions", "xx"]
+  - ["6. Beneficiary’s Statement on Work Plans in the USA", "xx"]
+  - ["7. List of Exhibits", "xx"]
+  - ["8. Exhibits", ""]
+
+criteria:
+  awards:
+    roman: i
+    section: B.i.
+    title: Evidence of receipt of nationally or internationally recognized prizes or awards for excellence.
+    cover_text: Evidence of {possessive_reference} receipt of nationally or internationally recognized prizes or awards for excellence
+    step_ids: [criterion_awards_episode]
+  memberships:
+    roman: ii
+    section: B.ii
+    title: Evidence of {possessive_reference} membership in associations in the field which demand outstanding achievement of their members
+    cover_text: Evidence of {possessive_reference} membership in associations in the field which demand outstanding achievement of their members
+    step_ids: [criterion_memberships_episode]
+  media:
+    roman: iii
+    section: B.iii
+    title: Evidence of published material about {preferred_reference} in professional or major trade publications or other major media
+    cover_text: Evidence of published material about {preferred_reference} in professional or major trade publications or other major media
+    step_ids: [criterion_media_episode]
+  judging:
+    roman: iv
+    section: B.iv
+    title: Evidence of {possessive_reference} participation, either individually or on a panel, as a judge of the work of others, in the same or an allied field
+    cover_text: Evidence of {possessive_reference} participation, either individually or on a panel, as a judge of the work of others, in the same or an allied field
+    step_ids: [criterion_judging_episode]
+  original_contribution:
+    roman: v
+    section: B.v
+    title: Evidence of {possessive_reference} original business-related contributions of major significance to the field
+    cover_text: Evidence of {possessive_reference} original business-related contributions of major significance to the field
+    step_ids: [criterion_original_contribution_fact, criterion_original_contribution_significance]
+  scholarly_articles:
+    roman: vi
+    section: B.vi
+    title: Evidence of {possessive_reference} authorship of scholarly articles in the field, in professional or major trade publications, or other major media
+    cover_text: Evidence of {possessive_reference} authorship of scholarly articles in the field, in professional or major trade publications, or other major media
+    step_ids: [criterion_scholarly_articles_episode]
+  exhibitions:
+    roman: vii
+    section: B.vii
+    title: Evidence of the display of {possessive_reference} work in the field at artistic exhibitions or showcases
+    cover_text: Evidence of the display of {possessive_reference} work in the field at artistic exhibitions or showcases
+    step_ids: [criterion_exhibitions_episode]
+  leading_critical_role:
+    roman: viii
+    section: B.viii
+    title: Evidence of {possessive_reference} performance of a leading and critical role in distinguished organizations
+    cover_text: Evidence of {possessive_reference} performance of a leading or critical role in distinguished organizations
+    step_ids: [criterion_leading_critical_role_fact, criterion_leading_critical_role_reputation]
+  high_salary:
+    roman: ix
+    section: B.ix
+    title: Evidence of {possessive_reference} high salary or other significantly high remuneration in relation to others in the field.
+    cover_text: Evidence of {possessive_reference} high salary or other significantly high remuneration in relation to others in the field
+    step_ids: [criterion_high_salary_fact, criterion_high_salary_comparison]
+  commercial_success:
+    roman: x
+    section: B.x
+    title: Evidence of commercial successes in the performing arts
+    cover_text: Evidence of commercial successes in the performing arts
+    step_ids: [criterion_commercial_success_episode]
