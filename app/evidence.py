@@ -764,7 +764,7 @@ def _infer_category(loaded: LoadedCase, file_path: Path, source_kind: str) -> st
     if not relative_parts:
         return source_kind
     top_folder = relative_parts[0]
-    for roles_key in ("eb1a_folder_roles", "rfe_folder_roles"):
+    for roles_key in ("o1b_folder_roles", "eb1a_folder_roles", "rfe_folder_roles"):
         roles = loaded.config.get(roles_key, {})
         if isinstance(roles, dict):
             for role, folder in roles.items():

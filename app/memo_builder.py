@@ -10,21 +10,23 @@ from pathlib import Path
 from typing import Any
 
 from .cli_support import PROJECT_ROOT, case_path
-from .workflow import extract_docx_text, load_case, load_yaml_file, safe_path_component
+from .workflow import extract_docx_text, folder_role_map, load_case, load_yaml_file, safe_path_component
 
 
 DEFAULT_TEMPLATE_BY_TASK_TYPE = {
     "eb1a_petition": "templates/EB1A/EB1A_unified_template_LLM.docx",
     "eb1a_rfe_response": "templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.txt",
+    "o1b_petition": "templates/O1B/MEMO O-1В_ver.1.0.docx",
 }
 
 DEFAULT_WORKING_STRUCTURE_BY_TASK_TYPE = {
     "eb1a_petition": "templates/EB1A/EB1A_working_document_structure.yaml",
+    "o1b_petition": "templates/O1B/O1B_working_document_structure.yaml",
 }
 
 # Regulatory criteria only. Employment-plan components are assembled through
 # their dedicated workflow destination and _draft_step_xml() path below.
-CRITERION_STEP_BY_ROLE = {
+EB1A_CRITERION_STEP_BY_ROLE = {
     "awards": ("criterion_awards_episode", "Awards"),
     "memberships": ("criterion_memberships_episode", "Memberships / associations"),
     "media": ("criterion_media_episode", "Published material"),
@@ -36,6 +38,19 @@ CRITERION_STEP_BY_ROLE = {
     "high_salary": ("criterion_high_salary_fact", "High salary / remuneration"),
     "commercial_success": ("criterion_commercial_success_episode", "Commercial success"),
 }
+
+O1B_CRITERION_STEP_BY_ROLE = {
+    "lead_starring_productions": ("o1b_criterion_i_episode", "Lead or starring productions/events"),
+    "published_recognition": ("o1b_criterion_ii_episode", "Published recognition"),
+    "organization_role": ("o1b_criterion_iii_role", "Lead, starring, or critical organizational role"),
+    "commercial_critical_success": ("o1b_criterion_iv_episode", "Commercial or critically acclaimed success"),
+    "significant_recognition": ("o1b_criterion_v_episode", "Significant recognition"),
+    "high_salary": ("o1b_criterion_vi_compensation", "High salary or substantial remuneration"),
+    "comparable_evidence": ("o1b_comparable_evidence_episode", "Comparable evidence (Arts only)"),
+}
+
+# Backward-compatible alias for EB-1A-specific callers and tests.
+CRITERION_STEP_BY_ROLE = EB1A_CRITERION_STEP_BY_ROLE
 
 
 @dataclass(frozen=True)
@@ -100,7 +115,10 @@ def apply_case_intake(
             intake_sources["case_info_file"] = remembered_case_info
             fields_updated += 1
     if claimed_criteria is not None:
-        normalized_criteria = [role for role in CRITERION_STEP_BY_ROLE if role in claimed_criteria]
+        criterion_map = _criterion_step_map(config)
+        normalized_criteria = [role for role in criterion_map if role in claimed_criteria]
+        if str(config.get("task_type", "")) == "o1b_petition" and str(config.get("o1b_track", "")) == "mptv":
+            normalized_criteria = [role for role in normalized_criteria if role != "comparable_evidence"]
         if config.get("claimed_criteria") != normalized_criteria:
             config["claimed_criteria"] = normalized_criteria
             fields_updated += 1
@@ -200,6 +218,8 @@ def build_memo_skeleton(
     task_type = str(config.get("task_type", ""))
     if task_type == "eb1a_rfe_response":
         return _rfe_skeleton(config, case_dir, report)
+    if task_type == "o1b_petition":
+        return _o1b_skeleton(config, case_dir, report)
     return _eb1a_skeleton(config, case_dir, report)
 
 
@@ -254,14 +274,17 @@ def render_markdown_skeleton(
 
 
 def write_docx(path: Path, case_id: str, config: dict[str, Any], skeleton: list[dict[str, Any]]) -> None:
-    if str(config.get("task_type", "")) == "eb1a_petition":
+    task_type = str(config.get("task_type", ""))
+    if task_type == "eb1a_petition":
         document_xml = _eb1a_document_xml(config, path.parent.parent)
+    elif task_type == "o1b_petition":
+        document_xml = _o1b_document_xml(config, path.parent.parent)
     else:
         document_xml = _document_xml(case_id, config, skeleton)
-    styles_xml = _styles_xml()
-    content_types = _content_types_xml()
+    styles_xml = _o1b_styles_xml() if task_type == "o1b_petition" else _styles_xml()
+    content_types = _content_types_xml(include_footer=task_type == "o1b_petition")
     rels = _rels_xml()
-    doc_rels = _document_rels_xml()
+    doc_rels = _document_rels_xml(include_footer=task_type == "o1b_petition")
     app_xml = _app_xml()
     core_xml = _core_xml(case_id)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -274,6 +297,8 @@ def write_docx(path: Path, case_id: str, config: dict[str, Any], skeleton: list[
         archive.writestr("word/document.xml", document_xml)
         archive.writestr("word/styles.xml", styles_xml)
         archive.writestr("word/numbering.xml", _numbering_xml())
+        if task_type == "o1b_petition":
+            archive.writestr("word/footer1.xml", _o1b_footer_xml())
 
 
 def _read_template_text(path: Path) -> str:
@@ -383,6 +408,67 @@ def _eb1a_skeleton(
     return skeleton
 
 
+def _o1b_skeleton(
+    config: dict[str, Any], case_dir: Path, report: TemplateParseReport
+) -> list[dict[str, Any]]:
+    structure = _load_working_structure(config)
+    skeleton: list[dict[str, Any]] = [
+        {
+            "level": 1,
+            "title": "INDEX",
+            "paragraphs": ["[SCRIPT-CONTROLLED CONTENT: generated from the document and exhibit indexes.]"],
+        },
+        {
+            "level": 1,
+            "title": "O-1B Cover Letter",
+            "paragraphs": ["[SCRIPT-CONTROLLED CONTENT: petitioner, beneficiary, O-1B track, and claimed criteria.]"],
+        },
+        {
+            "level": 1,
+            "title": "OVERVIEW OF THE BENEFICIARY'S QUALIFICATIONS AND ACHIEVEMENTS",
+            "paragraphs": [
+                "[LLM SECTION PLACEHOLDER: o1b_final_overview]",
+                "[LLM SECTION PLACEHOLDER: o1b_professional_biography]",
+                "[OPTIONAL LLM SECTION PLACEHOLDER: o1b_recommendation_letter_episode]",
+            ],
+        },
+        {
+            "level": 1,
+            "title": "OVERVIEW OF THE INDUSTRY",
+            "paragraphs": ["[LLM SECTION PLACEHOLDER: o1b_industry_overview]"],
+        },
+        {"level": 1, "title": "EVIDENTIAL CRITERIA OF ELIGIBILITY", "paragraphs": []},
+    ]
+    skeleton.extend(_o1b_criteria_from_config_and_folders(config, case_dir, structure))
+    skeleton.extend(
+        [
+            {
+                "level": 1,
+                "title": "ADVISORY OPINION",
+                "paragraphs": ["[LLM SECTION PLACEHOLDER: o1b_advisory_opinion]"],
+            },
+            {
+                "level": 1,
+                "title": "Continuing to Work in the Area of Extraordinary Ability or Achievement",
+                "paragraphs": ["[LLM SECTION PLACEHOLDER: o1b_continuing_to_work]"],
+            },
+            {
+                "level": 1,
+                "title": "Conclusions",
+                "paragraphs": ["[LLM SECTION PLACEHOLDER: o1b_conclusions]"],
+            },
+            {
+                "level": 1,
+                "title": "Exhibit List",
+                "paragraphs": ["[SCRIPT PLACEHOLDER: generated from indexes/exhibit_index.csv]"],
+            },
+        ]
+    )
+    if not any(item.get("inferred") for item in skeleton):
+        skeleton.extend(_template_fallback_sections(report, prefix="[TEMPLATE STRUCTURE PLACEHOLDER]"))
+    return skeleton
+
+
 def _rfe_skeleton(
     config: dict[str, Any], case_dir: Path, report: TemplateParseReport
 ) -> list[dict[str, Any]]:
@@ -440,9 +526,7 @@ def _rfe_skeleton(
 def _eb1a_criteria_from_config_and_folders(
     config: dict[str, Any], case_dir: Path, structure: dict[str, Any]
 ) -> list[dict[str, Any]]:
-    roles = config.get("eb1a_folder_roles", {})
-    if not isinstance(roles, dict):
-        return []
+    roles = folder_role_map(config)
     selected = _selected_criteria(config, case_dir)
     source_root = case_dir / _path_from_config(config, "source_originals")
     criteria_template = structure.get("criteria", {})
@@ -452,15 +536,15 @@ def _eb1a_criteria_from_config_and_folders(
     result: list[dict[str, Any]] = []
     for role, folder in roles.items():
         role = str(role)
-        if role not in CRITERION_STEP_BY_ROLE or role not in selected:
+        if role not in EB1A_CRITERION_STEP_BY_ROLE or role not in selected:
             continue
         folder_path = source_root / str(folder)
         criterion = criteria_template.get(role, {})
         if not isinstance(criterion, dict):
             criterion = {}
         section = str(criterion.get("section", ""))
-        title = _format_case_text(str(criterion.get("title", CRITERION_STEP_BY_ROLE[role][1])), tokens)
-        step_ids = criterion.get("step_ids", [CRITERION_STEP_BY_ROLE[role][0]])
+        title = _format_case_text(str(criterion.get("title", EB1A_CRITERION_STEP_BY_ROLE[role][1])), tokens)
+        step_ids = criterion.get("step_ids", [EB1A_CRITERION_STEP_BY_ROLE[role][0]])
         if not isinstance(step_ids, list):
             step_ids = [str(step_ids)]
         paragraphs = [f"[LLM SECTION PLACEHOLDER: {step_id}]" for step_id in step_ids]
@@ -469,6 +553,43 @@ def _eb1a_criteria_from_config_and_folders(
                 "level": 3,
                 "title": f"[{section}] {title}" if section else title,
                 "paragraphs": paragraphs,
+                "inferred": True,
+                "criterion_role": role,
+                "episode_folders": _episode_names(folder_path),
+            }
+        )
+    return result
+
+
+def _o1b_criteria_from_config_and_folders(
+    config: dict[str, Any], case_dir: Path, structure: dict[str, Any]
+) -> list[dict[str, Any]]:
+    roles = folder_role_map(config)
+    selected = _selected_criteria(config, case_dir)
+    source_root = case_dir / _path_from_config(config, "source_originals")
+    criteria_template = structure.get("criteria", {})
+    if not isinstance(criteria_template, dict):
+        criteria_template = {}
+    tokens = _beneficiary_tokens(config)
+    result: list[dict[str, Any]] = []
+    for role in O1B_CRITERION_STEP_BY_ROLE:
+        if role not in selected:
+            continue
+        criterion = criteria_template.get(role, {})
+        if not isinstance(criterion, dict):
+            criterion = {}
+        title = _format_case_text(
+            str(criterion.get("title", O1B_CRITERION_STEP_BY_ROLE[role][1])), tokens
+        )
+        step_ids = criterion.get("step_ids", [O1B_CRITERION_STEP_BY_ROLE[role][0]])
+        if not isinstance(step_ids, list):
+            step_ids = [str(step_ids)]
+        folder_path = source_root / str(roles.get(role, role))
+        result.append(
+            {
+                "level": 2,
+                "title": title,
+                "paragraphs": [f"[LLM SECTION PLACEHOLDER: {step_id}]" for step_id in step_ids],
                 "inferred": True,
                 "criterion_role": role,
                 "episode_folders": _episode_names(folder_path),
@@ -516,18 +637,23 @@ def _folder_has_documents(folder: Path) -> bool:
 
 
 def _selected_criteria(config: dict[str, Any], case_dir: Path) -> list[str]:
+    criterion_map = _criterion_step_map(config)
     claimed = [str(item) for item in config.get("claimed_criteria", []) or []]
     if claimed:
-        return [role for role in CRITERION_STEP_BY_ROLE if role in claimed]
-    roles = config.get("eb1a_folder_roles", {})
-    if not isinstance(roles, dict):
-        return []
+        return [role for role in criterion_map if role in claimed]
+    roles = folder_role_map(config)
     source_root = case_dir / _path_from_config(config, "source_originals")
     return [
         role
-        for role in CRITERION_STEP_BY_ROLE
+        for role in criterion_map
         if role in roles and _folder_has_documents(source_root / str(roles[role]))
     ]
+
+
+def _criterion_step_map(config: dict[str, Any]) -> dict[str, tuple[str, str]]:
+    if str(config.get("task_type", "")) == "o1b_petition":
+        return O1B_CRITERION_STEP_BY_ROLE
+    return EB1A_CRITERION_STEP_BY_ROLE
 
 
 def _load_working_structure(config: dict[str, Any]) -> dict[str, Any]:
@@ -604,6 +730,7 @@ def _normalize_intake_fields(fields: dict[str, str]) -> dict[str, str]:
         "preferred_reference": "beneficiary.preferred_reference",
         "gender": "beneficiary.gender",
         "honorific": "beneficiary.honorific",
+        "citizenship": "beneficiary.citizenship",
         "area": "field",
         "field": "field",
         "specialization": "specialization",
@@ -615,6 +742,19 @@ def _normalize_intake_fields(fields: dict[str, str]) -> dict[str, str]:
         "rfe_date": "rfe_metadata.rfe_date",
         "response_deadline": "rfe_metadata.response_deadline",
         "uscis_address": "rfe_metadata.uscis_address",
+        "o1b_track": "o1b_track",
+        "petitioner_company_name": "petitioner.company_name",
+        "petitioner_company_address": "petitioner.company_address",
+        "petitioner_type": "petitioner.petitioner_type",
+        "authorized_signatory": "petitioner.authorized_signatory",
+        "filing_processing": "filing.processing",
+        "validity_start": "filing.validity_start",
+        "validity_end": "filing.validity_end",
+        "filing_uscis_address": "filing.uscis_address",
+        "position_or_role": "us_work.position_or_role",
+        "compensation": "us_work.compensation",
+        "work_location": "us_work.work_location",
+        "duties_summary": "us_work.duties_summary",
     }
     result: dict[str, str] = {}
     for key, value in fields.items():
@@ -803,6 +943,19 @@ def _beneficiary_tokens(config: dict[str, Any]) -> dict[str, str]:
         "beneficiary_address": clean(_get(config, "beneficiary.address")) or "[Address]",
         "uscis_address": clean(_get(config, "filing.uscis_address")) or "[USCIS Address and processing center]",
         "petition_date": clean(config.get("petition_date", "")) or f"___/__/{datetime.now(UTC).year}",
+        "citizenship": clean(_get(config, "beneficiary.citizenship")) or "[Citizenship]",
+        "o1b_track": clean(config.get("o1b_track", "")) or "arts",
+        "petitioner_company": clean(_get(config, "petitioner.company_name")) or "[Petitioner Company]",
+        "petitioner_address": clean(_get(config, "petitioner.company_address")) or "[Petitioner Address]",
+        "petitioner_type": clean(_get(config, "petitioner.petitioner_type")) or "us_employer",
+        "authorized_signatory": clean(_get(config, "petitioner.authorized_signatory")) or "[Authorized Signatory]",
+        "processing": clean(_get(config, "filing.processing")) or "Regular Processing",
+        "validity_start": clean(_get(config, "filing.validity_start")) or "[Start Date]",
+        "validity_end": clean(_get(config, "filing.validity_end")) or "[End Date]",
+        "position_or_role": clean(_get(config, "us_work.position_or_role")) or "[Position / Role]",
+        "compensation": clean(_get(config, "us_work.compensation")) or "[Compensation]",
+        "work_location": clean(_get(config, "us_work.work_location")) or "[Work Location]",
+        "duties_summary": clean(_get(config, "us_work.duties_summary")) or "[Duties Summary]",
     }
 
 
@@ -821,6 +974,165 @@ def _metadata_lines(config: dict[str, Any]) -> list[str]:
         f"- Specialization: `{config.get('specialization', '')}`",
         f"- SOC code: `{config.get('soc_code', '')}`",
     ]
+
+
+def _o1b_document_xml(config: dict[str, Any], case_dir: Path) -> str:
+    structure = _load_working_structure(config)
+    tokens = _beneficiary_tokens(config)
+    criteria_data = structure.get("criteria", {})
+    if not isinstance(criteria_data, dict):
+        criteria_data = {}
+    selected_roles = _selected_criteria(config, case_dir)
+    selected_criteria = [
+        (role, criteria_data[role])
+        for role in selected_roles
+        if role in criteria_data and isinstance(criteria_data[role], dict)
+    ]
+    track = tokens["o1b_track"].lower()
+    is_mptv = track == "mptv"
+    classification = (
+        "O-1B extraordinary achievement in motion picture or television"
+        if is_mptv
+        else "O-1B extraordinary ability in the arts"
+    )
+    regulation = "8 C.F.R. § 214.2(o)(3)(v)" if is_mptv else "8 C.F.R. § 214.2(o)(3)(iv)"
+    standard = "extraordinary achievement" if is_mptv else "distinction"
+    body: list[str] = []
+
+    body.append(_rich_paragraph([("INDEX:", {"bold": True})], style="Heading1"))
+    index_rows = structure.get("index_rows", [])
+    if isinstance(index_rows, list):
+        for row in index_rows:
+            body.append(_rich_paragraph([(_format_case_text(str(row), tokens), {})]))
+    body.append(_placeholder_paragraph("[SCRIPT PLACEHOLDER: final exhibit titles and page ranges are generated from indexes after PDF assembly.]"))
+    body.append(_page_break_paragraph())
+
+    body.append(_rich_paragraph([(tokens["petition_date"], {})]))
+    body.append(_rich_paragraph([("TO USCIS", {"bold": True})], style="Heading1"))
+    body.append(_rich_paragraph([(tokens["processing"], {})]))
+    body.append(_rich_paragraph([(f"RE: I-129 Petition for {classification}", {"bold": True})]))
+    body.append(_rich_paragraph([(f'Petitioner: {tokens["petitioner_company"]}', {"bold": True})]))
+    body.append(_rich_paragraph([(f'Beneficiary: {tokens["full_name"]}', {"bold": True})]))
+    body.append(_rich_paragraph([(f'Citizenship: {tokens["citizenship"]}', {"bold": True})]))
+    body.append(_rich_paragraph([("Dear Officer,", {})]))
+    body.append(
+        _rich_paragraph(
+            [
+                (
+                    f'{tokens["petitioner_company"]} petitions for {tokens["full_name"]} to be classified '
+                    f'as a nonimmigrant of {classification}, specifically in {tokens["specialization"]}, '
+                    f'pursuant to {regulation}.',
+                    {},
+                )
+            ]
+        )
+    )
+    count = len([role for role, _ in selected_criteria if role != "comparable_evidence"])
+    body.append(
+        _rich_paragraph(
+            [
+                (
+                    f'As demonstrated below, {tokens["preferred_reference"]} satisfies {count} of the six '
+                    f'regulatory criteria claimed for this petition:',
+                    {},
+                )
+            ]
+        )
+    )
+    for _role, criterion in selected_criteria:
+        cover_text = _format_case_text(str(criterion.get("cover_text", criterion.get("title", ""))), tokens)
+        body.append(_rich_paragraph([(cover_text, {})], num_id=2))
+    body.append(_page_break_paragraph())
+
+    body.append(_rich_paragraph([("OVERVIEW OF THE BENEFICIARY'S QUALIFICATIONS AND ACHIEVEMENTS", {"bold": True})], style="Heading1"))
+    body.append(_rich_paragraph([("Exhibits from XX to XX, Pages from XX to XX.", {"italic": True})]))
+    body.append(
+        _draft_step_xml(case_dir, "o1b_final_overview")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: o1b_final_overview — draft after the criteria.]"))
+    body.append(
+        _draft_step_xml(case_dir, "o1b_professional_biography", strip_opening_headings=True)
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: education, specialization, and professional biography.]"))
+    recommendation_xml = _draft_step_xml(
+        case_dir, "o1b_recommendation_letter_episode", episode_style="Heading2", episode_label=""
+    )
+    if recommendation_xml:
+        body.append(_rich_paragraph([("Recommendation Letters", {"bold": True})], style="Heading2"))
+        body.append(recommendation_xml)
+
+    body.append(_page_break_paragraph())
+    body.append(_rich_paragraph([("OVERVIEW OF THE INDUSTRY", {"bold": True})], style="Heading1"))
+    body.append(_rich_paragraph([("Exhibits from XX to XX, Pages from XX to XX.", {"italic": True})]))
+    body.append(
+        _draft_step_xml(case_dir, "o1b_industry_overview")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: concise O-1B industry overview.]"))
+
+    body.append(_page_break_paragraph())
+    body.append(_rich_paragraph([("EVIDENTIAL CRITERIA OF ELIGIBILITY", {"bold": True})], style="Heading1"))
+    body.append(
+        _rich_paragraph(
+            [
+                (
+                    f'The evidence below demonstrates that {tokens["preferred_reference"]} satisfies the claimed '
+                    f'O-1B criteria and meets the governing {standard} standard. Each criterion is supported by '
+                    "identified documentary evidence.",
+                    {},
+                )
+            ]
+        )
+    )
+    for role, criterion in selected_criteria:
+        body.append(_page_break_paragraph())
+        title = _format_case_text(str(criterion.get("title", "")), tokens)
+        body.append(_rich_paragraph([(title, {"bold": True})], style="Heading1"))
+        exhibit_range = str(criterion.get("exhibit_range", "Exhibits from XX to XX, Pages from XX to XX."))
+        body.append(_rich_paragraph([(exhibit_range, {"italic": True})]))
+        step_ids = criterion.get("step_ids", [])
+        if not isinstance(step_ids, list):
+            step_ids = [step_ids]
+        for step_id in step_ids:
+            body.append(
+                _draft_step_xml(
+                    case_dir,
+                    str(step_id),
+                    episode_style="Heading2",
+                    episode_label="",
+                )
+                or _placeholder_paragraph(f"[LLM SECTION PLACEHOLDER: {step_id}]")
+            )
+
+    body.append(_page_break_paragraph())
+    body.append(_rich_paragraph([("ADVISORY OPINION", {"bold": True})], style="Heading1"))
+    body.append(_rich_paragraph([("Exhibit 9.1, pages from XX to XX.", {"italic": True})]))
+    body.append(
+        _draft_step_xml(case_dir, "o1b_advisory_opinion")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: O-1 consultation under 8 C.F.R. § 214.2(o)(5).]"))
+
+    body.append(_page_break_paragraph())
+    body.append(
+        _rich_paragraph(
+            [("Continuing to Work in the Area of Extraordinary Ability or Achievement", {"bold": True})],
+            style="Heading1",
+        )
+    )
+    body.append(_rich_paragraph([("Exhibits from XX to XX, Pages from XX to XX.", {"italic": True})]))
+    body.append(
+        _draft_step_xml(case_dir, "o1b_continuing_to_work")
+        or _placeholder_paragraph(
+            f'[LLM SECTION PLACEHOLDER: {tokens["position_or_role"]}, {tokens["work_location"]}, '
+            f'{tokens["validity_start"]}–{tokens["validity_end"]}, {tokens["compensation"]}.]'
+        )
+    )
+
+    body.append(_page_break_paragraph())
+    body.append(_rich_paragraph([("Conclusions", {"bold": True})], style="Heading1"))
+    body.append(
+        _draft_step_xml(case_dir, "o1b_conclusions")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: conclusion listing only the claimed and supported criteria.]"))
+    body.append(_page_break_paragraph())
+    body.append(_rich_paragraph([("Exhibit List", {"bold": True})], style="Heading1"))
+    body.append(_placeholder_paragraph("[SCRIPT PLACEHOLDER: generated from indexes/exhibit_index.csv]"))
+    body.append(_o1b_section_properties())
+    return _wrap_document_xml("".join(body))
 
 
 def _eb1a_document_xml(config: dict[str, Any], case_dir: Path) -> str:
@@ -1077,7 +1389,14 @@ def _placeholder_paragraph(text: str) -> str:
     return _rich_paragraph([(text, {})], style="Placeholder")
 
 
-def _draft_step_xml(case_dir: Path, step_id: str, *, strip_opening_headings: bool = False) -> str:
+def _draft_step_xml(
+    case_dir: Path,
+    step_id: str,
+    *,
+    strip_opening_headings: bool = False,
+    episode_style: str = "Heading3",
+    episode_label: str = "Episode:",
+) -> str:
     paths = _draft_paths_for_step(case_dir, step_id)
     if not paths:
         return ""
@@ -1087,7 +1406,8 @@ def _draft_step_xml(case_dir: Path, step_id: str, *, strip_opening_headings: boo
         if not text:
             continue
         if len(paths) > 1:
-            parts.append(_rich_paragraph([(f"Episode: {path.stem}", {"bold": True})], style="Heading3"))
+            heading = f"{episode_label} {path.stem}".strip()
+            parts.append(_rich_paragraph([(heading, {"bold": True})], style=episode_style))
         parts.append(_draft_text_xml(text, strip_opening_headings=strip_opening_headings and index == 0))
     return "".join(parts)
 
@@ -1118,6 +1438,24 @@ def _draft_paths_for_step(case_dir: Path, step_id: str) -> list[Path]:
         "criterion_high_salary_comparison": ("criteria/high_salary", "*_phase_2.md"),
         "criterion_commercial_success_episode": ("criteria/commercial_success", "*.md"),
         "employment_plan": ("employment_plan", "*.md"),
+        "o1b_petitioner_support_letter": ("supporting_documents", "petitioner_support_letter.md"),
+        "o1b_itinerary": ("supporting_documents", "itinerary.md"),
+        "o1b_professional_biography": ("o1b", "professional_biography.md"),
+        "o1b_recommendation_letter_episode": ("o1b/recommendation_letters", "*.md"),
+        "o1b_industry_overview": ("o1b", "industry_overview.md"),
+        "o1b_criterion_i_episode": ("o1b/criteria/criterion_i", "*.md"),
+        "o1b_criterion_ii_episode": ("o1b/criteria/criterion_ii", "*.md"),
+        "o1b_criterion_iii_role": ("o1b/criteria/criterion_iii", "*_phase_1.md"),
+        "o1b_criterion_iii_reputation": ("o1b/criteria/criterion_iii", "*_phase_2.md"),
+        "o1b_criterion_iv_episode": ("o1b/criteria/criterion_iv", "*.md"),
+        "o1b_criterion_v_episode": ("o1b/criteria/criterion_v", "*.md"),
+        "o1b_criterion_vi_compensation": ("o1b/criteria/criterion_vi", "*_phase_1.md"),
+        "o1b_criterion_vi_comparison": ("o1b/criteria/criterion_vi", "*_phase_2.md"),
+        "o1b_comparable_evidence_episode": ("o1b/criteria/comparable_evidence", "*.md"),
+        "o1b_advisory_opinion": ("o1b", "advisory_opinion.md"),
+        "o1b_continuing_to_work": ("o1b", "continuing_to_work.md"),
+        "o1b_final_overview": ("o1b", "final_overview.md"),
+        "o1b_conclusions": ("o1b", "conclusions.md"),
     }
     folder_pattern = patterns.get(step_id)
     if not folder_pattern:
@@ -1314,6 +1652,16 @@ def _section_properties() -> str:
     )
 
 
+def _o1b_section_properties() -> str:
+    return (
+        "<w:sectPr>"
+        '<w:footerReference w:type="default" r:id="rIdFooter"/>'
+        '<w:pgSz w:w="12240" w:h="15840"/>'
+        '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/>'
+        "</w:sectPr>"
+    )
+
+
 def _styles_xml() -> str:
     return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -1330,7 +1678,28 @@ def _styles_xml() -> str:
 </w:styles>"""
 
 
-def _content_types_xml() -> str:
+def _o1b_styles_xml() -> str:
+    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman"/><w:sz w:val="24"/></w:rPr><w:pPr><w:jc w:val="both"/><w:spacing w:before="0" w:after="160" w:line="360" w:lineRule="auto"/></w:pPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="240"/></w:pPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:pPr><w:spacing w:before="240" w:after="160"/><w:keepNext/></w:pPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="28"/></w:rPr><w:pPr><w:spacing w:before="200" w:after="120"/><w:keepNext/></w:pPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Heading3"><w:name w:val="heading 3"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="24"/></w:rPr><w:pPr><w:spacing w:before="160" w:after="100"/><w:keepNext/></w:pPr></w:style>
+  <w:style w:type="paragraph" w:styleId="SpecialSection"><w:name w:val="Special section"/><w:basedOn w:val="Heading1"/><w:qFormat/></w:style>
+  <w:style w:type="paragraph" w:styleId="Meta"><w:name w:val="Memo metadata"/><w:basedOn w:val="Normal"/><w:rPr><w:i/></w:rPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Note"><w:name w:val="Draft note"/><w:basedOn w:val="Normal"/><w:rPr><w:color w:val="666666"/></w:rPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Placeholder"><w:name w:val="Script placeholder"/><w:basedOn w:val="Normal"/><w:rPr><w:color w:val="666666"/></w:rPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Bullet"><w:name w:val="Script bullet"/><w:basedOn w:val="Normal"/><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr></w:pPr></w:style>
+</w:styles>"""
+
+
+def _content_types_xml(*, include_footer: bool = False) -> str:
+    footer = (
+        '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>'
+        if include_footer
+        else ""
+    )
     return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
@@ -1340,7 +1709,7 @@ def _content_types_xml() -> str:
   <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
   <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
   <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
-</Types>"""
+</Types>""".replace("</Types>", footer + "</Types>")
 
 
 def _rels_xml() -> str:
@@ -1352,11 +1721,28 @@ def _rels_xml() -> str:
 </Relationships>"""
 
 
-def _document_rels_xml() -> str:
+def _document_rels_xml(*, include_footer: bool = False) -> str:
+    footer = (
+        '<Relationship Id="rIdFooter" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>'
+        if include_footer
+        else ""
+    )
     return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
   <Relationship Id="rIdNumbering" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>
-</Relationships>"""
+</Relationships>""".replace("</Relationships>", footer + "</Relationships>")
+
+
+def _o1b_footer_xml() -> str:
+    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p><w:pPr><w:jc w:val="right"/></w:pPr>
+    <w:r><w:fldChar w:fldCharType="begin"/></w:r>
+    <w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>
+    <w:r><w:fldChar w:fldCharType="end"/></w:r>
+  </w:p>
+</w:ftr>"""
 
 
 def _numbering_xml() -> str:

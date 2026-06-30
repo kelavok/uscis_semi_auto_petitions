@@ -33,6 +33,7 @@ from .workflow import (
     build_status_report,
     destination_for_step,
     find_step,
+    folder_role_map,
     import_llm_output,
     insert_section,
     load_case,
@@ -229,6 +230,20 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
                 "uscis_address": data.get("uscis_address", ""),
                 "procedural_context": data.get("procedural_context", ""),
                 "drafting_objective": data.get("drafting_objective", ""),
+                "citizenship": data.get("citizenship", ""),
+                "o1b_track": data.get("o1b_track", ""),
+                "petitioner_company_name": data.get("petitioner_company_name", ""),
+                "petitioner_company_address": data.get("petitioner_company_address", ""),
+                "petitioner_type": data.get("petitioner_type", ""),
+                "authorized_signatory": data.get("authorized_signatory", ""),
+                "filing_processing": data.get("filing_processing", ""),
+                "validity_start": data.get("validity_start", ""),
+                "validity_end": data.get("validity_end", ""),
+                "filing_uscis_address": data.get("filing_uscis_address", ""),
+                "position_or_role": data.get("position_or_role", ""),
+                "compensation": data.get("compensation", ""),
+                "work_location": data.get("work_location", ""),
+                "duties_summary": data.get("duties_summary", ""),
             },
             case_info_file=data.get("case_info_file", ""),
             source_folder_path=data.get("source_folder_path", ""),
@@ -251,6 +266,12 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
                     "leading_critical_role",
                     "high_salary",
                     "commercial_success",
+                    "lead_starring_productions",
+                    "published_recognition",
+                    "organization_role",
+                    "commercial_critical_success",
+                    "significant_recognition",
+                    "comparable_evidence",
                 )
                 if data.get(f"criterion_{role}") == "on"
             ]
@@ -438,6 +459,7 @@ def render_home(query: str = "") -> str:
             <input name="new_case" placeholder="new_case_id" required>
             <select name="task_type">
               <option value="eb1a_petition">EB1A petition</option>
+              <option value="o1b_petition">O-1B petition</option>
               <option value="eb1a_rfe_response">EB1A RFE response</option>
             </select>
             <button>Create case</button>
@@ -790,6 +812,8 @@ def _dependency_warning(stage: LLMStage, unit: LLMUnit | None) -> str:
         "criterion_original_contribution_significance": "criterion_original_contribution_fact",
         "criterion_leading_critical_role_reputation": "criterion_leading_critical_role_fact",
         "criterion_high_salary_comparison": "criterion_high_salary_fact",
+        "o1b_criterion_iii_reputation": "o1b_criterion_iii_role",
+        "o1b_criterion_vi_comparison": "o1b_criterion_vi_compensation",
     }
     prerequisite = phase_pairs.get(unit.step_id, "")
     if prerequisite:
@@ -1221,31 +1245,43 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
         f'<option value="{value}"{" selected" if gender == value else ""}>{label}</option>'
         for value, label in (("", "Gender / pronouns"), ("male", "Male — Mr./he"), ("female", "Female — Ms./she"), ("neutral", "Neutral — Mx./they"))
     )
-    criteria_labels = [
-        ("awards", "(i) Awards"),
-        ("memberships", "(ii) Memberships"),
-        ("media", "(iii) Published material"),
-        ("judging", "(iv) Judging"),
-        ("original_contribution", "(v) Original contribution"),
-        ("scholarly_articles", "(vi) Scholarly articles"),
-        ("exhibitions", "(vii) Exhibitions"),
-        ("leading_critical_role", "(viii) Leading / critical role"),
-        ("high_salary", "(ix) High salary"),
-        ("commercial_success", "(x) Commercial success"),
-    ]
-    if task_type == "eb1a_petition" and not claimed:
-        roles = config.get("eb1a_folder_roles", {})
-        if isinstance(roles, dict):
-            originals = _case_dir(case_id) / "source_documents" / "originals"
-            for role, _ in criteria_labels:
-                folder = originals / str(roles.get(role, role))
-                if folder.exists() and any(
-                    item.is_file() and item.name != ".gitkeep" for item in folder.rglob("*")
-                ):
-                    claimed.add(role)
-    criteria_html = "" if task_type != "eb1a_petition" else (
+    if task_type == "o1b_petition":
+        criteria_labels = [
+            ("lead_starring_productions", "(i) Lead/starring productions or events"),
+            ("published_recognition", "(ii) Published recognition"),
+            ("organization_role", "(iii) Lead/starring/critical organizational role"),
+            ("commercial_critical_success", "(iv) Commercial or critically acclaimed success"),
+            ("significant_recognition", "(v) Significant recognition"),
+            ("high_salary", "(vi) High salary or substantial remuneration"),
+            ("comparable_evidence", "Comparable evidence — Arts only"),
+        ]
+        criteria_legend = "Claimed O-1B criteria"
+    else:
+        criteria_labels = [
+            ("awards", "(i) Awards"),
+            ("memberships", "(ii) Memberships"),
+            ("media", "(iii) Published material"),
+            ("judging", "(iv) Judging"),
+            ("original_contribution", "(v) Original contribution"),
+            ("scholarly_articles", "(vi) Scholarly articles"),
+            ("exhibitions", "(vii) Exhibitions"),
+            ("leading_critical_role", "(viii) Leading / critical role"),
+            ("high_salary", "(ix) High salary"),
+            ("commercial_success", "(x) Commercial success"),
+        ]
+        criteria_legend = "Claimed EB1A criteria"
+    if task_type in {"eb1a_petition", "o1b_petition"} and not claimed:
+        roles = folder_role_map(config)
+        originals = _case_dir(case_id) / "source_documents" / "originals"
+        for role, _ in criteria_labels:
+            folder = originals / str(roles.get(role, role))
+            if folder.exists() and any(
+                item.is_file() and item.name != ".gitkeep" for item in folder.rglob("*")
+            ):
+                claimed.add(role)
+    criteria_html = "" if task_type not in {"eb1a_petition", "o1b_petition"} else (
         '<input type="hidden" name="claimed_criteria_present" value="1">'
-        '<fieldset><legend>Claimed EB1A criteria</legend>'
+        f'<fieldset><legend>{escape(criteria_legend)}</legend>'
         '<p class="muted small">Checked criteria are stored in the case configuration and control the working memorandum. When no selection was saved, they are inferred from non-empty evidence folders.</p>'
         '<div class="check-grid">'
         + "".join(
@@ -1254,11 +1290,10 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
         )
         + "</div></fieldset>"
     )
-    template_default = (
-        "templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.txt"
-        if task_type == "eb1a_rfe_response"
-        else "templates/EB1A/EB1A_unified_template_LLM.docx"
-    )
+    template_default = {
+        "eb1a_rfe_response": "templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.txt",
+        "o1b_petition": "templates/O1B/MEMO O-1В_ver.1.0.docx",
+    }.get(task_type, "templates/EB1A/EB1A_unified_template_LLM.docx")
     if task_type == "eb1a_rfe_response":
         source_target_options = [
             ("source_rfe_notice", "RFE notice"),
@@ -1309,6 +1344,43 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
         <input name="response_deadline" value="{field_value(rfe_metadata.get('response_deadline'))}" placeholder="RFE response deadline">
         <input name="uscis_address" value="{field_value(rfe_metadata.get('uscis_address'))}" placeholder="USCIS address">
         """
+        left_extra = ""
+    elif task_type == "o1b_petition":
+        petitioner = config.get("petitioner", {}) if isinstance(config.get("petitioner"), dict) else {}
+        filing = config.get("filing", {}) if isinstance(config.get("filing"), dict) else {}
+        us_work = config.get("us_work", {}) if isinstance(config.get("us_work"), dict) else {}
+        track = str(config.get("o1b_track", "arts"))
+        petitioner_type = str(petitioner.get("petitioner_type", "us_employer"))
+        processing = str(filing.get("processing", "Regular Processing"))
+        left_extra = f"""
+        <input name="citizenship" value="{field_value(beneficiary.get('citizenship'))}" placeholder="Citizenship">
+        <select name="o1b_track">
+          <option value="arts"{" selected" if track == "arts" else ""}>O-1B Arts — distinction</option>
+          <option value="mptv"{" selected" if track == "mptv" else ""}>O-1B MPTV — extraordinary achievement</option>
+        </select>
+        """
+        right_fields = f"""
+        <input name="petitioner_company_name" value="{field_value(petitioner.get('company_name'))}" placeholder="Petitioner / agent company name">
+        <input name="petitioner_company_address" value="{field_value(petitioner.get('company_address'))}" placeholder="Petitioner company address">
+        <select name="petitioner_type">
+          <option value="us_employer"{" selected" if petitioner_type == "us_employer" else ""}>U.S. employer</option>
+          <option value="us_agent"{" selected" if petitioner_type == "us_agent" else ""}>U.S. agent</option>
+          <option value="us_agent_for_multiple_employers"{" selected" if petitioner_type == "us_agent_for_multiple_employers" else ""}>U.S. agent for multiple employers</option>
+          <option value="us_agent_for_foreign_employer"{" selected" if petitioner_type == "us_agent_for_foreign_employer" else ""}>U.S. agent for foreign employer</option>
+        </select>
+        <input name="authorized_signatory" value="{field_value(petitioner.get('authorized_signatory'))}" placeholder="Authorized signatory and title">
+        <select name="filing_processing">
+          <option value="Regular Processing"{" selected" if processing == "Regular Processing" else ""}>Regular Processing</option>
+          <option value="Premium Processing"{" selected" if processing == "Premium Processing" else ""}>Premium Processing</option>
+        </select>
+        <input name="validity_start" value="{field_value(filing.get('validity_start'))}" placeholder="Requested validity start">
+        <input name="validity_end" value="{field_value(filing.get('validity_end'))}" placeholder="Requested validity end">
+        <input name="filing_uscis_address" value="{field_value(filing.get('uscis_address'))}" placeholder="USCIS filing address">
+        <input name="position_or_role" value="{field_value(us_work.get('position_or_role'))}" placeholder="U.S. position / role">
+        <input name="compensation" value="{field_value(us_work.get('compensation'))}" placeholder="Compensation / salary">
+        <input name="work_location" value="{field_value(us_work.get('work_location'))}" placeholder="Primary work location">
+        <textarea name="duties_summary" rows="3" placeholder="Short duties summary">{field_value(us_work.get('duties_summary'))}</textarea>
+        """
     else:
         procedural_value = field_value(config.get("procedural_context")) or "Initial EB-1A petition"
         drafting_value = field_value(config.get("drafting_objective")) or "Prepare EB-1A petition memorandum"
@@ -1316,11 +1388,21 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
         <input name="procedural_context" value="{procedural_value}" placeholder="Procedural context, e.g. Initial EB-1A petition">
         <input name="drafting_objective" value="{drafting_value}" placeholder="Drafting objective, e.g. Prepare EB-1A petition memorandum">
         """
+        left_extra = ""
     existing_intake = bool(field_value(beneficiary.get("full_name")))
-    inferred_unsaved = task_type == "eb1a_petition" and (
+    o1b_missing_intake = task_type == "o1b_petition" and any(
+        not field_value(value)
+        for value in (
+            config.get("o1b_track"),
+            (config.get("petitioner", {}) or {}).get("company_name") if isinstance(config.get("petitioner"), dict) else "",
+            (config.get("us_work", {}) or {}).get("position_or_role") if isinstance(config.get("us_work"), dict) else "",
+        )
+    )
+    inferred_unsaved = task_type in {"eb1a_petition", "o1b_petition"} and (
         (bool(claimed) and not bool(configured_claimed))
         or not field_value(config.get("procedural_context"))
         or not field_value(config.get("drafting_objective"))
+        or o1b_missing_intake
     )
     submit_label = "Save inferred intake" if inferred_unsaved else "No intake changes"
     submit_disabled = "" if inferred_unsaved or not existing_intake else " disabled"
@@ -1340,6 +1422,7 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
           <div class="stack">
             <input name="beneficiary_full_name" value="{field_value(beneficiary.get('full_name'))}" placeholder="Beneficiary full name">
             <input name="preferred_reference" value="{field_value(beneficiary.get('preferred_reference'))}" placeholder="Preferred reference, e.g. Mr./Ms. Surname">
+            {left_extra}
             <select name="gender">{gender_options}</select>
             <input name="field" value="{field_value(config.get('field'))}" placeholder="Area / field">
             <input name="specialization" value="{field_value(config.get('specialization'))}" placeholder="Specialization">

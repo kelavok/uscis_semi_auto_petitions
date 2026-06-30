@@ -606,6 +606,34 @@ PDF-действия (`Render separator PDFs`, `Build final bundle`) требу�
 зависимостей `reportlab`/`pypdf`. В Codex-среде они доступны через bundled
 Python runtime; в обычном окружении их можно поставить как optional extras.
 
+### O-1B petition track
+
+Create an O-1B case from the local UI or with:
+
+```powershell
+python -m app.draft init-case --case artist_001 --task-type o1b_petition
+```
+
+The case starts from `templates/O1B/case_folders_template`, uses
+`templates/O1B/O1B_company_memo_llm_structure.yaml` as the detailed LLM/legal
+instruction source, and builds the human working memorandum from
+`templates/O1B/O1B_working_document_structure.yaml` in the order required by
+`MEMO O-1В_ver.1.0.docx`.
+
+The O-1B intake records the Arts/MPTV track, petitioner or agent, requested
+validity period, U.S. position, compensation, location, duties, and claimed
+criteria. The first substantive LLM units are a standalone petitioner/agent
+support letter and itinerary, followed by biography, optional recommendation
+letters, industry context, criteria, advisory opinion, continued work,
+overview, and conclusions.
+
+Place each criterion episode in its own folder. For Criterion (iii), optional
+phase subfolders such as `1 role and contribution` and
+`2 distinguished reputation` route evidence to two prompts with one shared
+episode id. For Criterion (vi), use `1 compensation facts` and
+`2 comparison sources`. If phase subfolders are absent, both phases remain
+available and receive the full episode as a safe fallback.
+
 ## EB1A RFE response track
 
 Для ответа на RFE создан отдельный task type:

@@ -28,6 +28,12 @@ CRITERION_LABELS = {
     "high_salary": "High salary",
     "commercial_success": "Commercial success",
     "employment_plan": "Employment plan",
+    "lead_starring_productions": "O-1B Criterion (i): lead/starring productions or events",
+    "published_recognition": "O-1B Criterion (ii): published recognition",
+    "organization_role": "O-1B Criterion (iii): organizational role",
+    "commercial_critical_success": "O-1B Criterion (iv): commercial/critical success",
+    "significant_recognition": "O-1B Criterion (v): significant recognition",
+    "comparable_evidence": "O-1B Arts comparable evidence",
 }
 
 
@@ -87,6 +93,12 @@ def build_llm_stage(case_id: str) -> LLMStage:
         if not step_id or execution.startswith("deterministic") or step_id in disabled_steps:
             continue
         criterion = _criterion_for_step(step_id, step)
+        if (
+            str(loaded.config.get("task_type", "")) == "o1b_petition"
+            and str(loaded.config.get("o1b_track", "")) == "mptv"
+            and criterion == "comparable_evidence"
+        ):
+            continue
         if criterion and criterion != "employment_plan" and claimed and criterion not in claimed:
             continue
         if "repeatable" in execution:
@@ -186,6 +198,13 @@ def _build_unit(
 
 def _criterion_for_step(step_id: str, step: dict[str, Any]) -> str:
     mapping = (
+        ("o1b_criterion_vi", "high_salary"),
+        ("o1b_criterion_iii", "organization_role"),
+        ("o1b_criterion_iv", "commercial_critical_success"),
+        ("o1b_criterion_v", "significant_recognition"),
+        ("o1b_criterion_ii", "published_recognition"),
+        ("o1b_criterion_i", "lead_starring_productions"),
+        ("o1b_comparable_evidence", "comparable_evidence"),
         ("criterion_original_contribution", "original_contribution"),
         ("criterion_leading_critical_role", "leading_critical_role"),
         ("criterion_scholarly_articles", "scholarly_articles"),

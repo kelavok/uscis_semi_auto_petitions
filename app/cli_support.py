@@ -56,6 +56,8 @@ def create_case_from_template(case_id: str, task_type: str) -> Path:
         text = text.replace("workflow: workflows/eb1a_petition.yaml", workflow_value)
         if task_type == "eb1a_rfe_response":
             text = _rfe_case_config_text(text)
+        elif task_type == "o1b_petition":
+            text = _o1b_case_config_text(text)
         config_path.write_text(text, encoding="utf-8")
 
     if task_type == "eb1a_petition":
@@ -70,6 +72,16 @@ def create_case_from_template(case_id: str, task_type: str) -> Path:
                     shutil.copy2(child, child_destination)
     elif task_type == "eb1a_rfe_response":
         _create_eb1a_rfe_structure(target)
+    elif task_type == "o1b_petition":
+        source = PROJECT_ROOT / "templates" / "O1B" / "case_folders_template"
+        destination = target / "source_documents" / "originals"
+        if source.exists():
+            for child in source.iterdir():
+                child_destination = destination / child.name
+                if child.is_dir():
+                    shutil.copytree(child, child_destination)
+                else:
+                    shutil.copy2(child, child_destination)
 
     return target
 
@@ -78,6 +90,7 @@ def workflow_for(task_type: str) -> str:
     mapping = {
         "eb1a_petition": "workflow: workflows/eb1a_petition.yaml",
         "eb1a_rfe_response": "workflow: workflows/eb1a_rfe_response.yaml",
+        "o1b_petition": "workflow: workflows/o1b_petition.yaml",
     }
     if task_type not in mapping:
         supported = ", ".join(sorted(mapping))
@@ -86,6 +99,73 @@ def workflow_for(task_type: str) -> str:
             "Add and test its workflow YAML before enabling case creation."
         )
     return mapping[task_type]
+
+
+def _o1b_case_config_text(text: str) -> str:
+    text = text.replace(
+        "source_folder_template: templates/EB1A/case_folders_template",
+        "source_folder_template: templates/O1B/case_folders_template",
+    )
+    text = text.replace(
+        "working_document_template: templates/EB1A/EB1A_working_document_structure.yaml",
+        "working_document_template: templates/O1B/O1B_working_document_structure.yaml",
+    )
+    text = re.sub(
+        r"(?m)^procedural_context:\s*.*$",
+        "procedural_context: Initial O-1B petition",
+        text,
+        count=1,
+    )
+    text = re.sub(
+        r"(?m)^drafting_objective:\s*.*$",
+        "drafting_objective: Prepare O-1B petition memorandum and supporting employment documents",
+        text,
+        count=1,
+    )
+    o1b_roles = (
+        "o1b_folder_roles:\n"
+        '  identity_cv_education: "!CV_passport_linkedin_education"\n'
+        '  us_work_documents: "!!offer_contracts_agent_itinerary_letter"\n'
+        '  lead_starring_productions: "1.lead_starring_or_critical_role_for_organizations_and_establishments"\n'
+        '  published_recognition: "2.critical_reviews_or_other_published_materials_by_or_about_the_beneficiary"\n'
+        '  organization_role: "3.leading_critical_role_for_organization"\n'
+        '  commercial_critical_success: "4.commercial_or_critically_acclaimed_successes"\n'
+        '  significant_recognition: "5.significant_recognition_for_achievements"\n'
+        '  high_salary: "6.high_salary_or_remuneration"\n'
+        '  comparable_evidence: "7. Comparable_evidence"\n'
+        '  advisory_opinion: "advisory_opinion"\n'
+        '  recommendation_letters: "recommendation_letters"\n\n'
+    )
+    text = re.sub(
+        r"(?ms)^eb1a_folder_roles:\n.*?(?=^approvals:)",
+        o1b_roles,
+        text,
+        count=1,
+    )
+    marker = "drafting_objective: Prepare O-1B petition memorandum and supporting employment documents\n"
+    if marker in text and "o1b_track:" not in text:
+        text = text.replace(
+            marker,
+            marker
+            + "o1b_track: arts\n"
+            + "petitioner:\n"
+            + "  company_name: __REQUIRED__\n"
+            + "  company_address: __REQUIRED__\n"
+            + "  petitioner_type: us_employer\n"
+            + "  authorized_signatory: __REQUIRED__\n"
+            + "filing:\n"
+            + "  processing: Regular Processing\n"
+            + "  validity_start: __REQUIRED__\n"
+            + "  validity_end: __REQUIRED__\n"
+            + "  uscis_address: __REQUIRED__\n"
+            + "us_work:\n"
+            + "  position_or_role: __REQUIRED__\n"
+            + "  compensation: __REQUIRED__\n"
+            + "  work_location: __REQUIRED__\n"
+            + "  duties_summary: __REQUIRED__\n\n",
+            1,
+        )
+    return text
 
 
 def _rfe_case_config_text(text: str) -> str:

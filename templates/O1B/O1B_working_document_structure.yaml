@@ -1,0 +1,78 @@
+schema_version: 1
+template_role: deterministic_o1b_working_document
+source_reference: templates/O1B/MEMO O-1В_ver.1.0.docx
+instruction_reference: templates/O1B/O1B_company_memo_llm_structure.yaml
+
+document:
+  petition_title: I-129 Petition for O-1B Classification
+  company_order_is_mandatory: true
+  font: Times New Roman
+  body_font_size: 12
+  line_spacing: 1.5
+  alignment: justified
+  heading_1_size: 16
+  heading_2_size: 14
+  page_numbers: footer_right
+
+index_rows:
+  - General documents. Exhibits from 1.1 to 1.N, Pages from XX to XX.
+  - Industry Overview. Exhibits from 1.N to 1.N, Pages from XX to XX.
+  - Criterion (i). Exhibits from 2.1 to 2.N, Pages from XX to XX.
+  - Criterion (ii). Exhibits from 3.1 to 3.N, Pages from XX to XX.
+  - Criterion (iii). Exhibits from 4.1 to 4.N, Pages from XX to XX.
+  - Criterion (iv). Exhibits from 5.1 to 5.N, Pages from XX to XX.
+  - Criterion (v). Exhibits from 6.1 to 6.N, Pages from XX to XX.
+  - Criterion (vi). Exhibits from 7.1 to 7.N, Pages from XX to XX.
+  - Recommendation Letters / Comparable Evidence. Exhibits from 8.1 to 8.N, Pages from XX to XX.
+  - ADVISORY OPINION. Exhibit 9.1, Pages from XX to XX.
+  - Employment Agreement / Agent Documents / Itinerary / Job Offer. Exhibits from 10.1 to 10.N, Pages from XX to XX.
+
+criteria:
+  lead_starring_productions:
+    roman: i
+    title: "Criterion 1. Evidence that the beneficiary has performed, and will perform, services as a lead or starring participant in productions or events which have a distinguished reputation as evidenced by critical reviews, advertisements, publicity releases, publications, contracts, or endorsements."
+    cover_text: "Criterion (i): lead or starring participation in productions or events with a distinguished reputation."
+    exhibit_range: Exhibits from 2.1 to 2.N, Pages from XX to XX.
+    step_ids: [o1b_criterion_i_episode]
+
+  published_recognition:
+    roman: ii
+    title: "Criterion 2. Evidence that the beneficiary has achieved national or international recognition for achievements evidenced by critical reviews or other published materials by or about the beneficiary in major newspapers, trade journals, magazines, or other publications."
+    cover_text: "Criterion (ii): national or international recognition evidenced by qualifying published material."
+    exhibit_range: Exhibits from 3.1 to 3.N, Pages from XX to XX.
+    step_ids: [o1b_criterion_ii_episode]
+
+  organization_role:
+    roman: iii
+    title: "Criterion 3. Evidence that the beneficiary has performed, and will perform, in a lead, starring, or critical role for organizations and establishments that have a distinguished reputation."
+    cover_text: "Criterion (iii): lead, starring, or critical roles for organizations or establishments with a distinguished reputation."
+    exhibit_range: Exhibits from 4.1 to 4.N, Pages from XX to XX.
+    step_ids: [o1b_criterion_iii_role, o1b_criterion_iii_reputation]
+
+  commercial_critical_success:
+    roman: iv
+    title: "Criterion 4. Evidence that the beneficiary has a record of major commercial or critically acclaimed successes as evidenced by title, rating, standing in the field, receipts, ratings, or other occupational achievements reported in qualifying publications."
+    cover_text: "Criterion (iv): a record of major commercial or critically acclaimed successes."
+    exhibit_range: Exhibits from 5.1 to 5.N, Pages from XX to XX.
+    step_ids: [o1b_criterion_iv_episode]
+
+  significant_recognition:
+    roman: v
+    title: "Criterion 5. Evidence that the beneficiary has received significant recognition for achievements from organizations, critics, government agencies, or other recognized experts in the field."
+    cover_text: "Criterion (v): significant recognition for achievements from qualified organizations, critics, agencies, or experts."
+    exhibit_range: Exhibits from 6.1 to 6.N, Pages from XX to XX.
+    step_ids: [o1b_criterion_v_episode]
+
+  high_salary:
+    roman: vi
+    title: "Criterion 6. Evidence that the beneficiary has commanded or will command a high salary or other substantial remuneration for services in relation to others in the field."
+    cover_text: "Criterion (vi): high salary or other substantial remuneration in relation to others in the field."
+    exhibit_range: Exhibits from 7.1 to 7.N, Pages from XX to XX.
+    step_ids: [o1b_criterion_vi_compensation, o1b_criterion_vi_comparison]
+
+  comparable_evidence:
+    roman: comparable
+    title: "Comparable Evidence (O-1B Arts only)."
+    cover_text: "Comparable evidence submitted because the listed criteria do not readily apply to the beneficiary's occupation."
+    exhibit_range: Exhibits from 8.1 to 8.N, Pages from XX to XX.
+    step_ids: [o1b_comparable_evidence_episode]

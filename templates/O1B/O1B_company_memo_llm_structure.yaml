@@ -1,0 +1,1654 @@
+schema_version: 1
+template_role: company_specific_o1b_memo_llm_interaction_and_script_assembly_map
+template_name: O-1B Company Memo Structure YAML
+template_date: '2026-06-30'
+created_for: Separate O-1B branch for a company-specific memo template
+source_references:
+- MEMO O-1В_ver.1.0.docx - company-required memo structure, formatting settings, index, cover, criteria sections, advisory
+  opinion, continued work, and conclusions
+- O1B_working_document_structure.yaml - prior universal O-1B YAML structure with case_config, legal tests, evidence model,
+  generation rules, divider pages, and validation rules
+- USCIS Policy Manual Volume 2 Part M Chapter 4 - O-1B Arts and O-1B Motion Picture/Television standards and evidentiary criteria
+- 8 CFR 214.2(o) - O classification regulatory framework; verify current language before filing
+scope:
+  visa_classification: O-1B
+  document_type: I-129 Petition Memo for Alien of Extraordinary Ability in the field of arts / O-1B
+  company_template_order_is_mandatory: true
+  tracks:
+    arts:
+      standard_label: distinction
+      standard_summary: High level of achievement in the field of arts evidenced by a degree of skill and recognition substantially
+        above that ordinarily encountered, to the extent that the beneficiary is prominent, renowned, leading, or well-known
+        in the field of arts.
+      applicable_regulatory_criteria: 8 CFR 214.2(o)(3)(iv)
+      comparable_evidence_allowed: true
+      must_prove:
+      - extraordinary ability in the arts demonstrated by sustained national or international acclaim
+      - achievements recognized in the field through extensive documentation
+      - coming to the United States to work in the area of extraordinary ability
+    mptv:
+      standard_label: extraordinary achievement
+      standard_summary: Very high level of accomplishment in the motion picture or television industry evidenced by a degree
+        of skill and recognition significantly above that ordinarily encountered, to the extent that the beneficiary is recognized
+        as outstanding, notable, or leading in the motion picture or television field.
+      applicable_regulatory_criteria: 8 CFR 214.2(o)(3)(v)
+      comparable_evidence_allowed: false
+      must_prove:
+      - record of extraordinary achievement in motion picture or television productions
+      - recognition in the MPTV field through extensive documentation
+      - coming to continue work in motion picture or television productions
+  do_not_use:
+  - EB-1A terminology unless explicitly comparing categories
+  - Form I-140 language
+  - permanent residence petition language
+  - national interest or substantial benefit argument as an O-1B eligibility element
+  - O-1A top-of-field language as the governing standard for O-1B Arts
+  - unverified fee or address constants
+company_formatting_requirements:
+  normal_text_font_options:
+  - Times New Roman
+  - Arial
+  line_spacing: 1.5
+  paragraph_spacing:
+    space_after: enabled
+    space_before: disabled
+  paragraphs_required: true
+  alignment: justified
+  page_numbering:
+    enabled: true
+    footer_position: bottom_right
+  criterion_headings:
+    style: Heading 1
+    font_size: 16
+  episode_subheadings:
+    style: Heading 2
+    font_size: 14
+  script_note: These formatting requirements come from the company memo and should be implemented by the document assembly
+    script, not by the LLM prose generator. Let the LLM output structured text blocks only.
+case_config:
+  beneficiary:
+    full_legal_name: '{FIRST_AND_LAST_NAME_OF_BENEFICIARY}'
+    preferred_reference: '{Mr./Ms. Last Name}'
+    short_reference: '{Last Name}'
+    first_name_variants:
+    - '{NAME_VARIANT_1}'
+    - '{NAME_VARIANT_2}'
+    name_variants_affidavit_needed: '{true|false}'
+    citizenship:
+    - '{COUNTRY}'
+    pronouns:
+      subject: '{he/she/they}'
+      object: '{him/her/them}'
+      possessive: '{his/her/their}'
+  petitioner:
+    company_name: '{COMPANY_NAME}'
+    company_address: '{COMPANY_ADDRESS}'
+    petitioner_type: '{us_employer|us_agent|us_agent_for_multiple_employers|us_agent_for_foreign_employer}'
+    authorized_signatory: '{SIGNATORY_NAME_TITLE}'
+    relationship_to_beneficiary: '{employer|agent|representative}'
+    control_theory: '{who controls duties, schedule, payment, supervision, termination, and work product}'
+  o1b_track: '{arts|mptv}'
+  field:
+    subfield: '{SUBFIELD}'
+    specialization: '{SPECIALIZATION}'
+    why_this_is_o1b: '{explain why the work is arts or MPTV rather than O-1A}'
+    industry_overview_focus: '{why the subfield matters to the U.S. or to the relevant arts/MPTV industry}'
+  filing:
+    date: '{DATE}'
+    to_line: TO USCIS
+    processing: '{Premium Processing|Regular Processing}'
+    classification_line: I-129 Petition for Alien of Extraordinary Ability in the field of arts (O-1B)
+    validity_period:
+      start: '{START_DATE}'
+      end: '{END_DATE}'
+      basis: '{contract|itinerary|job_offer|project_plan}'
+    verify_current_forms_fees_addresses: true
+  claimed_criteria:
+    minimum_required: 3
+    company_template_default_claim: 5
+    claimed:
+    - criterion_i
+    - criterion_ii
+    - criterion_iii
+    - criterion_iv
+    - criterion_v
+    - criterion_vi
+    not_claimed: []
+    strongest_criteria:
+    - '{criterion_key_1}'
+    - '{criterion_key_2}'
+    - '{criterion_key_3}'
+    weak_or_backup_criteria:
+    - '{criterion_key}'
+    significant_award_path: '{true|false}'
+    comparable_evidence_for_arts: '{true|false}'
+    comparable_evidence_for_mptv_prohibited: true
+  consultation:
+    status: '{advisory_opinion_obtained|no_appropriate_peer_group|expert_letters_instead|letter_of_no_objection|mptv_union_and_management_consultation}'
+    source_name: '{ORGANIZATION_OR_EXPERT_PANEL}'
+    exhibit_id: '9.1'
+    attempts_to_obtain_consultation_exhibit: '{EXHIBIT_ID_IF_APPLICABLE}'
+    important_correction: Use 8 CFR 214.2(o)(5), not the erroneous 214.1(C)(5)(1) reference appearing in the company memo
+      sample.
+  us_work:
+    company_name: '{COMPANY_NAME}'
+    company_address: '{COMPANY_ADDRESS}'
+    position_or_role: '{POSITION_ROLE}'
+    contract_period: '{CONTRACT_PERIOD}'
+    compensation: '{SALARY_OR_REMUNERATION}'
+    duties:
+    - '{DUTY_1}'
+    - '{DUTY_2}'
+    - '{DUTY_3}'
+    - '{DUTY_4}'
+    employment_evidence_exhibit: '{EMPLOYMENT_EXHIBIT_ID}'
+    itinerary_exhibit: '{ITINERARY_EXHIBIT_ID}'
+    job_offer_exhibit: '{JOB_OFFER_EXHIBIT_ID}'
+evidence_item_schema:
+  id: '{EXHIBIT_ID}'
+  title: '{DOCUMENT_TITLE}'
+  group: '{general|industry|criterion_i|criterion_ii|criterion_iii|criterion_iv|criterion_v|criterion_vi|advisory|employment}'
+  page_range: '{PAGES_FROM_TO}'
+  evidence_type: '{primary|secondary|testimonial|official|media|contract|translation|salary_comparison|consultation}'
+  submitted_as: '{initial|new|resubmitted|not_applicable}'
+  language: '{English|Russian|Other}'
+  translation_required: '{true|false}'
+  proves:
+  - '{FACT_OR_LEGAL_ELEMENT_1}'
+  - '{FACT_OR_LEGAL_ELEMENT_2}'
+  use_in_sections:
+  - '{SECTION_KEY}'
+  source_reliability_note: '{why this document is reliable/probative}'
+  citation_format: '(Refer to Exhibit {id}: {title}, pages {page_range}.)'
+exhibit_numbering_strategy:
+  company_index_style: Use exhibit group labels in the INDEX exactly as the company template expects, while allowing configuration
+    to avoid duplicate numbering.
+  default_groups:
+    general_documents:
+      range: 1.1 to 1.3
+      pages_placeholder: Pages from XX to XX
+    name_affidavit_optional:
+      suggested_id: '1.4'
+      reason: The memo references an Affidavit of name; the sample index leaves a gap between 1.3 and 1.5.
+    industry_overview:
+      range: 1.5 to 1.6
+      pages_placeholder: Pages from XX to XX
+    criterion_i:
+      range: 2.1 to 2.7
+      pages_placeholder: Pages from XX to XX
+    criterion_ii:
+      range: '{CONFIGURE}'
+      pages_placeholder: Pages from XX to XX
+    criterion_iii:
+      range: 3.1 to 3.3 per sample, or configure if Criterion ii uses group 3
+      pages_placeholder: Pages from XX to XX
+    criterion_iv:
+      range: '{CONFIGURE}'
+      pages_placeholder: Pages from XX to XX
+    criterion_v_recommendation_letters:
+      range: 8.1 to 8.7
+      pages_placeholder: Pages from XX to XX
+    criterion_vi_salary:
+      range: '{CONFIGURE}'
+      pages_placeholder: Pages from XX to XX
+    advisory_opinion:
+      range: '9.1'
+      pages_placeholder: Pages from XX to XX
+    employment_agreement_itinerary_job_offer:
+      range: '{CONFIGURE_USUALLY_10.1_TO_10.N}'
+      pages_placeholder: Pages from XX to XX
+  validation:
+  - No two active exhibit groups may use the same exhibit id unless they intentionally refer to the same document.
+  - If Criterion (ii) uses Exhibit 3.*, then Criterion (iii) must not also use Exhibit 3.* unless the company specifically
+    confirms that numbering convention.
+  - All page ranges must be resolved after final PDF assembly.
+document_render_order:
+- formatting_settings_internal_only
+- index
+- cover_letter
+- overview_beneficiary_qualifications_and_achievements
+- overview_industry
+- evidential_criteria_intro
+- criterion_i_lead_or_starring_productions_events
+- criterion_ii_published_recognition
+- criterion_iii_lead_starring_critical_role_organizations
+- criterion_iv_major_commercial_or_critically_acclaimed_success
+- criterion_v_significant_recognition
+- criterion_vi_high_salary_or_substantial_remuneration
+- advisory_opinion
+- continuing_to_work
+- conclusions
+- exhibit_divider_pages
+- exhibits
+sections:
+  index:
+    heading: 'INDEX:'
+    purpose: Give the officer a map of exhibit groups, exhibit ids, and final page ranges.
+    llm_role: The LLM may draft exhibit titles and group descriptions, but the script must fill final page ranges.
+    template_lines:
+    - General documents. Exhibits from 1.1 to 1.3, Pages from {GENERAL_PAGES_FROM} to {GENERAL_PAGES_TO}
+    - Exhibit 1.1. {Document name}
+    - Exhibit 1.2. {Document name}
+    - Exhibit 1.3. {Document name}
+    - Industry Overview. Exhibits from 1.5 to 1.6, Pages from {INDUSTRY_PAGES_FROM} to {INDUSTRY_PAGES_TO}
+    - Criterion (i). Exhibits from 2.1 to 2.7, Pages from {CRITERION_I_PAGES_FROM} to {CRITERION_I_PAGES_TO}
+    - Criterion (ii). Exhibits from {CRITERION_II_EXHIBITS_FROM} to {CRITERION_II_EXHIBITS_TO}, Pages from {CRITERION_II_PAGES_FROM}
+      to {CRITERION_II_PAGES_TO}
+    - Criterion (iii). Exhibits from {CRITERION_III_EXHIBITS_FROM} to {CRITERION_III_EXHIBITS_TO}, Pages from {CRITERION_III_PAGES_FROM}
+      to {CRITERION_III_PAGES_TO}
+    - Criterion (iv). Exhibits from {CRITERION_IV_EXHIBITS_FROM} to {CRITERION_IV_EXHIBITS_TO}, Pages from {CRITERION_IV_PAGES_FROM}
+      to {CRITERION_IV_PAGES_TO}
+    - Recommendation Letters. Exhibits from 8.1 to 8.7, Pages from {RECOMMENDATION_PAGES_FROM} to {RECOMMENDATION_PAGES_TO}
+    - ADVISORY OPINION. Exhibit 9.1, pages from {ADVISORY_PAGES_FROM} to {ADVISORY_PAGES_TO}
+    - Employment Agreement / Itinerary / Job Offer. Exhibits from {EMPLOYMENT_EXHIBITS_FROM} to {EMPLOYMENT_EXHIBITS_TO},
+      Pages from {EMPLOYMENT_PAGES_FROM} to {EMPLOYMENT_PAGES_TO}
+  cover_letter:
+    heading: TO USCIS / Premium Processing / RE line
+    purpose: Identify petitioner, beneficiary, citizenship, classification, field, criteria claimed, and name variant note.
+    required_fields:
+    - date
+    - processing
+    - petitioner
+    - beneficiary
+    - citizenship
+    - field_subfield
+    - criteria_claimed
+    - name_variants_if_any
+    drafting_rules:
+    - 'Use the company template style: concise cover, followed by a list of criteria.'
+    - State at least three claimed criteria. If using the company default 'five of six', ensure exactly five are actually
+      supported or revise the number.
+    - Use O-1B Arts language unless case_config.o1b_track is mptv.
+    - If MPTV, change 'field of arts' language to motion picture or television and use extraordinary achievement language.
+    - If name variants exist, include the affidavit sentence and cite the name affidavit exhibit.
+    template: '[DATE]
+
+      TO USCIS
+
+      [Premium Processing / Regular Processing]
+
+
+      RE: I-129 Petition for Alien of Extraordinary Ability in the field of arts (O-1B)
+
+      Petitioner: [COMPANY NAME]
+
+      Beneficiary: [First and Last Name of Beneficiary]
+
+      Citizenship: [Country / countries]
+
+
+      Dear Officer,
+
+
+      We represent Mr./Ms. [Full Name], who seeks classification as an O-1B nonimmigrant of extraordinary ability in the arts,
+      specifically in the field of [SUBFIELD], pursuant to 8 C.F.R. § 214.2(o)(3)(iv).
+
+
+      As will be demonstrated below, Mr./Ms. [Full Name] satisfies at least [NUMBER] of the six regulatory criteria for O-1B
+      classification: [list claimed criteria only].
+
+
+      Please be respectfully informed that due to language peculiarities, the first name / last name of Mr./Ms. [Full Name]
+      can be spelled as [VARIANTS]. All identified variants refer to the same person.
+
+      (Refer to Exhibit [X.X]: Affidavit of name.)'
+  overview_beneficiary_qualifications_and_achievements:
+    heading: OVERVIEW OF THE BENEFICIARY’S QUALIFICATIONS AND ACHIEVEMENTS
+    exhibit_range: Exhibits from XX to XX, Pages from XX to XX.
+    purpose: Provide a controlled overview of the beneficiary's field, experience, qualification, and career episodes before
+      the criteria.
+    llm_instructions:
+    - Draft this section after reviewing all evidence so the overview previews the strongest facts.
+    - Use one or two paragraphs to describe the professional field/subfield.
+    - Then describe the beneficiary's experience and qualification chronologically.
+    - For each career episode, include dates, role, organization/project, duties/projects, field relevance, and evidence reference.
+    - If the work history is project-based, replace employer chronology with project/album/show/production chronology.
+    - Do not overargue criteria here; save detailed eligibility analysis for criteria sections.
+    episode_schema:
+      heading_format: ({letter}) [Role/Project] at [Organization/Project] ([dates])
+      fields:
+      - role_or_project
+      - dates
+      - organization_or_project
+      - duties
+      - achievements
+      - why_relevant_to_o1b
+      - evidence_citation
+      output_length: 1-2 paragraphs per episode unless evidence is unusually important
+  overview_industry:
+    heading: OVERVIEW OF THE INDUSTRY
+    exhibit_range: Exhibits from XX to XX, Pages from XX to XX.
+    purpose: Briefly explain the importance of the beneficiary's field/subfield, preferably with U.S.-relevant sources and
+      government/industry reports.
+    llm_instructions:
+    - Keep this section short. It is context, not a NIW petition.
+    - Explain why the subfield matters to the U.S. market or arts/MPTV industry only insofar as it helps understand the proposed
+      work.
+    - Use sources such as government reports, industry reports, professional association materials, market reports, or reputable
+      media.
+    - Do not argue prospective substantial benefit as if this were EB-1A or NIW.
+    - Cite exhibits 1.5 to 1.6 or configured industry exhibits.
+  evidential_criteria_intro:
+    heading: EVIDENTIAL CRITERIA OF ELIGIBILITY
+    purpose: Introduce the criteria section and identify the eligibility path.
+    template: 'EVIDENTIAL CRITERIA OF ELIGIBILITY
+
+
+      The evidence below demonstrates that Mr./Ms. [Last Name] satisfies at least [NUMBER] of the six regulatory criteria
+      for O-1B classification. Each criterion is addressed through specific documentary evidence, with exhibits identified
+      by number and page range.'
+  criteria:
+    criterion_i_lead_or_starring_productions_events:
+      roman_label: Criterion (i)
+      heading: Criterion 1. Evidence that the beneficiary has performed, and will perform, services as a lead or starring
+        participant in productions or events which have a distinguished reputation as evidenced by critical reviews, advertisements,
+        publicity releases, publications, contracts, or endorsements.
+      client_template_episode_heading: (Mr./Ms.) [Last Name] performed and will perform as a lead or starring participant
+        in "[PRODUCTION/EVENT NAME]", a production/event with a distinguished reputation.
+      legal_test:
+        required_elements:
+        - The beneficiary performed services as a lead or starring participant in at least one past production or event.
+        - The beneficiary will perform services as a lead or starring participant in a prospective production or event, including
+          the U.S. work or another qualifying prospective activity.
+        - The relevant production/event has a distinguished reputation.
+        - The accepted evidence is in the form of critical reviews, advertisements, publicity releases, publications, contracts,
+          or public-facing endorsements.
+        - For a lead role, show principal role, central creative function, top billing, named featured role, or comparable
+          prominence.
+        - For a starring role, show prominence relative to other participants in the production or event.
+        uscis_policy_logic:
+        - This criterion is specific to productions or events, not organizations or establishments.
+        - Past and future elements are both required by the wording has performed and will perform.
+        - The U.S. event/production itself does not always need to be the same distinguished event if the record otherwise
+          shows qualifying past and prospective lead/starring participation.
+        - Unpublished recommendation letters alone should not be used as the main evidence under this criterion.
+        risk_flags:
+        - Beneficiary is one of many participants and not highlighted in public materials.
+        - Event is reputable but beneficiary role is secondary or generic.
+        - Role is central but event reputation is supported only by organizer self-description.
+        - Prospective work is described only as employment duties without production/event framing.
+      episode_structure:
+      - id: a_fact_of_lead_or_starring_participation
+        title: (a) The fact of the beneficiary's lead or starring participation
+        instructions:
+        - Describe the production/event, date, venue/location, organizer, and the beneficiary's exact role.
+        - 'Explain why the role is lead or starring: top billing, principal credit, central authorship, featured public role,
+          contractual role, or unique creative control.'
+        - Use contracts, credits, programs, public announcements, advertisements, or critical reviews as the main evidence.
+      - id: b_evidence_confirming_role
+        title: (b) Evidence confirming lead or starring role
+        instructions:
+        - 'List public-facing proof: posters, programs, press materials, advertisements, publicity releases, contracts, endorsements,
+          critical reviews.'
+        - Quote or summarize the evidence showing that the beneficiary was highlighted or featured.
+        - If recommendation evidence is used, use it only as support and connect it to public/contractual evidence.
+      - id: c_role_contribution
+        title: (c) Description of the beneficiary's role and contribution to the production/event
+        instructions:
+        - Explain what the beneficiary actually did and why the production/event depended on that role.
+        - Avoid generic praise. Tie contribution to concrete creative, performance, curatorial, design, or production tasks.
+      - id: d_distinguished_reputation
+        title: (d) Distinguished reputation of the production/event
+        instructions:
+        - 'Describe why the production/event is distinguished: critical reviews, major venue, attendance, sold-out shows,
+          commercial success, recognized organizer, known line-up, awards, or media coverage.'
+        - If relevant, describe the reputation of organizers, production companies, venues, festivals, galleries, broadcasters,
+          or platforms.
+      - id: conclusion
+        title: Conclusion
+        instructions:
+        - Conclude briefly that the episode proves lead/starring participation in a production/event with distinguished reputation.
+        - Do not repeat all evidence. State the legal element satisfied.
+      evidence_types:
+      - contracts
+      - programs
+      - posters
+      - credits
+      - critical_reviews
+      - advertisements
+      - publicity_releases
+      - public_endorsements
+      - media_coverage
+      - attendance_or_sales_data
+      - venue_or_organizer_reputation
+      default_exhibit_group: '2'
+      llm_prompt_step_id: draft_criterion_i_episode
+    criterion_ii_published_recognition:
+      roman_label: Criterion (ii)
+      heading: Criterion 2. Evidence that the beneficiary has achieved national or international recognition for achievements
+        evidenced by critical reviews or other published materials by or about the beneficiary in major newspapers, trade
+        journals, magazines, or other publication.
+      client_template_episode_heading: Publication about Mr./Ms. [Last Name] in the online/print edition "[Name of the Publication]".
+      legal_test:
+        required_elements:
+        - There is a published material, critical review, transcript, article, interview, catalogue text, or similar publication.
+        - The material is by or about the beneficiary, or discusses the beneficiary's work/achievement and mentions the beneficiary
+          in connection with it.
+        - The material reflects recognition for achievements, not mere paid advertising, portfolio self-description, or an
+          ordinary listing.
+        - The publication is a major newspaper, major media, trade journal, magazine, professional publication, or another
+          qualifying publication.
+        - The record includes title, date, author if available, source, link, and translation if needed.
+        - The publication's audience, circulation, traffic, rankings, reputation, editorial status, or industry authority
+          supports national or international recognition.
+        uscis_policy_logic:
+        - The beneficiary need not be the only subject of the publication.
+        - Published material about a broader project may qualify if it discusses the beneficiary or the beneficiary's work/achievement
+          and connects the beneficiary to that work.
+        - USCIS evaluates both the content of the publication and the level of recognition enjoyed by the publication.
+        risk_flags:
+        - Publication is a personal website, portfolio, social media post, or press release with no editorial layer.
+        - Article discusses only the employer or project and does not identify the beneficiary's role.
+        - Publication status is asserted without traffic, circulation, ratings, registration, rankings, or industry context.
+        - Author is important but not described despite being central to the recognition argument.
+      episode_structure:
+      - id: a_fact_of_publication
+        title: (a) Fact of publication
+        fields:
+        - publication_title
+        - publication_type_online_print
+        - article_title
+        - publication_date
+        - author
+        - author_credentials_if_relevant
+        - link
+        - language
+        - translation_exhibit
+        instructions:
+        - State title, date, author, publication name, format, and link.
+        - If the author is a recognized critic or journalist, describe the author's authority because it may support recognition.
+      - id: b_material_about_beneficiary
+        title: (b) Objective documentary evidence that the submitted published material was about the beneficiary and the
+          beneficiary's work in the field
+        instructions:
+        - Summarize what the publication says about the beneficiary's achievements, work, contribution, project, recognition,
+          or role.
+        - Explicitly state why the material demonstrates national or international recognition for achievements.
+        - Quote short excerpts only when useful and cite the exhibit.
+      - id: c_publication_status
+        title: (c) The published material qualifies as professional or major trade publications or other major media
+        subblocks:
+        - major_media
+        - professional_publication
+        instructions:
+        - 'For major media: describe publication name, founding year, founder/publisher, history, ratings/rankings, traffic
+          or circulation, awards, media registration if applicable, and national/international audience.'
+        - 'For professional publication: describe industry audience, editorial policy, editor-in-chief or known contributors,
+          partners, rankings, traffic/circulation, awards, and registration if applicable.'
+      - id: conclusion
+        title: Conclusion
+        instructions:
+        - Summarize how the publications demonstrate national or international recognition in the field.
+      evidence_types:
+      - articles
+      - critical_reviews
+      - interviews
+      - catalogue_texts
+      - professional_publications
+      - major_media_publications
+      - publication_traffic_data
+      - circulation_data
+      - media_rankings
+      - author_bio
+      - registration_records
+      default_exhibit_group: '3'
+      llm_prompt_step_id: draft_criterion_ii_publication_episode
+    criterion_iii_lead_starring_critical_role_organizations:
+      roman_label: Criterion (iii)
+      heading: Criterion 3. Evidence that the beneficiary has performed, and will perform, in a lead, starring, or critical
+        role for organizations and establishments that have a distinguished reputation evidenced by articles in newspapers,
+        trade journals, publications, or testimonials.
+      client_template_episode_heading: Mr./Ms. [Last Name] played a leading / starring / critical role in the company "[COMPANY
+        NAME]" with a distinguished reputation.
+      legal_test:
+        required_elements:
+        - The beneficiary performed a lead, starring, or critical role for a past/current organization or establishment.
+        - The beneficiary will perform a lead, starring, or critical role for a prospective U.S. organization or establishment,
+          including a relevant department or division if applicable.
+        - The organization or establishment has a distinguished reputation.
+        - 'For lead role: show principal position within hierarchy or project structure.'
+        - 'For starring role: show great prominence relative to others in the organization.'
+        - 'For critical role: show contribution of significant importance to the organization''s goals, activities, projects,
+          reputation, commercial success, or standing.'
+        - Reputation must be supported by articles, publications, testimonials, awards, rankings, scale, longevity, customer
+          base, or other probative evidence.
+        uscis_policy_logic:
+        - This criterion is specific to organizations and establishments, not productions or events.
+        - The organization need not have directly employed the beneficiary.
+        - Detailed letters from persons with personal knowledge can be helpful if they explain the role, basis of knowledge,
+          and the organization's reputation.
+        - The relevant distinguished entity can be a division or department if the division/department itself has distinguished
+          reputation.
+        risk_flags:
+        - Only job title is provided without hierarchy, duties, or outcomes.
+        - The company is described by its own website only, without third-party proof of reputation.
+        - Critical role is asserted as ordinary competence or necessary services.
+        - No prospective U.S. role is included.
+      episode_structure:
+      - id: a_employment_or_role_evidence
+        title: (a) Employment Evidence
+        instructions:
+        - 'Describe documents proving the beneficiary''s position or role: contract, employment record, credits, organizational
+          chart, portfolio, official letter, or project documents.'
+        - For lead role, explain managerial or principal duties and hierarchy.
+        - For starring or critical role, describe the specific role and cite documents proving the fact of participation.
+      - id: b_contribution_to_development
+        title: (b) Beneficiary's Contribution to the Company's Development
+        instructions:
+        - Describe achievements during the role in chronological order.
+        - Include projects, numbers, awards, outcomes, public recognition, revenue, audience, market effects, or creative
+          effects where available.
+        - Explain how the role affected the organization or its key projects, not merely the beneficiary's own career.
+        - Insert carefully selected quotes from recommendation letters that confirm concrete facts.
+      - id: recommendation_letters
+        title: Recommendation Letters
+        instructions:
+        - Use only letters that identify the author, title, relationship to beneficiary, basis of knowledge, and concrete
+          facts.
+        - Do not rely on emotional praise. Use quotes that state what the beneficiary did and why it mattered.
+      - id: c_distinguished_reputation
+        title: (c) Distinguished Reputation of [COMPANY NAME]
+        instructions:
+        - Describe company history, industry, scale, markets, major projects, client base, awards, rankings, media coverage,
+          or other evidence.
+        - Use media publications and third-party sources where possible, as the client template expressly requires media-supported
+          reputation.
+        - Mention awards, recognition, and industry rankings if available.
+      - id: conclusion
+        title: Conclusion
+        instructions:
+        - State whether the role was lead, starring, or critical and why the organization has distinguished reputation.
+      evidence_types:
+      - employment_contracts
+      - job_descriptions
+      - organizational_charts
+      - official_employer_letters
+      - project_documents
+      - recommendation_letters
+      - company_media_coverage
+      - company_rankings
+      - awards
+      - client_base_data
+      - market_scale_data
+      default_exhibit_group: '4'
+      client_sample_note: The client memo sample lists Criterion (iii) as Exhibits 3.1 to 3.3. If Criterion (ii) also uses
+        group 3, script must override this prefix to avoid duplicate exhibit numbering.
+      llm_prompt_step_id: draft_criterion_iii_role_episode
+    criterion_iv_major_commercial_or_critically_acclaimed_success:
+      roman_label: Criterion (iv)
+      heading: Criterion 4. Evidence that the beneficiary has a record of major commercial or critically acclaimed successes
+        as evidenced by such indicators as title, rating, standing in the field, box office receipts, motion pictures or television
+        ratings, and other occupational achievements reported in trade journals, major newspapers, or other publications.
+      client_template_episode_heading: '[Commercial Success / Critically Acclaimed Success] of the Project "[Project Name]".'
+      legal_test:
+        required_elements:
+        - There is a project, production, work, album, tour, film, show, performance, design project, exhibition, or comparable
+          occupational achievement.
+        - The beneficiary's role in the project is identified and tied to the success.
+        - The project/work had major commercial success or critical acclaim.
+        - Success is evidenced by indicators such as title, rating, standing, box office, TV ratings, sales, streams, revenue,
+          chart positions, awards tied to performance, professional reviews, or other occupational achievements.
+        - The success indicators are reported in trade journals, major newspapers, or other publications.
+        - If the publication is about the project rather than the beneficiary, explain why the project success represents
+          the beneficiary's success based on contribution.
+        uscis_policy_logic:
+        - The publication does not have to be primarily about the beneficiary.
+        - There must be a bridge between the project's success and the beneficiary's success.
+        - For critically acclaimed success, public-facing praise from professional critics or recognized publications is important.
+        - For commercial success, the record should show that the ratings, receipts, sales, revenue, streams, chart positions,
+          or standing are major in the relevant field.
+        risk_flags:
+        - Commercial figures are presented without benchmark or field context.
+        - Publication reports project success but beneficiary's role is not established.
+        - Critical praise is from promotional materials or non-independent sources only.
+        - Success is merely moderate or local but described as major.
+      episode_structure:
+      - id: a_about_project
+        title: (a) About the beneficiary project
+        fields:
+        - project_title
+        - type_of_project
+        - beneficiary_role
+        - dates
+        - location_or_platform
+        instructions:
+        - Identify the project and the beneficiary's role.
+        - Explain why the beneficiary's role connects the project success to the beneficiary.
+      - id: b_evidence_of_success
+        title: (b) Evidence of success
+        instructions:
+        - 'State the success in one paragraph with concrete figures and source: sales, streams, revenue, rankings, chart positions,
+          box office, ratings, awards, critical reviews, critic ratings.'
+        - If citing a media/publication, include title, outlet, date, author if available.
+        - For commercial success, include relevant benchmark or context showing that the result is major.
+        - For critical acclaim, summarize reviews, critics, ratings, and publication status.
+      - id: c_publication_or_critic_status
+        title: (c) Publication / critic status
+        instructions:
+        - Describe the publication's ranking, awards, audience, traffic, circulation, professional role, or the critic's expertise
+          and authority.
+        - Keep this concise unless the publication status is contested or central.
+      - id: conclusion
+        title: Conclusion
+        instructions:
+        - State how the project demonstrates a record of major commercial or critically acclaimed success attributable to
+          the beneficiary.
+      evidence_types:
+      - trade_journal_articles
+      - major_newspaper_articles
+      - ratings
+      - charts
+      - box_office_data
+      - sales_data
+      - streams_data
+      - revenue_data
+      - critic_reviews
+      - awards
+      - publication_status_evidence
+      default_exhibit_group: '5'
+      llm_prompt_step_id: draft_criterion_iv_success_episode
+    criterion_v_significant_recognition:
+      key: significant_recognition
+      regulatory_label: Criterion (v)
+      title: Evidence that the beneficiary has received significant recognition for achievements from organizations, critics,
+        government agencies, or other recognized experts in the field in which the beneficiary is engaged.
+      short_title: Significant recognition for achievements
+      applies_to:
+      - O1B_Arts
+      - O1B_MPTV
+      exhibit_group:
+        default_group_title: Criterion 5. Significant recognition for achievements from organizations, critics, government
+          agencies, or recognized experts
+        suggested_exhibit_range: 8.1-8.n
+        page_range_placeholder: Pages from XX to XX
+      regulatory_text: Evidence that the beneficiary has received significant recognition for achievements from organizations,
+        critics, government agencies, or other recognized experts in the field in which the beneficiary is engaged. Such testimonials
+        must be in a form which clearly indicates the author's authority, expertise, and knowledge of the beneficiary's achievements.
+      uscis_logic:
+        core_test:
+        - The beneficiary must have received recognition.
+        - The recognition must be significant.
+        - The recognition must concern one or more achievements, not merely the beneficiary's general character, diligence,
+          or potential.
+        - 'The recognition must come from at least one qualifying source: organization, critic, government agency, or recognized
+          expert in the field.'
+        - If testimonial evidence is used, the testimonial must clearly indicate the author's authority, expertise, and knowledge
+          of the beneficiary's achievements.
+        important_interpretation:
+        - The word 'significant' modifies recognition, not achievements. However, the recognized achievements must still be
+          identified with enough specificity.
+        - The significance of recognition is mainly shown through the authority, reputation, expertise, or field position
+          of the recognizing source.
+        - A testimonial may qualify as significant recognition if the recognizing author or organization is sufficiently authoritative
+          and the letter explains concrete achievements.
+        - An award may be used under this criterion if the argument is framed as recognition from an organization, jury, government
+          agency, critic, or recognized field body. If the award is also used under another criterion, explain the distinct
+          evidentiary purpose.
+        distinguish_from_other_criteria:
+          criterion_1: Do not use this criterion to prove lead/starring participation in productions or events unless the
+            recognition specifically discusses that achievement.
+          criterion_2: Published material about the beneficiary belongs primarily to Criterion 2, but a critical review or
+            published expert recognition may also support Criterion 5 if the author/source authority is explained.
+          criterion_4: Commercial or critically acclaimed success belongs primarily to Criterion 4, but awards, reviews, or
+            expert recognition connected to the success may also support Criterion 5.
+          advisory_opinion: Do not treat the advisory opinion itself as ordinary Criterion 5 evidence unless the case strategy
+            expressly allows it and it recognizes achievements beyond the consultation function.
+      llm_general_instruction: 'Draft Criterion 5 as a series of recognition episodes. Each episode must identify the source
+        of recognition, the form of recognition, the date, the achievement recognized, the authority of the recognizing source,
+        the supporting evidence, and the legal conclusion.
+
+
+        Do not write a generic paragraph saying that the beneficiary is respected by colleagues. USCIS does not need more
+        decorative fog. The task is to show who recognized the beneficiary, why that source matters, what achievement was
+        recognized, and where the proof is located.
+
+
+        Select only recognition that can be tied to concrete achievements. Ordinary recommendation letters saying that the
+        beneficiary is talented, hardworking, creative, or pleasant to collaborate with should be excluded or used only as
+        background.
+
+        '
+      recognition_episode_model:
+        episode_id: 5.X
+        allowed_episode_types:
+        - award_as_significant_recognition
+        - organization_testimonial
+        - government_agency_recognition
+        - critic_recognition
+        - recognized_expert_testimonial
+        - professional_body_recognition
+        - mixed_recognition_package
+        required_episode_fields:
+          episode_type: '[award_as_significant_recognition | organization_testimonial | government_agency_recognition | critic_recognition
+            | recognized_expert_testimonial | professional_body_recognition | mixed_recognition_package]'
+          episode_title: '[Recognition by / Award from / Testimonial from SOURCE]'
+          recognizing_source_name: '[Organization / critic / government agency / expert / award body]'
+          recognizing_source_type: '[organization | critic | government_agency | recognized_expert | award_body | professional_body]'
+          date_or_period: '[DATE / PERIOD]'
+          form_of_recognition: '[award | nomination | official letter | testimonial letter | government commendation | critical
+            review | official publication | ranking | other]'
+          achievement_recognized: '[SPECIFIC ACHIEVEMENT]'
+          field_connection: '[HOW THE ACHIEVEMENT RELATES TO THE BENEFICIARY''S FIELD]'
+          source_authority_summary: '[WHY THE SOURCE IS AUTHORITATIVE]'
+          evidence_items:
+          - '[EXHIBIT_ID]'
+          drafting_mode: '[full_episode | short_episode | supporting_episode]'
+        citation_rule: Every episode must cite the document proving the recognition and the document proving the authority
+          of the recognizing source.
+      section_output_structure:
+        introduction:
+          instruction: Write 1-2 paragraphs summarizing the types of significant recognition claimed under this criterion.
+          template: 'Mr./Ms. [LAST NAME] has received significant recognition for [his/her/their] achievements in [FIELD/SUBFIELD]
+            from [organizations / critics / government agencies / recognized experts]. This recognition is significant because
+            it was issued by authoritative sources in [FIELD], including [SOURCE 1], [SOURCE 2], and [SOURCE 3], and because
+            it concerns concrete achievements such as [ACHIEVEMENT 1], [ACHIEVEMENT 2], and [ACHIEVEMENT 3].
+
+
+            The evidence below is organized by recognition episode. Each episode identifies the recognizing source, the achievement
+            recognized, the form of recognition, and the authority of the source.
+
+            '
+        exhibit_intro:
+          template: 'Exhibits from [XX] to [XX], Pages from [XX] to [XX].
+
+
+            Within this criterion, the following documents are attached:
+
+            [AUTO-GENERATED LIST OF EPISODES AND EXHIBITS]
+
+            '
+        episodes_loop:
+          instruction: For each recognition episode, select one episode structure from episode_structures below.
+        conclusion:
+          instruction: Conclude by tying all episodes to the criterion elements.
+          template: 'Taken together, the evidence demonstrates that Mr./Ms. [LAST NAME] has received significant recognition
+            for [his/her/their] achievements from authoritative sources in [FIELD/SUBFIELD]. The recognizing sources are not
+            ordinary personal acquaintances; they include [organizations / critics / government agencies / recognized experts]
+            with established authority in the field. The recognition concerns specific achievements, including [ACHIEVEMENT
+            SUMMARY], and therefore satisfies Criterion (v).
+
+            '
+      episode_structures:
+        award_as_significant_recognition:
+          use_when:
+          - The beneficiary received an award, nomination, prize, official selection, finalist status, or similar recognition.
+          - The awarding source can be framed as an organization, government agency, professional body, jury, or other authoritative
+            field source.
+          - The award recognizes a concrete achievement in the beneficiary's field.
+          legal_test:
+            required_elements:
+            - Fact of award, nomination, or selection.
+            - Awarding body or jury qualifies as an organization, government agency, professional body, critic group, or recognized
+              expert body.
+            - Award recognized a specific achievement in the beneficiary's field.
+            - The recognition is significant because of the authority, reputation, scale, selection process, or field relevance
+              of the awarding body.
+            helpful_elements:
+            - Official rules or selection criteria.
+            - Jury or committee composition.
+            - Number and quality of applicants, nominees, finalists, or winners.
+            - National or international scope.
+            - Media or industry coverage of the award.
+            - Prior notable winners.
+            - Official website or certificate confirming the beneficiary.
+          evidence_types:
+            primary_evidence:
+            - Award certificate, diploma, nomination confirmation, finalist certificate, official selection notice.
+            - Official award website listing the beneficiary.
+            - Official letter from the awarding body.
+            - Award rules, regulations, selection criteria, or call for submissions.
+            - Jury list or committee description.
+            secondary_evidence:
+            - Media publications about the award.
+            - Award rankings or industry reputation materials.
+            - Information about prior winners.
+            - Explanatory note about the award and awarding body.
+          drafting_structure:
+            heading_template: '[X]. Recognition through [AWARD NAME] issued by [AWARDING BODY]'
+            subparts:
+              fact_of_recognition:
+                title: (a) Fact of recognition
+                instruction: State when the beneficiary received the award/nomination/selection, from whom, for what work,
+                  and in which category.
+                template: 'On [DATE], Mr./Ms. [LAST NAME] received [AWARD / NOMINATION / FINALIST STATUS] from [AWARDING BODY]
+                  for [WORK / PROJECT / ACHIEVEMENT] in the category [CATEGORY]. This recognition was granted for [SHORT DESCRIPTION
+                  OF ACHIEVEMENT].
+
+                  (Refer to Exhibit [X.X]: [Award certificate / official confirmation / website listing].)
+
+                  '
+              achievement_recognized:
+                title: (b) Achievement recognized by the award
+                instruction: Explain the creative/professional achievement recognized. Do not merely repeat the award name.
+                template: 'The award recognized Mr./Ms. [LAST NAME]''s achievement in [FIELD/SUBFIELD], namely [DETAILED DESCRIPTION
+                  OF WORK, ROLE, CONTRIBUTION, RESULT]. This achievement is directly connected to [his/her/their] field because
+                  [FIELD CONNECTION].
+
+                  (Refer to Exhibit [X.X]: [Document proving project/work/role].)
+
+                  '
+              about_awarding_body:
+                title: (c) About the awarding body
+                instruction: Describe the awarding organization, its field relevance, history, scale, reputation, and authority.
+                template: '[AWARDING BODY] is [DESCRIPTION: organization / professional association / festival / government
+                  body / competition organizer] specializing in [FIELD]. It is recognized in the field because [HISTORY /
+                  SCALE / INDUSTRY ROLE / PARTNERS / MEDIA COVERAGE / PRIOR WINNERS / JURY / OFFICIAL STATUS].
+
+                  (Refer to Exhibit [X.X]: [Explanatory note / official website / media source].)
+
+                  '
+              selection_criteria:
+                title: (d) Selection criteria and basis for recognition
+                instruction: Explain how the award is granted and why this shows recognition of achievements.
+                template: 'The official rules show that recipients are selected based on [CRITERIA]. The submitted materials
+                  also show that the selection process involved [JURY / EXPERT PANEL / PUBLIC VOTE / PROFESSIONAL REVIEW /
+                  MULTI-STAGE EVALUATION]. Therefore, the award was not a participation certificate or ordinary promotional
+                  mention, but a field-relevant recognition of professional achievement.
+
+                  (Refer to Exhibit [X.X]: [Award rules / jury information].)
+
+                  '
+              significance_of_recognition:
+                title: (e) Significance of the recognition
+                instruction: Explain why the recognition is significant under Criterion 5.
+                template: 'This recognition is significant because it was issued by [AUTHORITATIVE SOURCE] within [FIELD],
+                  after [SELECTION PROCESS], and concerned Mr./Ms. [LAST NAME]''s concrete achievement in [WORK/PROJECT].
+                  The authority of [AWARDING BODY], the professional basis for selection, and the field relevance of the recognized
+                  achievement demonstrate significant recognition under Criterion (v).
+
+                  '
+              mini_conclusion:
+                title: (f) Conclusion
+                instruction: Give a short criterion-specific conclusion.
+                template: 'Accordingly, [AWARD NAME] constitutes significant recognition of Mr./Ms. [LAST NAME]''s achievement
+                  in [FIELD] from an authoritative organization / professional body / expert jury.
+
+                  '
+          risk_flags:
+          - If the award is weak, local, participation-based, paid, or purely promotional, do not overstate it.
+          - 'If the award is already used under Criterion 4 for commercial or critical success, explain that here it is used
+            for a different purpose: recognition from an authoritative source.'
+          - If the award body is obscure, spend more text proving the authority of the awarding body.
+          - If no official rules exist, compensate with official confirmation letters, jury information, media coverage, and
+            prior winners.
+        organization_testimonial:
+          use_when:
+          - The recognition comes from an organization in the beneficiary's field.
+          - The evidence is a recommendation letter, official support letter, appreciation letter, certificate, or organizational
+            statement.
+          - The organization itself has authority, scale, reputation, or direct field relevance.
+          legal_test:
+            required_elements:
+            - Organization must be identified.
+            - Signatory must be identified, with title and authority to speak for the organization.
+            - Date of recognition/testimonial must be stated.
+            - Letter must describe specific achievements, not generic qualities.
+            - The organization’s authority, expertise, field relevance, and scale must be explained.
+            - The author’s basis of knowledge must be clear.
+            helpful_elements:
+            - Organization profile, website, registration, awards, rankings, media coverage, notable projects.
+            - Evidence that the organization operates in the same field or directly adjacent field.
+            - Evidence of collaboration, project participation, employment, exhibition, production, publication, or other
+              basis of knowledge.
+          evidence_types:
+            primary_evidence:
+            - Recommendation letter / support letter from organization.
+            - Official appreciation letter / certificate.
+            - Organization-issued statement recognizing the beneficiary's achievements.
+            - Documents proving collaboration or project involvement.
+            secondary_evidence:
+            - Organization website.
+            - Media publications about the organization.
+            - Industry rankings, awards, notable clients, major projects.
+            - Explanatory note about the organization and signatory.
+          drafting_structure:
+            heading_template: '[X]. Significant recognition from [ORGANIZATION NAME]'
+            subparts:
+              fact_of_recognition:
+                title: (a) Fact of recognition
+                instruction: Identify the organization, date, signatory, form of recognition, and achievement recognized.
+                template: 'Mr./Ms. [LAST NAME] received significant recognition from [ORGANIZATION NAME], an organization
+                  operating in [FIELD/SUBFIELD]. On [DATE], [SIGNATORY NAME], [SIGNATORY TITLE], issued a [recommendation
+                  letter / official letter / certificate / statement] recognizing Mr./Ms. [LAST NAME]''s achievements in [SPECIFIC
+                  ACHIEVEMENT].
+
+                  (Refer to Exhibit [X.X]: [Letter/document name].)
+
+                  '
+              author_and_basis_of_knowledge:
+                title: (b) Author's authority, expertise, and knowledge of the beneficiary's achievements
+                instruction: Explain who signed the letter, why they are competent, and how they know the beneficiary's work.
+                template: 'The letter was signed by [SIGNATORY NAME], [TITLE], whose authority to evaluate Mr./Ms. [LAST NAME]''s
+                  achievements is based on [ROLE / EXPERIENCE / POSITION / RELATION TO PROJECT / ORGANIZATIONAL AUTHORITY].
+                  [SIGNATORY NAME] has direct knowledge of Mr./Ms. [LAST NAME]''s work because [BASIS OF KNOWLEDGE: collaboration,
+                  supervision, evaluation, commissioning, curation, production, professional review].
+
+                  (Refer to Exhibit [X.X]: [Letter/explanatory note].)
+
+                  '
+              achievements_recognized:
+                title: (c) Achievements recognized by the organization
+                instruction: Summarize the concrete achievements recognized. Include short quotes only if they add proof.
+                template: 'In the letter, [ORGANIZATION / SIGNATORY] specifically recognizes the following achievements:
+
+                  - [ACHIEVEMENT 1]
+
+                  - [ACHIEVEMENT 2]
+
+                  - [ACHIEVEMENT 3]
+
+
+                  The letter states: “[SHORT QUOTE IDENTIFYING A CONCRETE ACHIEVEMENT].”
+
+                  (Refer to Exhibit [X.X]: [Letter/document name].)
+
+                  '
+              about_organization:
+                title: (d) About [ORGANIZATION NAME]
+                instruction: Write 1-3 paragraphs about the organization's authority, scale, field relevance, and reputation.
+                template: '[ORGANIZATION NAME] is [DESCRIPTION] in [FIELD/SUBFIELD]. It operates [GEOGRAPHY / MARKET / INDUSTRY
+                  SEGMENT] and is known for [PROJECTS / AWARDS / CLIENTS / PUBLICATIONS / CULTURAL OR INDUSTRY ROLE]. Its
+                  relevance to Mr./Ms. [LAST NAME]''s field is established by [SPECIFIC FACTS].
+
+
+                  The organization''s scale and reputation are confirmed by [MEDIA COVERAGE / AWARDS / RANKINGS / OFFICIAL
+                  STATUS / NOTABLE PROJECTS / PARTNERS]. Therefore, recognition from [ORGANIZATION NAME] carries probative
+                  value in evaluating Mr./Ms. [LAST NAME]''s standing in the field.
+
+                  (Refer to Exhibit [X.X]: [Organization profile / media / explanatory note].)
+
+                  '
+              significance_of_recognition:
+                title: (e) Significance of the recognition
+                instruction: Tie the authority of the organization to the recognition of concrete achievements.
+                template: 'Given [ORGANIZATION NAME]''s authority and active role in [FIELD], its recognition of Mr./Ms. [LAST
+                  NAME]''s achievements constitutes significant recognition under Criterion (v). The recognition is not merely
+                  a personal recommendation; it identifies concrete achievements and comes from an organization with direct
+                  expertise and standing in the beneficiary''s field.
+
+                  '
+              mini_conclusion:
+                title: (f) Conclusion
+                template: 'Accordingly, the testimonial from [ORGANIZATION NAME] establishes significant recognition of Mr./Ms.
+                  [LAST NAME]''s achievements from an authoritative organization in [FIELD].
+
+                  '
+          risk_flags:
+          - Do not use letters that only say the beneficiary is talented, reliable, or pleasant to work with.
+          - If the organization is not clearly distinguished or authoritative, explain its field relevance and scale carefully.
+          - If the signatory's authority is unclear, add an explanatory note.
+          - If the letter was written by a direct employer, it can still be useful, but it must recognize concrete achievements
+            and explain why those achievements matter beyond routine job duties.
+        government_agency_recognition:
+          use_when:
+          - The beneficiary received recognition, appreciation, grant, award, official invitation, commendation, or certificate
+            from a government agency.
+          - The government source is relevant to arts, culture, media, film, television, design, creative industries, or the
+            beneficiary's field.
+          legal_test:
+            required_elements:
+            - Government agency must be identified.
+            - Official capacity and date must be clear.
+            - Recognition must concern specific achievements.
+            - The agency's relevance to the field must be explained.
+            helpful_elements:
+            - Official seal, letterhead, public register, government website.
+            - Description of the government program, award, grant, or cultural initiative.
+          drafting_structure:
+            heading_template: '[X]. Significant recognition from [GOVERNMENT AGENCY]'
+            subparts:
+              fact_of_recognition:
+                title: (a) Fact of recognition
+                template: 'On [DATE], [GOVERNMENT AGENCY] issued [FORM OF RECOGNITION] to Mr./Ms. [LAST NAME] for [ACHIEVEMENT].
+
+                  (Refer to Exhibit [X.X]: [Official document].)
+
+                  '
+              about_agency:
+                title: (b) Authority and field relevance of the government agency
+                template: '[GOVERNMENT AGENCY] is [DESCRIPTION OF AGENCY AND COMPETENCE]. It is responsible for [FIELD-RELEVANT
+                  FUNCTIONS]. Its recognition is significant because [EXPLAIN OFFICIAL ROLE AND CONNECTION TO FIELD].
+
+                  (Refer to Exhibit [X.X]: [Agency profile / official source].)
+
+                  '
+              achievement_and_significance:
+                title: (c) Achievement recognized and significance
+                template: 'The recognition concerns Mr./Ms. [LAST NAME]''s achievement in [FIELD], specifically [ACHIEVEMENT].
+                  Because this recognition was issued by a government agency with authority over [FIELD/PROGRAM], it constitutes
+                  significant recognition from a qualifying source under Criterion (v).
+
+                  '
+        critic_recognition:
+          use_when:
+          - Recognition comes from a critic, reviewer, curator, editor, or professional commentator.
+          - The critic's authority can be shown through credentials, publication history, institutional role, or recognized
+            status.
+          legal_test:
+            required_elements:
+            - Critic must be identified.
+            - Critic's authority and expertise must be explained.
+            - Recognition must discuss specific achievements or works.
+            - If published, include publication title, date, outlet, and author.
+            helpful_elements:
+            - Critic biography.
+            - Publication profile.
+            - Other works by critic.
+            - Evidence of critic's professional reputation.
+          drafting_structure:
+            heading_template: '[X]. Significant recognition from [CRITIC NAME]'
+            subparts:
+              fact_of_recognition:
+                title: (a) Fact of recognition
+                template: 'On [DATE], [CRITIC NAME], [CREDENTIALS], recognized Mr./Ms. [LAST NAME]''s achievement in [WORK/PROJECT]
+                  through [critical review / article / letter / statement] titled “[TITLE]” / dated [DATE].
+
+                  (Refer to Exhibit [X.X]: [Review/letter].)
+
+                  '
+              about_critic:
+                title: (b) About the critic
+                template: '[CRITIC NAME] is [DESCRIPTION: critic / curator / editor / journalist / scholar] specializing in
+                  [FIELD]. [His/Her/Their] authority is established by [PUBLICATIONS / INSTITUTIONAL ROLE / YEARS OF EXPERIENCE
+                  / AWARDS / RECOGNIZED PLATFORM].
+
+                  (Refer to Exhibit [X.X]: [Critic explanatory note / biography / publication profile].)
+
+                  '
+              recognized_achievement:
+                title: (c) Achievement recognized
+                template: '[CRITIC NAME] recognized [specific aspects of the beneficiary''s work], including [ACHIEVEMENT
+                  1] and [ACHIEVEMENT 2]. The review states: “[SHORT QUOTE].”
+
+                  (Refer to Exhibit [X.X]: [Review/letter].)
+
+                  '
+              significance:
+                title: (d) Significance of the recognition
+                template: 'Given [CRITIC NAME]''s expertise in [FIELD] and the substantive nature of the evaluation, this
+                  recognition constitutes significant recognition of Mr./Ms. [LAST NAME]''s achievements under Criterion (v).
+
+                  '
+        recognized_expert_testimonial:
+          use_when:
+          - Recognition comes from an individual expert rather than an organization.
+          - The expert is recognized in the field and has direct knowledge of the beneficiary's achievements.
+          legal_test:
+            required_elements:
+            - Expert's identity and credentials.
+            - Expert's field relevance.
+            - Expert's basis of knowledge.
+            - Specific achievements recognized.
+            - Explanation why the expert's recognition is significant.
+          drafting_structure:
+            heading_template: '[X]. Significant recognition from recognized expert [EXPERT NAME]'
+            subparts:
+              fact_of_recognition:
+                title: (a) Fact of recognition
+                template: 'Mr./Ms. [LAST NAME] received significant recognition from [EXPERT NAME], [TITLE / FIELD ROLE].
+                  On [DATE], [EXPERT NAME] issued a testimonial recognizing Mr./Ms. [LAST NAME]''s achievements in [FIELD].
+
+                  (Refer to Exhibit [X.X]: [Expert testimonial].)
+
+                  '
+              expert_authority:
+                title: (b) Expert's authority and expertise
+                template: '[EXPERT NAME] is a recognized expert in [FIELD] with [YEARS / POSITIONS / AWARDS / PUBLICATIONS
+                  / PROJECTS / INSTITUTIONAL ROLES]. [His/Her/Their] expertise is relevant because [SPECIFIC CONNECTION TO
+                  FIELD].
+
+                  (Refer to Exhibit [X.X]: [Expert explanatory note / CV / public profile].)
+
+                  '
+              basis_of_knowledge:
+                title: (c) Expert's knowledge of the beneficiary's achievements
+                template: '[EXPERT NAME]''s knowledge of Mr./Ms. [LAST NAME]''s achievements is based on [collaboration /
+                  supervision / independent review / jury evaluation / professional interaction / direct observation of work].
+
+                  (Refer to Exhibit [X.X]: [Letter / supporting document].)
+
+                  '
+              achievements_recognized:
+                title: (d) Achievements recognized
+                template: 'The testimonial recognizes the following achievements:
+
+                  - [ACHIEVEMENT 1]
+
+                  - [ACHIEVEMENT 2]
+
+                  - [ACHIEVEMENT 3]
+
+
+                  [EXPERT NAME] states: “[SHORT QUOTE ABOUT CONCRETE ACHIEVEMENT].”
+
+                  (Refer to Exhibit [X.X]: [Expert testimonial].)
+
+                  '
+              significance:
+                title: (e) Significance of the recognition
+                template: 'Because [EXPERT NAME] is a recognized expert in [FIELD] and because the testimonial identifies
+                  specific achievements based on direct knowledge, this evidence constitutes significant recognition under
+                  Criterion (v).
+
+                  '
+          risk_flags:
+          - Avoid generic recommendation letters.
+          - Avoid expert letters that only repeat the beneficiary's CV.
+          - If the expert has no clear basis of knowledge, add one or do not use the letter.
+        professional_body_recognition:
+          use_when:
+          - Recognition comes from a professional association, academy, union, guild, cultural institution, festival committee,
+            jury, or expert council.
+          drafting_structure:
+            heading_template: '[X]. Recognition from professional body [BODY NAME]'
+            subparts:
+              fact_of_recognition:
+                title: (a) Fact of recognition
+                template: '[BODY NAME] recognized Mr./Ms. [LAST NAME] through [FORM OF RECOGNITION] on [DATE] for [ACHIEVEMENT].
+
+                  (Refer to Exhibit [X.X]: [Document].)
+
+                  '
+              about_body:
+                title: (b) About the professional body
+                template: '[BODY NAME] is [DESCRIPTION] in [FIELD]. Its authority is established by [membership, history,
+                  role, industry function, public recognition, awards, government recognition, notable members].
+
+                  (Refer to Exhibit [X.X]: [Evidence].)
+
+                  '
+              significance:
+                title: (c) Significance
+                template: 'Recognition from [BODY NAME] is significant because [BODY NAME] is an authoritative professional
+                  body in [FIELD] and the recognition concerns [specific achievement].
+
+                  '
+        mixed_recognition_package:
+          use_when:
+          - One achievement is recognized by several sources, such as an award, media reviews, expert letters, and organizational
+            recognition.
+          - Use only when the sources all concern the same achievement and are better analyzed together.
+          drafting_structure:
+            heading_template: '[X]. Combined significant recognition of [ACHIEVEMENT]'
+            subparts:
+              achievement_overview:
+                title: (a) Achievement recognized
+                template: 'This episode concerns recognition of Mr./Ms. [LAST NAME]''s achievement [ACHIEVEMENT / PROJECT].
+
+                  '
+              sources_of_recognition:
+                title: (b) Sources of recognition
+                template: 'The achievement was recognized by:
+
+                  - [SOURCE 1], through [FORM], dated [DATE];
+
+                  - [SOURCE 2], through [FORM], dated [DATE];
+
+                  - [SOURCE 3], through [FORM], dated [DATE].
+
+                  '
+              authority_of_sources:
+                title: (c) Authority of recognizing sources
+                template: 'Each recognizing source has authority in [FIELD] because [EXPLAIN].
+
+                  '
+              significance:
+                title: (d) Significance of combined recognition
+                template: 'The convergence of recognition from [organizations / critics / government agencies / recognized
+                  experts] demonstrates that this was not isolated praise, but significant field recognition of a concrete
+                  achievement.
+
+                  '
+      evidence_item_schema_for_criterion_5:
+        fields:
+          exhibit_id: '[8.X]'
+          document_title: '[Document title]'
+          episode_id: '[5.X]'
+          episode_type: '[award_as_significant_recognition | organization_testimonial | government_agency_recognition | critic_recognition
+            | recognized_expert_testimonial | professional_body_recognition | mixed_recognition_package]'
+          evidence_type: '[primary | secondary | testimonial | official | media | explanatory_note]'
+          submitted_as: '[initial | new | resubmitted]'
+          language: '[English | Russian | other]'
+          translation_required: '[true | false]'
+          proves:
+          - fact_of_recognition
+          - authority_of_recognizing_source
+          - achievement_recognized
+          - basis_of_knowledge
+          - field_relevance
+          - significance_of_recognition
+          citation_format: '(Refer to Exhibit {exhibit_id}: {document_title}).'
+      drafting_rules:
+        do:
+        - Use one episode per award when awards are used as recognition.
+        - For each award episode, explain the awarding body, award criteria, selection process, recognized achievement, and
+          field significance.
+        - For each organization letter, explain the organization in 1-3 paragraphs, including field relevance, scale, reputation,
+          projects, awards, ratings, or media coverage.
+        - For each testimonial, identify date, author, title, authority, basis of knowledge, and specific achievements recognized.
+        - Use short quotations from letters only where the quotation identifies a concrete achievement or recognized status.
+        - Tie every quote to the author's expertise and basis of knowledge.
+        - Separate primary evidence from secondary context.
+        - Make the conclusion about significant recognition, not general excellence.
+        do_not:
+        - Do not place all recommendation letters in one undifferentiated list.
+        - Do not treat a friendly letter as significant recognition without explaining the author's authority.
+        - Do not cite letters that only praise character traits.
+        - Do not overuse emotional adjectives.
+        - Do not claim national or international recognition unless the recognizing source and context support that level.
+        - Do not duplicate Criterion 2 or 4 arguments without explaining the separate relevance under Criterion 5.
+      validation_rules:
+        minimum_requirements:
+        - At least one qualifying recognition episode must identify a concrete achievement.
+        - Each testimonial episode must identify author authority, expertise, and basis of knowledge.
+        - Each organization episode must include a separate description of the organization and its field relevance.
+        - Each award episode must include the awarding body, award basis, recognized achievement, and significance of the
+          award/recognition.
+        fail_if:
+        - Episode contains only generic praise.
+        - Source authority is not explained.
+        - Achievement recognized is not identified.
+        - Recognition source is unrelated to the beneficiary's field.
+        - Letter does not show how the author knows the beneficiary's achievements.
+        - Award episode lacks proof that the beneficiary actually received the award/nomination/selection.
+        - Organization testimonial lacks signatory identity or authority.
+        warning_if:
+        - Recognition comes only from employers or close collaborators.
+        - Recognition source is obscure and no explanatory note is provided.
+        - Award appears paid, local, participation-based, or promotional.
+        - Multiple episodes rely on the same author/source.
+        - The same evidence is already heavily used under Criterion 2 or Criterion 4.
+      prompt_step:
+        step_id: draft_criterion_5_significant_recognition
+        instruction_to_llm: 'Draft Criterion 5 using the recognition episode model.
+
+
+          First, classify each piece of evidence into one of the allowed episode types:
+
+          award_as_significant_recognition, organization_testimonial, government_agency_recognition, critic_recognition, recognized_expert_testimonial,
+          professional_body_recognition, or mixed_recognition_package.
+
+
+          Then draft each episode separately. For awards, use the full award-analysis structure: fact of recognition, achievement
+          recognized, awarding body, selection criteria, significance, and conclusion. For organization testimonials, use
+          the organization-recognition structure: fact of recognition, author/signatory authority, achievements recognized,
+          quotation, organization profile, organization scale/reputation, and conclusion.
+
+
+          Do not merge all letters into a single generic recommendation-letter paragraph. Do not write conclusory statements
+          without explaining why the recognizing source is authoritative and what achievement was recognized.
+
+          '
+      roman_label: Criterion (v)
+      heading: Evidence that the beneficiary has received significant recognition for achievements from organizations, critics,
+        government agencies, or other recognized experts in the field in which the beneficiary is engaged.
+      default_exhibit_group: '8'
+      llm_prompt_step_id: draft_criterion_5_significant_recognition
+    criterion_vi_high_salary_or_substantial_remuneration:
+      roman_label: Criterion (vi)
+      heading: Criterion 6. Evidence that the beneficiary has either commanded a high salary or will command a high salary
+        or other substantial remuneration for services in relation to others in the field, as evidenced by contracts or other
+        reliable evidence.
+      client_template_episode_heading: High salary / substantial remuneration episode for [YEAR] / [CONTRACT PERIOD].
+      legal_test:
+        required_elements:
+        - The beneficiary actually commanded or will command salary/substantial remuneration.
+        - The remuneration is documented by contracts, pay records, tax documents, offer letters, invoices, bank records,
+          or other reliable evidence.
+        - The comparison is to others in the same field, similar role, year, location, compensation rate, and work context.
+        - Currency conversion is transparent and uses a reliable source, preferably IRS yearly average exchange rates where
+          appropriate.
+        - If pay is hourly/daily/project-based, the record explains the time basis and compares like with like where possible.
+        - The conclusion states how many times the beneficiary's pay exceeds each benchmark.
+        uscis_policy_logic:
+        - Officers consider the reliability and validity of wage surveys and whether the comparison occupation is accurate.
+        - Location and currency matter; a foreign salary should be compared to relevant local wage data rather than only converted
+          into U.S. dollars.
+        - 'Salary rate being measured matters: annual, hourly, daily, project fee, or mixed compensation should not be compared
+          carelessly.'
+        risk_flags:
+        - Comparison source has broad occupation categories unrelated to the beneficiary.
+        - User-reported salary website has small sample size or no methodology.
+        - Different years or locations are compared without explanation.
+        - Project fee is treated as annual salary without hours/duration evidence.
+        - Future salary is unsupported by a credible contract or job offer.
+      episode_structure:
+      - id: a_fact_of_receiving_salary
+        title: (a) Fact of Receiving Salary
+        instructions:
+        - Each year of salary proof is a separate episode.
+        - State year, position, region/city, employer/project, currency, total compensation, and documents proving payment.
+        - For hourly/daily/project-based pay, state hours/days/project duration if available.
+      - id: b_usd_conversion
+        title: (b) Beneficiary's salary in US dollars
+        instructions:
+        - Convert annual or relevant compensation to USD.
+        - Use IRS yearly average exchange rates when appropriate and cite the exact rate/source.
+        - Show the calculation in a simple formula.
+      - id: c_comparison
+        title: (c) Comparison of the beneficiary's salary
+        instructions:
+        - For each source, identify source name, occupation title, year, location, amount, annualization method, USD conversion,
+          and why the source is reliable.
+        - Conclude how many times the beneficiary's compensation exceeded the benchmark.
+        - Use at least two independent comparison sources when available.
+      - id: d_conclusion_table
+        title: (d) Conclusion
+        instructions:
+        - 'Add a comparison table with columns: Source, Beneficiary Annual Salary USD, Source Annual Salary USD, Exceeding
+          Times.'
+        - State whether past salary or future offered compensation is high in relation to others in the field.
+      salary_table_schema:
+      - source
+      - beneficiary_salary_annual_usd
+      - source_salary_annual_usd
+      - exceeding_times
+      - year
+      - location
+      - occupation_comparison
+      evidence_types:
+      - employment_contracts
+      - pay_records
+      - tax_records
+      - bank_records
+      - invoices
+      - job_offer_letters
+      - salary_surveys
+      - government_wage_data
+      - industry_reports
+      - irs_exchange_rates
+      default_exhibit_group: '6'
+      llm_prompt_step_id: draft_criterion_vi_salary_episode
+  advisory_opinion:
+    heading: ADVISORY OPINION
+    exhibit_range: Exhibit 9.1, pages from XX to XX.
+    purpose: Document the required O-1 consultation/advisory opinion or a supported reason for using expert letters/alternative
+      consultation evidence.
+    legal_correction_to_company_template:
+    - The company memo sample references Title of Federal Regulations Part 214.1(C)(5)(1). Use 8 CFR 214.2(o)(5) instead.
+    - The company memo sample says Alien of Outstanding Ability in business, science, education, or athletics. For this O-1B
+      branch, use O-1B Arts or O-1B MPTV language.
+    accepted_scenarios:
+      favorable_advisory_opinion: Submit favorable advisory opinion issued by the relevant peer group, labor organization,
+        management organization, or expert panel.
+      letter_of_no_objection: Submit no-objection letter where acceptable.
+      no_appropriate_peer_group: Explain specific attempts/reasons and submit recognized expert letters with evidence of expertise.
+      mptv: For MPTV, check whether both labor and management consultations are required for the occupation. Do not treat
+        generic expert letters as automatically sufficient.
+    llm_instructions:
+    - Do not write this as a recommendation letter. Write it as a procedural compliance section.
+    - Identify the consultation source, its field relevance, the author/signatory authority, and whether the opinion is favorable/no-objection/alternative.
+    - State that the opinion describes the beneficiary's qualifications and the nature of the proposed work.
+    - If no appropriate peer group exists, use a conservative explanation and attach proof of attempts or expert authority.
+    template_options:
+      advisory_obtained: 'Pursuant to the consultation requirements for O-1 classification, the petitioner submits a favorable
+        advisory opinion issued by [ORGANIZATION / EXPERT PANEL]. The opinion evaluates Mr./Ms. [Last Name]''s qualifications
+        in [FIELD/SUBFIELD], describes the nature of the proposed work in the United States, and supports the approval of
+        this petition.
+
+        (Refer to Exhibit 9.1: Advisory Opinion, pages XX-XX.)'
+      no_peer_group: To the best of the petitioner's knowledge, there is no appropriate peer group or labor organization available
+        to provide a consultation in the beneficiary's specific area of expertise. Therefore, the petitioner submits testimonial
+        letters from recognized experts in the field, enclosed as Exhibits [XX-XX], in support of this petition. These materials
+        provide relevant expert evaluation of the beneficiary's qualifications and achievements.
+  continuing_to_work:
+    heading: Continuing to Work in the Area of Extraordinary Ability or Achievement
+    exhibit_range: Exhibits from XX to XX, Pages from XX to XX.
+    purpose: Show that the beneficiary is coming temporarily to the United States to continue work in the area of extraordinary
+      ability / achievement and that the work is supported by contract, offer, itinerary, or project plan.
+    required_elements:
+    - Beneficiary plans to enter the United States to continue professional activity in the O-1B field.
+    - There is a contract, job offer letter, itinerary, project agreement, or other documentation.
+    - The role, employer/company, address, period, compensation, and duties are identified.
+    - Duties are connected to the same area of extraordinary ability or achievement.
+    - If the petition requests up to 3 years, the events/activities/itinerary support the full requested period.
+    llm_instructions:
+    - Do not write an EB-1A substantial benefit section.
+    - For Arts, use area of extraordinary ability. For MPTV, use area of extraordinary achievement / MPTV productions.
+    - Explain shared skillsets between past recognized work and proposed U.S. duties.
+    - If using multiple employers or projects, present a simple itinerary table.
+    - If compensation includes bonuses, project fees, royalties, or mixed pay, describe the structure only if supported by
+      documents.
+    table_fields:
+    - company_name
+    - company_address
+    - position_role
+    - contract_period
+    - compensation_salary
+    - duties
+    - exhibit_reference
+    template: 'Mr./Ms. [Full Name] plans to enter the United States to continue [his/her/their] professional activity in the
+      field of [FIELD/SUBFIELD].
+
+
+      [He/She/They] has a [contract / job offer letter / itinerary / project agreement] confirming that, upon approval of
+      Form I-129 for O-1 status, [he/she/they] will work at [COMPANY NAME] under the following terms:
+
+      - Company name: [COMPANY NAME]
+
+      - Company address: [COMPANY ADDRESS]
+
+      - Position / Role: [POSITION / ROLE]
+
+      - Contract period / Expected duration of employment: [DATES]
+
+      - Compensation / Salary: [COMPENSATION]
+
+
+      [His/Her/Their] duties will include: [DUTY 1]; [DUTY 2]; [DUTY 3]; [DUTY 4].
+
+
+      These responsibilities require specialized expertise in [FIELD/SUBFIELD] and are directly connected to the achievements
+      and recognition documented in this petition.
+
+      (Refer to Exhibit [XX]: Employment Agreement / Itinerary / Job Offer.)'
+  conclusions:
+    heading: Conclusions
+    purpose: Summarize that the beneficiary meets the claimed criteria and qualifies under the O-1B standard.
+    llm_instructions:
+    - 'Use the company style: list the claimed criteria and provide a short totality paragraph.'
+    - Do not call the conclusion final merits determination.
+    - 'For Arts, conclude distinction: prominent, renowned, leading, or well-known.'
+    - 'For MPTV, conclude extraordinary achievement: outstanding, notable, or leading in MPTV.'
+    - Mention continued work in the U.S. only briefly.
+    template: 'Mr./Ms. [Last Name] has provided evidence that [he/she/they] meets [NUMBER] of the six criteria listed in 8
+      CFR § 214.2(o)(3)(iv), namely:
+
+      [list claimed criteria]
+
+
+      Taken together, the evidence demonstrates that Mr./Ms. [Last Name] has achieved distinction in [FIELD/SUBFIELD], with
+      a degree of skill and recognition substantially above that ordinarily encountered. The submitted documentation also
+      establishes that [he/she/they] is coming to the United States to continue working in the same area of extraordinary
+      ability.'
+global_llm_generation_rules:
+  evidence_first:
+  - Every paragraph asserting a fact must cite or identify supporting evidence.
+  - Do not merely list documents. Explain what each document proves.
+  - Use primary evidence for facts and secondary evidence for reputation, scale, public recognition, or context.
+  - Use source reliability notes for media, salary data, and industry reports.
+  style:
+  - formal
+  - respectful
+  - precise
+  - non-marketing
+  - no unsupported praise
+  - no sarcasm in generated petition text
+  citation_format: '(Refer to Exhibit {exhibit_id}: {document_title}, pages {page_range}.)'
+  quote_format: '"{quote}" — {author_name}, {author_title}. (Refer to Exhibit {exhibit_id}: {document_title}, pages {page_range}.)'
+  translation_rule: For each non-English document, the exhibit title must include English translation and certificate of translation
+    if applicable.
+  page_placeholder_rule: Use XX placeholders during drafting; resolve page numbers after final PDF assembly.
+  criteria_1_and_3_future_component_rule: Criteria (i) and (iii) require both past and prospective participation/role; always
+    include a prospective U.S. evidence subblock or mark the criterion risky.
+  do_not_invent:
+  - awards
+  - media rankings
+  - publication authors
+  - attendance numbers
+  - salary figures
+  - contracts
+  - advisory opinion status
+  - USCIS rules
+llm_interaction_workflow:
+  stage_1_case_intake:
+    goal: Fill case_config and classify Arts vs MPTV.
+    llm_output: structured YAML patch only
+    required_inputs:
+    - beneficiary CV
+    - field/specialization
+    - petitioner info
+    - U.S. work documents
+    - document index
+  stage_2_evidence_catalog:
+    goal: Convert raw document list into evidence_item_schema items.
+    llm_output: evidence_catalog YAML array
+    must_include:
+    - id
+    - title
+    - page_range placeholder
+    - evidence_type
+    - proves
+    - use_in_sections
+    - translation status
+  stage_3_strategy_selection:
+    goal: Select claimed criteria and mark strong/weak/backup.
+    llm_output: criteria strategy YAML patch plus risk notes
+    rule: Do not claim a criterion only because the company template lists it. Claim only if evidence satisfies legal_test.
+  stage_4_section_drafting:
+    goal: Draft one section or one criterion episode at a time using the episode structure.
+    llm_output: plain English petition text with exhibit placeholders
+    quality_gate: Every factual claim has an exhibit reference or is marked [NEEDS EVIDENCE].
+  stage_5_index_and_dividers:
+    goal: Generate INDEX and exhibit divider pages from evidence_catalog and final page ranges.
+    llm_output: structured index entries; script handles layout and page numbers
+  stage_6_validation:
+    goal: Run consistency checks before final assembly.
+    llm_output: validation report with blocking issues and warnings
+prompt_registry:
+  draft_criterion_i_episode: 'Draft one Criterion (i) episode using the company O-1B memo structure. Prove: past lead/starring
+    role, future lead/starring role, distinguished reputation of production/event, and accepted evidence type. Use only facts
+    from the provided evidence catalog. Mark unsupported claims as [NEEDS EVIDENCE].'
+  draft_criterion_ii_publication_episode: 'Draft one Criterion (ii) publication episode. Include: fact of publication, title/date/author/link,
+    why the material is by or about the beneficiary and achievements, why the publication qualifies as major/professional/trade
+    media, and a concise conclusion. Use company headings (a), (b), (c), Conclusion.'
+  draft_criterion_iii_role_episode: 'Draft one Criterion (iii) organization role episode. Include: employment/role evidence,
+    contribution to company development, recommendation letter quotes if available, distinguished reputation of the organization,
+    awards/rankings/media recognition, and conclusion. Separate lead, starring, and critical role logic.'
+  draft_criterion_iv_success_episode: Draft one Criterion (iv) success episode. Identify project, beneficiary role, success
+    type, success metrics, publication evidence, publication/critic status, and the bridge showing why the project success
+    is attributable to the beneficiary.
+  draft_criterion_v_recognition_episode: Draft one Criterion (v) significant recognition episode. Identify recognizer, form/date
+    of recognition, achievement recognized, recognizer authority, supporting documentation, and conclusion. Focus on why the
+    recognizer makes the recognition significant.
+  draft_criterion_vi_salary_episode: Draft one Criterion (vi) salary/remuneration episode for one year or contract period.
+    Include fact of salary, USD conversion, comparison source analysis, exceeding-times calculation, source reliability, and
+    conclusion table row.
+  draft_continued_work: Draft the Continuing to Work section under the company template. Identify contract/job offer/itinerary,
+    company, position, period, compensation, duties, and explain why the duties are in the same O-1B area of extraordinary
+    ability or achievement. Do not write a NIW or EB-1A benefit argument.
+  run_validation: 'Validate the draft against the YAML rules. Return: blocking issues, warnings, missing evidence, duplicate
+    exhibit ids, criteria without future component, unsupported claims, wrong O-1B/O-1A/EB-1A terminology, unresolved page
+    placeholders, and missing translations.'
+divider_pages:
+  enabled: true
+  script_generates: true
+  styles:
+    group_divider: Heading 1 centered or company-defined technical page style
+    subexhibit_divider: Heading 2 centered or company-defined technical page style
+  types:
+    exhibit_group:
+      title_template: '{GROUP_TITLE}. Exhibits from {EXHIBITS_FROM} to {EXHIBITS_TO}, Pages from {PAGES_FROM} to {PAGES_TO}'
+      include:
+      - group_name
+      - criterion_name_if_any
+      - document_list
+      - page_range_placeholder
+    subexhibit:
+      title_template: Exhibit {EXHIBIT_ID}. {DOCUMENT_TITLE}
+      include:
+      - evidence_type
+      - translation_note
+      - used_for
+    original_document:
+      title_template: Original Document
+    english_translation:
+      title_template: English Translation
+    certificate_of_translation:
+      title_template: Certificate of Translation
+validation_rules:
+  blocking:
+  - case_config.o1b_track must be arts or mptv.
+  - At least three criteria must be claimed unless significant_award_path is true and adequately supported.
+  - MPTV cases must not use comparable evidence.
+  - Criterion (i) must include a future/will perform component or be marked risky/not claimed.
+  - Criterion (iii) must include a future/will perform component or be marked risky/not claimed.
+  - Advisory Opinion section must not cite 8 CFR 214.1(C)(5)(1); it must use 8 CFR 214.2(o)(5) or a verified current citation.
+  - Cover must not say five criteria if only three or four are actually claimed.
+  - No active exhibit id may be duplicated across unrelated documents.
+  - All non-English documents must have translation status identified.
+  - Final assembly must not contain unresolved [NEEDS EVIDENCE] markers.
+  warnings:
+  - Unresolved page XX placeholders are acceptable in drafting but not final PDF.
+  - Industry Overview should not become a national interest argument.
+  - Criterion (ii) should not rely on social media or portfolio pages unless supported by qualifying publication evidence.
+  - Criterion (v) letters should identify concrete achievements and author authority.
+  - Salary comparisons should match year, location, occupation, and compensation rate.
+  terminology_checks:
+    forbidden_or_risky_terms:
+    - EB-1A
+    - I-140
+    - permanent residence
+    - national interest
+    - prospective substantial benefit
+    - one of the small percentage who have risen to the very top
+    arts_required_terms:
+    - O-1B
+    - extraordinary ability in the arts
+    - distinction
+    - prominent
+    - renowned
+    - leading
+    - well-known
+    mptv_required_terms:
+    - O-1B
+    - extraordinary achievement
+    - motion picture or television
+    - outstanding
+    - notable
+    - leading
+  pre_final_pdf_checks:
+  - Resolve all page ranges in INDEX.
+  - Resolve all exhibit citations.
+  - Update footer page numbering.
+  - 'Check heading styles: criteria Heading 1 16 pt, episodes Heading 2 14 pt.'
+  - Confirm 1.5 line spacing and justified alignment.
+  - Confirm no blank exhibit groups remain in active INDEX.
+  - Confirm all criteria listed in cover are actually drafted and supported.
+script_output_contract:
+  llm_should_output:
+  - section_key
+  - section_title
+  - draft_text
+  - evidence_used
+  - unresolved_placeholders
+  - risk_notes
+  script_should_handle:
+  - Word/PDF formatting
+  - heading styles
+  - page numbering
+  - INDEX page ranges
+  - exhibit dividers
+  - final PDF merge
+  - page citation resolution
+  yaml_should_store:
+  - structure
+  - legal tests
+  - evidence schema
+  - generation instructions
+  - validation rules
+  - prompt ids
+  yaml_should_not_store:
+  - long final case-specific prose
+  - actual confidential facts beyond placeholders
+  - current USCIS fees unless verified at runtime

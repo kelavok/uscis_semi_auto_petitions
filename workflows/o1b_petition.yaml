@@ -1,0 +1,383 @@
+schema_version: 0.1-draft
+task_type: o1b_petition
+status: active_draft
+
+purpose: >
+  File-driven O-1B petition workflow based on the company memorandum order,
+  the O1B YAML instruction template, and the user-provided evidence folders.
+  Each criterion is drafted one evidence episode at a time. Criteria (iii)
+  and (vi) use two drafting phases for each shared episode.
+
+opening_context:
+  template: instructions/task_types/o1b_petition/opening_context.md
+  required_case_fields:
+    - case_id
+    - beneficiary.full_name
+    - beneficiary.preferred_reference
+    - field
+    - specialization
+    - o1b_track
+    - petitioner.company_name
+    - us_work.position_or_role
+
+instruction_sources:
+  universal:
+    - instructions/universal/writing_rules.md
+    - instructions/universal/evidence_rules.md
+    - instructions/universal/citation_rules.md
+    - instructions/universal/quality_control.md
+  visa_or_rfe_specific:
+    - templates/O1B/O1B_company_memo_llm_structure.yaml
+    - templates/O1B/MEMO O-1В_ver.1.0.docx
+  task_type:
+    - instructions/task_types/o1b_petition/task_rules.md
+  case_specific: user_case_instructions.md
+
+source_folder_template:
+  path: templates/O1B/case_folders_template
+  role: Model O-1B evidence tree copied into source_documents/originals.
+
+manual_provider:
+  mode: prompt_file_then_manual_import
+  prompt_dir: generated_prompts
+  output_dir: llm_outputs
+  validated_dir: validated_outputs
+  required_output_schema: schemas/llm_section_output.schema.json
+
+common_validation_rules:
+  - output_matches_case_and_step
+  - draft_text_is_present_for_llm_steps
+  - used_document_ids_exist_in_document_index
+  - unsupported_claims_field_is_present
+  - questions_for_user_field_is_present
+  - quality_flags_field_is_present
+  - o1b_terminology_matches_arts_or_mptv_track
+  - comparable_evidence_is_not_used_for_mptv
+
+steps:
+  - step_id: setup_case_workspace
+    execution: deterministic
+    title: Create O-1B workspace, evidence tree, and working memorandum
+    command: python -m app.draft init-case --case CASE_ID --task-type o1b_petition
+
+  - step_id: opening_context_intake
+    execution: llm_manual
+    title: Give LLM the O-1B case context without drafting
+    objective: >
+      Review beneficiary, petitioner, proposed U.S. work, CV, education, and
+      available evidence. Identify whether the configured track is Arts or
+      MPTV. Do not draft petition prose yet.
+    section_instructions: instructions/task_types/o1b_petition/opening_context.md
+    evidence_folder_roles:
+      - identity_cv_education
+      - us_work_documents
+    destination: draft_sections/_context_notes.md
+
+  - step_id: template_review
+    execution: llm_manual
+    title: Review the company O-1B template and drafting rules
+    objective: >
+      Understand the required company section order, O-1B legal tests,
+      episode structure, exhibit conventions, and Arts/MPTV terminology.
+      Do not draft substantive petition text.
+    section_instructions: instructions/task_types/o1b_petition/template_review.md
+    templates:
+      - templates/O1B/O1B_company_memo_llm_structure.yaml
+      - templates/O1B/MEMO O-1В_ver.1.0.docx
+    destination: draft_sections/_template_notes.md
+
+  - step_id: o1b_petitioner_support_letter
+    execution: llm_manual
+    output_kind: standalone_support_document
+    title: Petitioner or agent support letter
+    objective: >
+      Draft a standalone support letter from the U.S. employer or agent. It
+      must explain the beneficiary's achievements, why extraordinary ability
+      or achievement is necessary for the proposed work, and the position,
+      compensation, location, period, duties, and relationship/control facts.
+    section_instructions: instructions/task_types/o1b_petition/petitioner_support_letter.md
+    evidence_folder_roles:
+      - us_work_documents
+      - identity_cv_education
+    destination: draft_sections/supporting_documents/petitioner_support_letter.md
+
+  - step_id: o1b_itinerary
+    execution: llm_manual
+    output_kind: standalone_support_document
+    title: O-1B itinerary
+    objective: >
+      Draft the itinerary immediately after the petitioner/agent letter. List
+      each event, engagement, project, employer or venue, location, dates,
+      duties, compensation where supported, and source document.
+    section_instructions: instructions/task_types/o1b_petition/itinerary.md
+    evidence_folder_roles:
+      - us_work_documents
+    include_draft_steps:
+      - o1b_petitioner_support_letter
+    destination: draft_sections/supporting_documents/itinerary.md
+
+  - step_id: o1b_professional_biography
+    execution: llm_manual
+    title: Education, professional biography, and specialization
+    objective: >
+      Draft the beneficiary's education, specialization, and professional
+      biography in the company template order. Do not draft the final overview
+      of achievements yet.
+    section_instructions: instructions/task_types/o1b_petition/professional_biography.md
+    evidence_folder_roles:
+      - identity_cv_education
+    exhibit_number: "1"
+    destination: draft_sections/o1b/professional_biography.md
+
+  - step_id: o1b_recommendation_letter_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_recommender_or_letter
+    title: Optional recommendation letter episode
+    objective: >
+      When recommendation letters exist, draft one controlled recommender block
+      per folder. Identify author authority and select only concrete supported
+      statements relevant to the O-1B criteria.
+    section_instructions: instructions/task_types/o1b_petition/recommendation_letters.md
+    evidence_folder_roles:
+      - recommendation_letters
+    exhibit_number: "8"
+    destination_pattern: draft_sections/o1b/recommendation_letters/{episode_id}.md
+
+  - step_id: o1b_industry_overview
+    execution: llm_manual
+    title: Concise O-1B industry overview
+    objective: >
+      Explain the relevant arts or MPTV subfield and the context needed to
+      understand the proposed U.S. work. Keep the section concise and do not
+      turn it into an EB-1A or NIW benefit argument.
+    section_instructions: instructions/task_types/o1b_petition/industry_overview.md
+    external_research:
+      allowed: true
+      source_hierarchy:
+        - U.S. government and official industry sources
+        - established professional associations and industry reports
+        - reputable major media
+    exhibit_number: "1"
+    destination: draft_sections/o1b/industry_overview.md
+
+  - step_id: o1b_criterion_i_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_production_or_event
+    title: "O-1B Criterion (i): lead or starring production/event episode"
+    objective: >
+      Draft one production or event episode. Establish past and prospective
+      lead/starring participation, the beneficiary's concrete role, accepted
+      public or contractual evidence, and the production/event's distinguished
+      reputation.
+    section_instructions: instructions/task_types/o1b_petition/criterion_i.md
+    evidence_folder_roles:
+      - lead_starring_productions
+    exhibit_number: "2"
+    destination_pattern: draft_sections/o1b/criteria/criterion_i/{episode_id}.md
+
+  - step_id: o1b_criterion_ii_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_publication
+    title: "O-1B Criterion (ii): published recognition episode"
+    objective: >
+      Draft one publication episode: publication facts, material by or about
+      the beneficiary and achievements, national or international recognition,
+      author relevance where probative, and major/professional publication status.
+    section_instructions: instructions/task_types/o1b_petition/criterion_ii.md
+    evidence_folder_roles:
+      - published_recognition
+    exhibit_number: "3"
+    destination_pattern: draft_sections/o1b/criteria/criterion_ii/{episode_id}.md
+
+  - step_id: o1b_criterion_iii_role
+    execution: llm_manual_repeatable
+    repeat_unit: one_organization_role
+    title: "O-1B Criterion (iii), phase 1: role and contribution"
+    objective: >
+      Draft the first phase for one shared organization episode: employment or
+      engagement facts, duties, achievements, contribution, and why the role
+      was lead, starring, or critical. Address prospective U.S. role evidence
+      where applicable.
+    section_instructions: instructions/task_types/o1b_petition/criterion_iii_phase_1.md
+    evidence_folder_roles:
+      - organization_role
+    phase_subfolder_terms:
+      - 1 role and contribution
+      - role facts
+      - employment evidence
+      - contribution to development
+    exhibit_number: "4"
+    destination_pattern: draft_sections/o1b/criteria/criterion_iii/{episode_id}_phase_1.md
+
+  - step_id: o1b_criterion_iii_reputation
+    execution: llm_manual_repeatable
+    repeat_unit: one_organization_role
+    title: "O-1B Criterion (iii), phase 2: distinguished reputation"
+    objective: >
+      Draft the second phase for the same organization episode. Establish the
+      organization's distinguished reputation through qualifying publications,
+      scale, major projects, clients, awards, rankings, and other reliable evidence.
+    section_instructions: instructions/task_types/o1b_petition/criterion_iii_phase_2.md
+    evidence_folder_roles:
+      - organization_role
+    phase_subfolder_terms:
+      - 2 distinguished reputation
+      - organization reputation
+      - distinguished reputation
+      - company reputation
+    exhibit_number: "4"
+    destination_pattern: draft_sections/o1b/criteria/criterion_iii/{episode_id}_phase_2.md
+
+  - step_id: o1b_criterion_iv_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_project_or_success
+    title: "O-1B Criterion (iv): commercial or critically acclaimed success episode"
+    objective: >
+      Draft one project episode showing the project, beneficiary's role, success
+      indicators, qualifying reporting or criticism, source reputation, and the
+      evidentiary bridge between the beneficiary and the demonstrated success.
+    section_instructions: instructions/task_types/o1b_petition/criterion_iv.md
+    evidence_folder_roles:
+      - commercial_critical_success
+    exhibit_number: "5"
+    destination_pattern: draft_sections/o1b/criteria/criterion_iv/{episode_id}.md
+
+  - step_id: o1b_criterion_v_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_recognition
+    title: "O-1B Criterion (v): significant recognition episode"
+    objective: >
+      Draft one recognition episode. Identify the concrete achievement,
+      recognition form and date, the recognizing organization/critic/agency/
+      expert, that source's authority, and supporting documentation.
+    section_instructions: instructions/task_types/o1b_petition/criterion_v.md
+    evidence_folder_roles:
+      - significant_recognition
+    exhibit_number: "6"
+    destination_pattern: draft_sections/o1b/criteria/criterion_v/{episode_id}.md
+
+  - step_id: o1b_criterion_vi_compensation
+    execution: llm_manual_repeatable
+    repeat_unit: one_compensation_period
+    title: "O-1B Criterion (vi), phase 1: compensation facts"
+    objective: >
+      Draft the first phase for one shared compensation episode: year or
+      contract period, role, employer/project, location, currency, salary or
+      remuneration amount, time basis, payment evidence, and supported USD conversion.
+    section_instructions: instructions/task_types/o1b_petition/criterion_vi_phase_1.md
+    evidence_folder_roles:
+      - high_salary
+    phase_subfolder_terms:
+      - 1 compensation facts
+      - fact of salary
+      - salary evidence
+      - remuneration evidence
+      - payment evidence
+    exhibit_number: "7"
+    destination_pattern: draft_sections/o1b/criteria/criterion_vi/{episode_id}_phase_1.md
+
+  - step_id: o1b_criterion_vi_comparison
+    execution: llm_manual_repeatable
+    repeat_unit: one_compensation_period
+    title: "O-1B Criterion (vi), phase 2: comparative wage evidence"
+    objective: >
+      Draft the second phase for the same compensation episode. Compare like
+      with like by occupation, year, location, and compensation basis; explain
+      source reliability, calculations, and the amount or multiple by which the
+      beneficiary exceeds each benchmark.
+    section_instructions: instructions/task_types/o1b_petition/criterion_vi_phase_2.md
+    evidence_folder_roles:
+      - high_salary
+    phase_subfolder_terms:
+      - 2 comparison sources
+      - comparative base
+      - salary comparison
+      - wage benchmarks
+      - comparison sources
+    exhibit_number: "7"
+    destination_pattern: draft_sections/o1b/criteria/criterion_vi/{episode_id}_phase_2.md
+
+  - step_id: o1b_comparable_evidence_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_comparable_evidence_category
+    title: O-1B Arts comparable evidence episode
+    objective: >
+      Draft one comparable-evidence episode only for an Arts case. Explain why
+      a listed criterion does not readily apply and why the submitted evidence
+      is genuinely comparable to that criterion. Never use this step for MPTV.
+    section_instructions: instructions/task_types/o1b_petition/comparable_evidence.md
+    evidence_folder_roles:
+      - comparable_evidence
+    exhibit_number: "8"
+    destination_pattern: draft_sections/o1b/criteria/comparable_evidence/{episode_id}.md
+
+  - step_id: o1b_advisory_opinion
+    execution: llm_manual
+    title: Advisory opinion / consultation compliance
+    objective: >
+      Draft the procedural consultation section under 8 C.F.R. § 214.2(o)(5),
+      using only the actual advisory opinion, no-objection letter, or documented
+      alternative consultation facts supplied in the case.
+    section_instructions: instructions/task_types/o1b_petition/advisory_opinion.md
+    evidence_folder_roles:
+      - advisory_opinion
+    exhibit_number: "9"
+    destination: draft_sections/o1b/advisory_opinion.md
+
+  - step_id: o1b_continuing_to_work
+    execution: llm_manual
+    title: Continuing to work in the O-1B area
+    objective: >
+      Draft the memorandum section connecting the proposed U.S. position,
+      engagements, itinerary, compensation, locations, dates, and duties to the
+      beneficiary's established O-1B area of ability or achievement.
+    section_instructions: instructions/task_types/o1b_petition/continuing_to_work.md
+    evidence_folder_roles:
+      - us_work_documents
+    include_draft_steps:
+      - o1b_petitioner_support_letter
+      - o1b_itinerary
+    exhibit_number: "10"
+    destination: draft_sections/o1b/continuing_to_work.md
+
+  - step_id: o1b_final_overview
+    execution: llm_manual
+    title: Final overview of qualifications and achievements
+    objective: >
+      After the criteria are drafted, write the controlled overview of the
+      beneficiary's field, career, strongest achievements, and qualifications.
+      Preview the record without duplicating full criterion analysis.
+    section_instructions: instructions/task_types/o1b_petition/final_overview.md
+    include_working_memo: true
+    destination: draft_sections/o1b/final_overview.md
+
+  - step_id: o1b_conclusions
+    execution: llm_manual
+    title: O-1B conclusions
+    objective: >
+      List only claimed and supported criteria, apply the correct Arts or MPTV
+      standard, and briefly confirm that the beneficiary will continue work in
+      the same area in the United States.
+    section_instructions: instructions/task_types/o1b_petition/conclusions.md
+    include_working_memo: true
+    destination: draft_sections/o1b/conclusions.md
+
+  - step_id: exhibit_list
+    execution: deterministic
+    title: Generate O-1B exhibit list from approved indexes
+    command: python -m app.bundle build --case CASE_ID --dry-run
+
+  - step_id: separator_pages
+    execution: deterministic
+    title: Generate O-1B exhibit and subexhibit separator pages
+
+  - step_id: evidence_bundle_pdf
+    execution: deterministic
+    title: Assemble O-1B evidence bundle PDF
+    command: python -m app.bundle build --case CASE_ID
+
+notes:
+  - The petitioner/agent support letter and itinerary are standalone supporting drafts, not memorandum sections.
+  - Recommendation-letter drafting units appear only when the recommendation folder contains evidence.
+  - Criteria (iii) and (vi) create two prompts for each shared episode id.
+  - Comparable evidence is available only for the Arts track and must be disabled for MPTV.

@@ -18,6 +18,7 @@ from app.bundle_workflow import (
 )
 from app.evidence import link_translations, manual_link_translation, scan_documents, unlink_translation
 from app.memo_builder import apply_case_intake, build_working_memo, parse_machine_template
+from app.stages import build_llm_stage
 from app.workflow import find_step, load_yaml_file
 from app.simple_yaml import load_yaml_subset
 
@@ -212,6 +213,162 @@ class CliSmokeTests(unittest.TestCase):
                 [path.name for path in workflow_module._episode_folders_for(translations, options, fact_step)],
                 ["Факт наличия вклада"],
             )
+
+    def test_o1b_case_builds_company_memo_and_two_phase_units(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            case_root = root / "case_workspace"
+            template_root = case_root / "_template"
+            import shutil
+
+            shutil.copytree(cli_support.CASE_TEMPLATE_ROOT, template_root)
+            with (
+                patch.object(cli_support, "CASE_ROOT", case_root),
+                patch.object(cli_support, "CASE_TEMPLATE_ROOT", template_root),
+                patch.object(web, "CASE_ROOT", case_root),
+            ):
+                case_dir = cli_support.create_case_from_template("o1b_test", "o1b_petition")
+                apply_case_intake(
+                    "o1b_test",
+                    {
+                        "beneficiary_full_name": "Alex Artist",
+                        "preferred_reference": "Mr. Artist",
+                        "gender": "male",
+                        "citizenship": "France",
+                        "field": "Arts",
+                        "specialization": "Film Production",
+                        "o1b_track": "arts",
+                        "petitioner_company_name": "US Arts LLC",
+                        "petitioner_company_address": "New York, NY",
+                        "petitioner_type": "us_employer",
+                        "authorized_signatory": "Jane Smith, CEO",
+                        "validity_start": "2026-09-01",
+                        "validity_end": "2029-08-31",
+                        "filing_uscis_address": "USCIS",
+                        "position_or_role": "Creative Producer",
+                        "compensation": "$120,000 per year",
+                        "work_location": "New York, NY",
+                        "duties_summary": "Lead creative productions and supervise delivery.",
+                    },
+                    claimed_criteria=["organization_role", "high_salary"],
+                )
+                role_episode = (
+                    case_dir
+                    / "source_documents/originals/3.leading_critical_role_for_organization/Studio Alpha"
+                )
+                (role_episode / "1 role and contribution").mkdir(parents=True)
+                (role_episode / "1 role and contribution/role.txt").write_text(
+                    "role evidence", encoding="utf-8"
+                )
+                (role_episode / "2 distinguished reputation").mkdir()
+                (role_episode / "2 distinguished reputation/reputation.txt").write_text(
+                    "reputation evidence", encoding="utf-8"
+                )
+                salary_episode = (
+                    case_dir
+                    / "source_documents/originals/6.high_salary_or_remuneration/2025 compensation"
+                )
+                (salary_episode / "1 compensation facts").mkdir(parents=True)
+                (salary_episode / "1 compensation facts/pay.txt").write_text(
+                    "pay evidence", encoding="utf-8"
+                )
+                (salary_episode / "2 comparison sources").mkdir()
+                (salary_episode / "2 comparison sources/wage.txt").write_text(
+                    "wage comparison", encoding="utf-8"
+                )
+
+                scan_documents("o1b_test")
+                summary = build_working_memo("o1b_test")
+                loaded = workflow_module.load_case("o1b_test")
+                stage = build_llm_stage("o1b_test")
+                intake_html = web.render_intake_panel("o1b_test", "o1b_petition")
+                role_prompt_path = workflow_module.build_prompt(
+                    "o1b_test",
+                    "o1b_criterion_iii_role",
+                    [],
+                    episode_id="Studio_Alpha",
+                    episode_folder="Studio Alpha",
+                )
+                role_prompt = role_prompt_path.read_text(encoding="utf-8")
+
+            self.assertEqual(loaded.config["task_type"], "o1b_petition")
+            self.assertEqual(loaded.config["o1b_track"], "arts")
+            self.assertTrue(
+                (case_dir / "source_documents/originals/3.leading_critical_role_for_organization").is_dir()
+            )
+            index_text = (case_dir / "indexes/document_index.csv").read_text(encoding="utf-8-sig")
+            self.assertIn(",organization_role,", index_text)
+            self.assertIn(",high_salary,", index_text)
+            phase_units = [
+                unit
+                for unit in stage.units
+                if unit.step_id in {
+                    "o1b_criterion_iii_role",
+                    "o1b_criterion_iii_reputation",
+                    "o1b_criterion_vi_compensation",
+                    "o1b_criterion_vi_comparison",
+                }
+            ]
+            self.assertEqual(len(phase_units), 4)
+            self.assertEqual(
+                {unit.episode_id for unit in phase_units if "criterion_iii" in unit.step_id},
+                {"Studio_Alpha"},
+            )
+            self.assertEqual(
+                {unit.episode_id for unit in phase_units if "criterion_vi" in unit.step_id},
+                {"2025_compensation"},
+            )
+            role_step = find_step(loaded.workflow, "o1b_criterion_iii_role")
+            reputation_step = find_step(loaded.workflow, "o1b_criterion_iii_reputation")
+            options = workflow_module.PromptOptions(
+                episode_id="Studio_Alpha", episode_folder="Studio Alpha"
+            )
+            role_context = workflow_module.render_evidence_context(loaded, role_step, options)
+            reputation_context = workflow_module.render_evidence_context(
+                loaded, reputation_step, options
+            )
+            self.assertIn("role.txt", role_context)
+            self.assertNotIn("reputation.txt", role_context)
+            self.assertIn("reputation.txt", reputation_context)
+            self.assertNotIn("role.txt", reputation_context)
+            with zipfile.ZipFile(summary.docx_path) as archive:
+                self.assertIn("word/footer1.xml", archive.namelist())
+                styles = archive.read("word/styles.xml").decode("utf-8")
+                document = archive.read("word/document.xml").decode("utf-8")
+                relationships = archive.read("word/_rels/document.xml.rels").decode("utf-8")
+            self.assertIn("Times New Roman", styles)
+            self.assertIn('w:line="360"', styles)
+            self.assertIn('w:sz w:val="32"', styles)
+            self.assertIn('w:sz w:val="28"', styles)
+            self.assertIn("O-1B", document)
+            self.assertIn("rIdFooter", document)
+            self.assertIn("relationships/styles", relationships)
+            self.assertIn("Criterion 3.", document)
+            self.assertIn("Criterion 6.", document)
+            self.assertIn("Claimed O-1B criteria", intake_html)
+            self.assertIn('name="o1b_track"', intake_html)
+            self.assertIn('name="petitioner_company_name"', intake_html)
+            self.assertIn("templates/O1B/MEMO O-1В_ver.1.0.docx", intake_html)
+            self.assertIn("task_type: `o1b_petition`", role_prompt)
+            self.assertIn("role.txt", role_prompt)
+            self.assertNotIn("reputation.txt", role_prompt)
+            self.assertIn("primary exhibit for this section is Exhibit 4", role_prompt)
+            step_order = [str(step.get("step_id")) for step in loaded.workflow["steps"]]
+            self.assertLess(
+                step_order.index("o1b_petitioner_support_letter"),
+                step_order.index("o1b_itinerary"),
+            )
+            self.assertLess(
+                step_order.index("o1b_itinerary"),
+                step_order.index("o1b_professional_biography"),
+            )
+            with self.assertRaisesRegex(SystemExit, "another petition framework"):
+                workflow_module._validate_human_facing_draft_text(
+                    "This EB-1A permanent residence filing is supported by the submitted record.",
+                    loaded,
+                    find_step(loaded.workflow, "o1b_petitioner_support_letter"),
+                    workflow_module.PromptOptions(),
+                )
 
     def test_employment_plan_destination_accepts_repeatable_episode_id(self) -> None:
         step = {"destination_pattern": "draft_sections/employment_plan/{episode_id}.md"}

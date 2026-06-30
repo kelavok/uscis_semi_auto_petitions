@@ -1,0 +1,1142 @@
+schema_version: 2
+template_role: deterministic_working_document_structure_and_llm_generation_map
+template_name: O-1B Working Petition Structure YAML
+template_date: '2026-06-30'
+source_references:
+- O1B draft general.docx - user baseline O-1B notes and rough template
+- Pasted text(80).txt - USCIS Policy Manual excerpt for O-1B Arts and O-1B Motion Picture or Television
+- O1B_unified_petition_template_LLM(1).txt - detailed narrative O-1B LLM template produced from the user baseline and policy
+  guidance
+- 'Official current-control sources to verify before filing: USCIS Policy Manual Volume 2 Part M Chapters 3, 4, 7; 8 CFR 214.2(o);
+  current USCIS filing addresses, form editions, and fees'
+scope:
+  visa_classification: O-1B
+  tracks:
+    arts:
+      standard_label: distinction
+      standard_summary: High level of achievement in the field of arts evidenced by skill and recognition substantially above
+        that ordinarily encountered, to the extent the person is prominent, renowned, leading, or well-known in the field
+        of arts.
+      must_prove:
+      - extraordinary ability in the arts demonstrated by sustained national or international acclaim
+      - achievements recognized in the field through extensive documentation
+      - beneficiary is coming to work in the area of extraordinary ability
+      comparable_evidence_allowed: true
+    mptv:
+      standard_label: extraordinary achievement
+      standard_summary: Very high level of accomplishment in the motion picture or television industry evidenced by skill
+        and recognition significantly above that ordinarily encountered, to the extent the person is recognized as outstanding,
+        notable, or leading in the motion picture or television field.
+      must_prove:
+      - record of extraordinary achievement in motion picture or television productions
+      - achievements recognized in the MPTV field through extensive documentation
+      - beneficiary is coming to continue work in motion picture or television productions
+      comparable_evidence_allowed: false
+  not_eb1a_warning:
+  - Do not call this a permanent residence petition.
+  - Do not use Form I-140 language.
+  - Do not use EB-1A final merits terminology as a section label.
+  - Do not argue prospective substantial benefit to the United States as an O-1B eligibility requirement.
+  - Do not use O-1A top-of-field language as the core O-1B Arts standard.
+document:
+  petition_title: Nonimmigrant O-1B Visa Petition
+  petition_subtitle: Arts / Motion Picture or Television
+  cover_heading: Nonimmigrant O-1B Visa Petition on behalf of {preferred_reference}
+  re_line: 'RE: Nonimmigrant O-1B Visa Petition on behalf of {preferred_reference}'
+  classification: 'Classification Sought: O-1B under INA § 101(a)(15)(O)(i)'
+  petition_type: 'Type of Petition: Form I-129 with O and P Classification Supplement'
+  salutation: Dear USCIS Officer
+  recommended_exhibit_label: Exhibit
+  citation_format_default: '(Please kindly refer to Exhibit {exhibit_id}, page {page_range}: {document_title}.)'
+  quote_format_default: '“{quote}” — {author_name}, {author_credentials} (Please kindly refer to Exhibit {exhibit_id}, page
+    {page_range}: {document_title}.)'
+case_config:
+  beneficiary:
+    full_legal_name: '{NAME SURNAME}'
+    stage_or_professional_name: '{STAGE_NAME_IF_ANY}'
+    preferred_reference: '{Mr./Ms. Surname}'
+    possessive_reference: '{Mr./Ms. Surname’s}'
+    pronouns:
+      subject: '{he/she/they}'
+      object: '{him/her/them}'
+      possessive: '{his/her/their}'
+    nationality: '{COUNTRY}'
+    current_residence: '{CITY_COUNTRY}'
+    passport_exhibit: '{EXHIBIT_ID}'
+  petitioner:
+    type: '{us_employer|us_agent_actual_employer|us_agent_multiple_employers|us_agent_for_foreign_employer|separate_legal_entity_owned_by_beneficiary}'
+    legal_name: '{PETITIONER_LEGAL_NAME}'
+    address: '{PETITIONER_ADDRESS}'
+    authorized_signatory: '{NAME_TITLE}'
+    relationship_to_beneficiary: '{employer|agent|representative|corporate_employer}'
+    control_or_authorization_theory: '{explain who controls work, who pays, who sets duties, and why petitioner can file}'
+  o1b_track: '{arts|mptv}'
+  field:
+    field_name: '{FIELD}'
+    specialization: '{SPECIALIZATION}'
+    track_classification_explanation: '{Why this is O-1B Arts or O-1B MPTV}'
+    shared_skillsets_for_continued_work:
+    - '{SKILLSET_1}'
+    - '{SKILLSET_2}'
+    - '{SKILLSET_3}'
+  requested_validity:
+    start_date: '{START_DATE}'
+    end_date: '{END_DATE}'
+    period_requested: '{up_to_3_years_or_shorter}'
+    basis: '{contracts|itinerary|project_plan|engagements}'
+    extension_or_amended_petition: false
+    verify_current_filing_address_and_fees_before_filing: true
+  us_work:
+    position_or_role: '{ROLE}'
+    employers_clients_projects:
+    - '{EMPLOYER_OR_PROJECT_1}'
+    - '{EMPLOYER_OR_PROJECT_2}'
+    events_activities_productions:
+    - '{EVENT_ACTIVITY_PRODUCTION_1}'
+    - '{EVENT_ACTIVITY_PRODUCTION_2}'
+    locations:
+    - '{CITY_STATE_OR_REMOTE}'
+    compensation_model: '{salary|hourly|daily|project_fee|royalty|mixed}'
+    contract_evidence: '{EXHIBIT_ID}'
+    itinerary_evidence: '{EXHIBIT_ID}'
+  consultation:
+    status: '{obtained|no_objection|peer_expert_letters|attempts_documented|waiver_requested}'
+    source: '{peer_group|labor_organization|management_organization|recognized_expert}'
+    organization_or_experts:
+    - '{CONSULTATION_SOURCE_1}'
+    exhibit: '{EXHIBIT_ID}'
+    mptv_requires_union_and_management_review_check: '{true_if_mptv}'
+  eligibility_path:
+    significant_award_path: false
+    three_of_six_criteria_path: true
+    comparable_evidence_for_arts: false
+    comparable_evidence_for_mptv_prohibited: true
+  claimed_criteria:
+    primary:
+    - criterion_1_lead_starring_events
+    - criterion_2_published_recognition
+    - criterion_5_significant_recognition
+    secondary:
+    - criterion_3_lead_critical_organizations
+    - criterion_4_major_success
+    - criterion_6_high_remuneration
+    backup_or_not_claimed:
+    - significant_award_path
+    - comparable_evidence
+  strategy:
+    criteria_order_in_document: regulatory_order
+    strongest_evidence_in_cover_summary: true
+    write_general_overview_after_criteria_are_analyzed: true
+    totality_themes:
+    - '{theme_1_distinction_or_achievement}'
+    - '{theme_2_recognition_beyond_self_promotion}'
+    - '{theme_3_continuity_with_us_work}'
+global_generation_rules:
+  evidence_first_writing:
+  - Every factual claim must identify the fact, document, exhibit, and legal relevance.
+  - Do not merely list exhibits; explain what each exhibit proves.
+  - Use primary evidence for the core fact and secondary evidence to prove reputation, recognition, scale, or context.
+  - Use testimonial letters only where the criterion allows or where they corroborate the significance of a role or achievement.
+  tone:
+  - formal
+  - respectful
+  - precise
+  - non-marketing
+  - no unsupported praise
+  language_controls:
+    arts_terms:
+    - distinction
+    - prominent
+    - renowned
+    - leading
+    - well-known
+    - sustained national or international acclaim
+    mptv_terms:
+    - extraordinary achievement
+    - outstanding
+    - notable
+    - leading
+    - motion picture or television productions
+    avoid_terms:
+    - permanent residence
+    - I-140
+    - EB-1A
+    - prospective substantial benefit
+    - national interest
+    - small percentage at the very top
+  citation_rules:
+    claim_level_citations_required: true
+    page_placeholders_allowed_at_drafting_stage: true
+    page_placeholders_must_be_resolved_before_final_pdf: true
+    non_english_documents_require_translation_reference: true
+  past_and_future_rule:
+    criteria_requiring_both_past_and_future:
+    - criterion_1_lead_starring_events
+    - criterion_3_lead_critical_organizations
+    instruction: Always separate past evidence, prospective U.S. evidence, and the bridge explaining continuity.
+filing_config:
+  forms:
+  - Form I-129
+  - O and P Classification Supplement
+  - Form I-907 if premium processing is requested
+  fees:
+    i_129_fee: '{VERIFY_CURRENT_FEE}'
+    asylum_program_fee: '{VERIFY_CURRENT_ASYLUM_PROGRAM_FEE_IF_APPLICABLE}'
+    premium_processing_fee: '{VERIFY_CURRENT_I_907_FEE_IF_APPLICABLE}'
+  filing_address: '{VERIFY_CURRENT_USCIS_FILING_ADDRESS_FOR_I_129_O}'
+  validity_rules_for_client_notes:
+    initial_period: Up to 3 years if justified by events or activities, contracts, and itinerary.
+    extension_period: Usually up to 1 year increments to continue or complete the same event or activity.
+    change_of_employer: Generally requires a new petition by the new employer or authorized agent.
+    amended_petition: Required when there is a material change in terms and conditions of employment or eligibility.
+table_of_contents:
+- - 1. Form I-129, Petition for a Nonimmigrant Worker, and O and P Classification Supplement to Form I-129
+  - ''
+- - 2. Filing fee checks / payment evidence [VERIFY CURRENT FEES]
+  - ''
+- - 3. Form I-907 Request for Premium Processing, if applicable [VERIFY CURRENT FEE]
+  - ''
+- - 4. Photocopies of beneficiary passport and immigration documents, if applicable
+  - ''
+- - 5. Nonimmigrant O-1B Visa Petition on behalf of {preferred_reference}
+  - xx
+- - 5.1. Cover Letter
+  - xx
+- - 5.2. Section I. Petitioner / U.S. Agent
+  - xx
+- - 5.3. Section II. Consultation / Advisory Opinion
+  - xx
+- - 5.4. Section III. Eligibility for O-1B Classification
+  - xx
+- - '[A] General information about the beneficiary, field, professional biography, achievements, and expert recognition'
+  - xx
+- - '[B] Evidence of O-1B eligibility'
+  - xx
+- - Criterion 1. Lead or starring participant in distinguished productions or events
+  - xx
+- - Criterion 2. National or international recognition through published materials
+  - xx
+- - Criterion 3. Lead, starring, or critical role for distinguished organizations or establishments
+  - xx
+- - Criterion 4. Major commercial or critically acclaimed successes
+  - xx
+- - Criterion 5. Significant recognition from organizations, critics, government agencies, or recognized experts
+  - xx
+- - Criterion 6. High salary or substantial remuneration
+  - xx
+- - Comparable evidence, if applicable to O-1B Arts
+  - xx
+- - '[C] Totality conclusion: distinction / extraordinary achievement'
+  - xx
+- - 5.5. Section IV. Employment, Contracts, and Itinerary
+  - xx
+- - 6. List of Exhibits
+  - xx
+- - 7. Exhibits
+  - ''
+sections:
+  cover_letter:
+    section_id: '5.1'
+    purpose: Frame the petition, identify petitioner/beneficiary/classification/validity, list claimed criteria, and preview
+      why the beneficiary qualifies.
+    required_blocks:
+    - filing_header_and_addresses
+    - re_line_and_identification
+    - petitioner_capacity
+    - beneficiary_track_standard
+    - temporary_us_work_summary
+    - evidence_summary
+    - criteria_list_claimed_only
+    - significant_award_or_comparable_evidence_note_if_used
+    - totality_request_for_approval
+    llm_instructions:
+    - Use O-1B language, not O-1A/EB-1A language.
+    - List only criteria actually claimed in case_config.claimed_criteria.primary and secondary.
+    - For MPTV, state expressly that comparable evidence is not used.
+    - Do not include long factual analysis here; preview the evidence and point to sections.
+    step_ids:
+    - cover_letter_header
+    - cover_letter_petitioner_capacity
+    - cover_letter_o1b_track_summary
+    - cover_letter_claimed_criteria
+    - cover_letter_closing
+  petitioner_or_agent:
+    section_id: '5.2'
+    title: Section I. Petitioner / U.S. Agent
+    purpose: Show who can file the O-1B petition and the legal/work relationship behind the petition.
+    required_elements:
+    - petitioner_identity
+    - petitioner_type
+    - legal_capacity_to_file
+    - relationship_to_beneficiary
+    - control_or_authorization_documents
+    - brief_need_for_beneficiary
+    evidence_blocks:
+    - petitioner_registration_documents
+    - agent_authorization_agreement
+    - contracts_or_offers
+    - petitioner_statement
+    - evidence_of_petitioner_business_activity
+    llm_instructions:
+    - Keep this section factual and short.
+    - If petitioner is an agent for multiple employers, identify each actual employer/client and connect to itinerary.
+    - If petitioner is a company owned by the beneficiary, explain corporate separateness, control, supervision, governance,
+      and non-self-petition theory.
+    - Do not overstate petitioner reputation unless it is relevant to Criterion 3.
+    step_ids:
+    - petitioner_identity_capacity
+    - petitioner_documents
+    - petitioner_need_for_beneficiary
+  consultation_advisory_opinion:
+    section_id: '5.3'
+    title: Section II. Consultation / Advisory Opinion
+    purpose: Show the required consultation from an appropriate peer group, labor organization, management organization, or
+      expert source.
+    required_elements:
+    - consultation_source_identity
+    - source_relevance_to_field
+    - author_authority
+    - beneficiary_identified
+    - proposed_us_work_identified
+    - ability_or_achievement_described
+    - duties_described
+    - opinion_or_no_objection_stated
+    - signed_and_dated_written_opinion
+    track_specific_rules:
+      arts: Consultation may come from an appropriate peer group, labor organization, management organization, or person/persons
+        with expertise in the field.
+      mptv: Consultation generally requires the appropriate union representing occupational peers and a management organization
+        in the beneficiary’s area.
+    evidence_blocks:
+    - advisory_opinion_letter
+    - no_objection_letter
+    - organization_credentials
+    - author_authority_evidence
+    - consultation_request_correspondence
+    - evidence_of_attempts_if_no_formal_opinion
+    - prior_consultation_and_waiver_request_if_applicable
+    llm_instructions:
+    - Do not treat advisory opinion as a generic recommendation letter.
+    - The opinion should connect achievements to proposed U.S. role.
+    - The tone should be neutral and professional, not ecstatic.
+    - If formal consultation is unavailable, document attempts and use expert evidence carefully.
+    step_ids:
+    - consultation_source_summary
+    - consultation_content_summary
+    - consultation_documents
+  general_beneficiary_information:
+    section_id: 5.4.A
+    title: '[A] General information about the beneficiary, field, professional biography, achievements, and expert recognition'
+    purpose: Give a controlled overview of beneficiary, field, specialization, biography, education/training, and expert recognition
+      before criteria analysis.
+    required_blocks:
+    - overview
+    - field_and_specialization
+    - professional_biography
+    - education_and_training_if_relevant
+    - selected_achievements_summary
+    - support_letters_overview
+    writing_sequence: Draft after reviewing criteria evidence so the overview reflects strongest documented facts.
+    llm_instructions:
+    - One or two paragraphs for overview, then structured biography.
+    - Do not write a CV dump. Each career stage must explain relevance to distinction or extraordinary achievement.
+    - Use only 4-7 strongest quotes from letters.
+    - If the case is MPTV, connect biography to productions and industry credits.
+    step_ids:
+    - beneficiary_overview
+    - field_specialization
+    - professional_biography
+    - education_training
+    - support_letters_overview
+  eligibility_criteria:
+    section_id: 5.4.B
+    title: '[B] Evidence of O-1B eligibility'
+    purpose: Analyze significant award path, claimed criteria, and comparable evidence if applicable.
+    rule: The petition must show either significant national/international award or nomination, or at least three of six criteria.
+      Comparable evidence is allowed only for O-1B Arts when a listed criterion does not readily apply.
+  totality_conclusion:
+    section_id: 5.4.C
+    title: '[C] Totality conclusion: distinction / extraordinary achievement'
+    purpose: After criteria are addressed, explain why the record as a whole establishes the O-1B standard.
+    required_analysis:
+    - summarize_met_criteria_without_repeating_full_sections
+    - explain_sustained_national_or_international_acclaim_for_arts_or_record_of_extraordinary_achievement_for_mptv
+    - explain_recognition_in_the_field_through_extensive_documentation
+    - connect_past_acclaim_to_proposed_us_work
+    - address_totality_of_evidence
+    avoid:
+    - Do not call it final merits determination.
+    - Do not rely only on number of criteria.
+    - Do not introduce unsupported new achievements.
+    step_ids:
+    - totality_summary
+    - distinction_or_achievement_argument
+    - continued_work_bridge
+  employment_contracts_itinerary:
+    section_id: '5.5'
+    title: Section IV. Employment, Contracts, and Itinerary
+    purpose: Prove beneficiary is coming temporarily to the United States to work in the area of extraordinary ability/achievement
+      and document the events or activities for the requested validity period.
+    required_elements:
+    - nature_of_events_or_activities
+    - beginning_and_ending_dates
+    - itinerary_if_applicable
+    - contracts_or_summary_of_oral_agreement
+    - position_role_duties
+    - compensation_terms
+    - locations
+    - connection_to_area_of_extraordinary_ability_or_achievement
+    evidence_blocks:
+    - offer_letter
+    - employment_contract
+    - services_agreement
+    - agent_agreements
+    - itinerary_table
+    - project_plan
+    - production_schedule
+    - petitioner_statement
+    - compensation_terms
+    llm_instructions:
+    - Do not describe speculative work as confirmed.
+    - For a three-year period, the itinerary/project plan must justify the full period.
+    - For multiple employers through an agent, each engagement should identify actual employer/client, dates, duties, and
+      terms.
+    - The duties must fall within the same area of extraordinary ability/achievement, but O-1B Arts does not require proving
+      that each duty itself requires a person of extraordinary ability.
+    step_ids:
+    - employment_summary
+    - contracts_summary
+    - itinerary_table_generation
+    - continued_work_connection
+criteria:
+  significant_award_path:
+    key: significant_award_path
+    section: B.0
+    title: Evidence of receipt of or nomination for a significant national or international award or prize in the particular
+      field
+    applicable_tracks:
+    - arts
+    - mptv
+    use_only_if: The award or nomination is truly significant at the national or international level in the particular field.
+      Weak awards should usually be analyzed under Criterion 2, 4, or 5 instead.
+    legal_test:
+      required_elements:
+      - beneficiary_received_or_was_nominated_for_award
+      - award_is_significant
+      - award_is_national_or_international
+      - award_is_in_particular_field
+      uscis_considerations:
+      - award_history_and_reputation
+      - selection_criteria
+      - jury_or_selecting_body
+      - prior_recipients_or_nominees
+      - field_recognition
+      - media_or_industry_coverage
+    evidence_blocks:
+    - award_certificate_or_nomination_notice
+    - official_award_rules
+    - official_winner_or_nominee_page
+    - organizer_confirmation
+    - jury_information
+    - media_or_trade_coverage
+    - prior_recipient_information
+    - explanatory_note
+    output_structure:
+    - intro_summary
+    - fact_of_award_or_nomination
+    - award_significance
+    - basis_for_selection
+    - field_relevance
+    - conclusion
+    step_ids:
+    - significant_award_fact
+    - significant_award_significance
+    - significant_award_conclusion
+    risk_flags:
+    - student_or_local_award_only
+    - participation_certificate
+    - award_from_employer_or_client_only
+    - no_external_evidence_of_significance
+  criterion_1_lead_starring_events:
+    number: 1
+    key: criterion_1_lead_starring_events
+    section: B.1
+    title: Evidence that the beneficiary has performed, and will perform, services as a lead or starring participant in productions
+      or events with distinguished reputations.
+    cover_text: Evidence that {preferred_reference} has performed, and will perform, services as a lead or starring participant
+      in productions or events with distinguished reputations.
+    applicable_tracks:
+    - arts
+    - mptv
+    regulatory_focus: Past and prospective lead/starring services in productions or events that have distinguished reputations.
+    legal_test:
+      required_elements:
+      - past_production_or_event_existed
+      - past_production_or_event_has_distinguished_reputation
+      - beneficiary_past_role_was_lead_or_starring
+      - accepted_public_facing_evidence_supports_role_and_reputation
+      - prospective_production_or_event_exists_or_is_planned
+      - beneficiary_will_perform_lead_or_starring_services
+      - prospective_event_reputation_or_anticipation_is_documented
+      uscis_considerations:
+      - lead_role_can_be_principal_role
+      - starring_role_means_great_prominence_relative_to_others
+      - distinguished_reputation_may_be shown by critical reception, attendance, commercial success, venue, organizer reputation,
+        or other field indicators
+      - future production reputation may rely on advance publicity, endorsements, or reputation of same organizers/similar
+        past events
+      - criterion_1_is_for_productions_or_events_not_organizations
+      preponderance_note: For each required element, draft the paragraph so that the claimed fact is more likely than not
+        based on the documents cited.
+    accepted_evidence_forms:
+    - critical_reviews
+    - advertisements
+    - publicity_releases
+    - publications
+    - contracts
+    - endorsements
+    classic_cases:
+    - lead artist in performance
+    - headliner of festival
+    - principal performer
+    - featured artist in exhibition
+    - lead curator or creative director if public materials show central creative role
+    - lead production designer/costume designer/sound designer when production credits and publicity show prominence
+    evidence_blocks:
+    - past_contracts
+    - programs_or_credits
+    - advertisements
+    - publicity_releases
+    - critical_reviews
+    - public_endorsements
+    - publications_about_event
+    - attendance_or_venue_evidence
+    - prospective_contracts_or_itinerary
+    - advance_publicity
+    output_structure:
+    - intro_argument
+    - list_of_documents
+    - past_role_1_fact
+    - past_role_1_event_reputation
+    - past_role_2_if_any
+    - prospective_role_fact
+    - prospective_event_reputation
+    - bridge_past_to_future
+    - criterion_conclusion
+    step_ids:
+    - criterion_1_past_lead_role
+    - criterion_1_event_reputation
+    - criterion_1_future_lead_role
+    - criterion_1_conclusion
+    citation_rule: Each factual claim must cite a specific Exhibit and page placeholder. Use page placeholders at drafting
+      stage and resolve after assembly.
+    risk_flags:
+    - only_unpublished_recommendation_letters
+    - beneficiary_one_of_many_participants_without_prominence
+    - event_reputation_not_documented
+    - no_future_role_evidence
+    llm_writing_notes:
+    - Do not use private recommendation letters as primary evidence for this criterion.
+    - Separate Criterion 1 productions/events from Criterion 3 organizations/establishments.
+    validation_checks:
+    - criterion_is_listed_in_case_config.claimed_criteria.primary_or_secondary_before_including_in_cover_letter
+    - all_referenced_evidence_items_exist_in_evidence_inventory
+    - each_required_element_has_at_least_one_evidence_item_or_is_marked_risky
+    - no_unsupported_superlatives
+    - page_placeholders_marked_for_resolution_after_pdf_assembly
+  criterion_2_published_recognition:
+    number: 2
+    key: criterion_2_published_recognition
+    section: B.2
+    title: Evidence that the beneficiary has achieved national or international recognition for achievements evidenced by
+      critical reviews or other published materials by or about the beneficiary in major newspapers, trade journals, magazines,
+      or other publications.
+    cover_text: Evidence that {preferred_reference} has achieved national or international recognition for achievements through
+      critical reviews or published materials by or about {object_pronoun}.
+    applicable_tracks:
+    - arts
+    - mptv
+    regulatory_focus: Recognition for achievements through published materials by or about the beneficiary in qualifying publications.
+    legal_test:
+      required_elements:
+      - published_material_exists
+      - material_is_by_or_about_beneficiary
+      - material_discusses_achievements_or_work
+      - publication_qualifies_as_major_newspaper_trade_journal_magazine_or_other_publication
+      - publication_status_supports_national_or_international_recognition
+      - title_date_author_translation_are_included
+      uscis_considerations:
+      - beneficiary_need_not_be_only_subject
+      - material_about_broader_project_can_qualify_if_beneficiary_or_work_is_discussed
+      - content_of_material_and_level_of_publication_recognition_are both considered
+      - circulation_readership_viewership_or_trade_audience_can_support publication_status
+      preponderance_note: For each required element, draft the paragraph so that the claimed fact is more likely than not
+        based on the documents cited.
+    accepted_evidence_forms:
+    - critical_reviews
+    - published_materials_by_or_about_beneficiary
+    - online_publications
+    - radio_or_video_transcripts
+    classic_cases:
+    - review of artist work
+    - professional interview focused on achievements
+    - major media profile
+    - catalog essay discussing beneficiary work
+    - trade publication article about beneficiary contribution
+    evidence_blocks:
+    - articles_about_beneficiary
+    - critical_reviews
+    - interviews_discussing_achievements
+    - catalogs_with_curatorial_text
+    - trade_journal_profiles
+    - major_media_features
+    - publication_audience_or_traffic_data
+    - editorial_or_publication_profile
+    - translations
+    output_structure:
+    - intro_argument
+    - list_of_documents
+    - publication_1_summary
+    - publication_1_about_beneficiary_and_achievements
+    - publication_1_publication_status
+    - repeat_for_each_publication
+    - comparative_or_cumulative_recognition_summary
+    - criterion_conclusion
+    step_ids:
+    - criterion_2_publication_fact
+    - criterion_2_publication_status
+    - criterion_2_recognition_conclusion
+    citation_rule: Each factual claim must cite a specific Exhibit and page placeholder. Use page placeholders at drafting
+      stage and resolve after assembly.
+    risk_flags:
+    - only_social_media_posts
+    - portfolio_or_self_published_page
+    - article_only_about_employer
+    - no_author_date_title
+    - no_publication_reputation_evidence
+    llm_writing_notes:
+    - For each publication identify title, date, author, publication, and what achievement is recognized.
+    - Do not describe advertisements or paid promo as independent recognition unless the record supports editorial/publication
+      value.
+    validation_checks:
+    - criterion_is_listed_in_case_config.claimed_criteria.primary_or_secondary_before_including_in_cover_letter
+    - all_referenced_evidence_items_exist_in_evidence_inventory
+    - each_required_element_has_at_least_one_evidence_item_or_is_marked_risky
+    - no_unsupported_superlatives
+    - page_placeholders_marked_for_resolution_after_pdf_assembly
+  criterion_3_lead_critical_organizations:
+    number: 3
+    key: criterion_3_lead_critical_organizations
+    section: B.3
+    title: Evidence that the beneficiary has performed, and will perform, in a lead, starring, or critical role for organizations
+      and establishments that have distinguished reputations.
+    cover_text: Evidence that {preferred_reference} has performed, and will perform, in a lead, starring, or critical role
+      for organizations and establishments with distinguished reputations.
+    applicable_tracks:
+    - arts
+    - mptv
+    regulatory_focus: Past/current and prospective lead, starring, or critical role for distinguished organizations or establishments,
+      including distinguished divisions or departments.
+    legal_test:
+      required_elements:
+      - organization_or_establishment_exists
+      - organization_or_relevant_division_has_distinguished_reputation
+      - beneficiary_past_role_was_lead_starring_or_critical
+      - beneficiary_contributed_in_way_significant_to_organization_activities
+      - prospective_organization_or_establishment_exists
+      - beneficiary_will_perform_lead_starring_or_critical_role_prospectively
+      - prospective_role_is_connected_to_distinguished_organization_or_division
+      uscis_considerations:
+      - criterion_3_is_for_organizations_or_establishments_not_productions_or_events
+      - lead_role_can_be_principal_role_in_organization
+      - critical_role_requires importance to organization goals or activities
+      - letters_with_personal_knowledge_can_be_helpful
+      - organization_reputation_may_be shown by customer base, longevity, media coverage, awards, scale, or field reputation
+      - direct employment by organization is not required
+      preponderance_note: For each required element, draft the paragraph so that the claimed fact is more likely than not
+        based on the documents cited.
+    accepted_evidence_forms:
+    - articles_in_newspapers
+    - trade_journals
+    - publications
+    - testimonials
+    - contracts
+    - organizational_documents
+    classic_cases:
+    - creative director for distinguished studio
+    - principal designer for renowned brand or institution
+    - lead artist for museum/major gallery project
+    - critical production role for distinguished production company
+    - department head in award-winning creative organization
+    evidence_blocks:
+    - employment_or_service_contracts
+    - organizational_charts
+    - job_descriptions
+    - credits
+    - letters_from_authorized_persons
+    - testimonials_with_role_details
+    - organization_profile
+    - media_about_organization
+    - awards_or_rankings_of_organization
+    - prospective_contract_or_offer
+    - scope_of_work
+    output_structure:
+    - intro_argument
+    - list_of_documents
+    - organization_reputation
+    - past_role_hierarchy_or_significance
+    - specific_contributions_and_outcomes
+    - prospective_role_and_organization
+    - bridge_past_to_future
+    - criterion_conclusion
+    step_ids:
+    - criterion_3_org_reputation
+    - criterion_3_role_significance
+    - criterion_3_future_role
+    - criterion_3_conclusion
+    citation_rule: Each factual claim must cite a specific Exhibit and page placeholder. Use page placeholders at drafting
+      stage and resolve after assembly.
+    risk_flags:
+    - organization_reputation_not_documented
+    - role_title_sounds_senior_but_duties_are_generic
+    - testimonial_lacks_author_credentials_or_basis_of_knowledge
+    - no_future_organization_role_evidence
+    llm_writing_notes:
+    - Explain whether the role is lead/starring or critical. Do not rely on title alone.
+    - For critical role, show why the work mattered to the organization, not merely that the beneficiary was competent.
+    validation_checks:
+    - criterion_is_listed_in_case_config.claimed_criteria.primary_or_secondary_before_including_in_cover_letter
+    - all_referenced_evidence_items_exist_in_evidence_inventory
+    - each_required_element_has_at_least_one_evidence_item_or_is_marked_risky
+    - no_unsupported_superlatives
+    - page_placeholders_marked_for_resolution_after_pdf_assembly
+  criterion_4_major_success:
+    number: 4
+    key: criterion_4_major_success
+    section: B.4
+    title: Evidence that the beneficiary has a record of major commercial or critically acclaimed successes.
+    cover_text: Evidence that {preferred_reference} has a record of major commercial or critically acclaimed successes.
+    applicable_tracks:
+    - arts
+    - mptv
+    regulatory_focus: Record of major commercial or critically acclaimed successes shown through publications reporting indicators
+      such as title, rating, standing, box office receipts, television or motion picture ratings, sales, revenue, or other
+      occupational achievements.
+    legal_test:
+      required_elements:
+      - success_indicator_exists
+      - success_is_major_in_relevant_field
+      - success_is_commercial_or_critically_acclaimed
+      - success_is_reported_in_trade_journals_major_newspapers_or_other_publications
+      - record_connects_success_to_beneficiary_or_beneficiary_work
+      uscis_considerations:
+      - publication_may_be_about_production_not_beneficiary_if_record_links_production_success_to_beneficiary_contribution
+      - commercial_success_evidence_should_show ratings_receipts_sales_revenue_standing_or_other occupational achievement
+        are major
+      - critically_acclaimed_success_requires public-facing praise or positive reviews in relevant field
+      preponderance_note: For each required element, draft the paragraph so that the claimed fact is more likely than not
+        based on the documents cited.
+    accepted_evidence_forms:
+    - publications_reporting_commercial_success
+    - publications_reporting_critical_success
+    - trade_journals
+    - major_newspapers
+    - other_publications
+    - transcripts_of_radio_or_video_coverage
+    classic_cases:
+    - film or show box office success tied to beneficiary role
+    - critically praised exhibition where beneficiary was featured artist
+    - production with high ratings where beneficiary had credited major role
+    - album/tour/event with documented sales or attendance and beneficiary principal contribution
+    evidence_blocks:
+    - box_office_or_sales_publications
+    - ratings_publications
+    - revenue_or_attendance_reports
+    - rankings
+    - major_newspaper_or_trade_publication_reviews
+    - professional_critic_reviews
+    - award_or_nomination_coverage_as_success_context
+    - evidence_linking_beneficiary_role_to_success
+    output_structure:
+    - intro_argument
+    - list_of_documents
+    - success_1_indicator
+    - why_success_is_major
+    - beneficiary_connection_to_success
+    - success_2_if_any
+    - cumulative_record_summary
+    - criterion_conclusion
+    step_ids:
+    - criterion_4_success_indicator
+    - criterion_4_success_majority
+    - criterion_4_beneficiary_connection
+    - criterion_4_conclusion
+    citation_rule: Each factual claim must cite a specific Exhibit and page placeholder. Use page placeholders at drafting
+      stage and resolve after assembly.
+    risk_flags:
+    - success_of_project_not_connected_to_beneficiary
+    - internal_metrics_only_without_publication
+    - publication_does_not_show_major_success
+    - only_award_certificate_without success context
+    llm_writing_notes:
+    - This criterion is evidence-through-publications heavy. Private letters alone generally do not establish it.
+    - If using production success, explain why that production success represents the beneficiary’s success.
+    validation_checks:
+    - criterion_is_listed_in_case_config.claimed_criteria.primary_or_secondary_before_including_in_cover_letter
+    - all_referenced_evidence_items_exist_in_evidence_inventory
+    - each_required_element_has_at_least_one_evidence_item_or_is_marked_risky
+    - no_unsupported_superlatives
+    - page_placeholders_marked_for_resolution_after_pdf_assembly
+  criterion_5_significant_recognition:
+    number: 5
+    key: criterion_5_significant_recognition
+    section: B.5
+    title: Evidence that the beneficiary has received significant recognition for achievements from organizations, critics,
+      government agencies, or other recognized experts in the field.
+    cover_text: Evidence that {preferred_reference} has received significant recognition for achievements from organizations,
+      critics, government agencies, or recognized experts in the field.
+    applicable_tracks:
+    - arts
+    - mptv
+    regulatory_focus: Significant recognition for one or more achievements from authoritative sources in the field. The significance
+      of the recognition depends heavily on who is recognizing the achievement and why that source is authoritative.
+    legal_test:
+      required_elements:
+      - beneficiary_has_specific_achievement
+      - recognition_source_is_organization_critic_government_agency_or_recognized_expert
+      - recognition_is_significant_based_on_source_authority
+      - testimonial_clearly_indicates_author_authority_expertise_and_knowledge
+      - testimonial_describes_achievement_and_why_it_matters
+      uscis_considerations:
+      - significant_modifies_recognition_not_achievement
+      - testimonial_from_organization_or_agency_should explain author connection and organization significance
+      - critic_or_expert_testimonial_should describe credentials expertise and basis of knowledge
+      - testimonial itself may qualify as significant recognition if source significance is established
+      preponderance_note: For each required element, draft the paragraph so that the claimed fact is more likely than not
+        based on the documents cited.
+    accepted_evidence_forms:
+    - testimonials_from_organizations
+    - testimonials_from_critics
+    - testimonials_from_government_agencies
+    - testimonials_from_recognized_experts
+    classic_cases:
+    - letter from museum curator recognizing specific artistic contribution
+    - letter from government cultural body recognizing achievement
+    - critic letter analyzing beneficiary work
+    - recognized producer/director/designer explaining why beneficiary achievement is significant
+    evidence_blocks:
+    - expert_testimonial_letters
+    - letters_from_art_organizations
+    - critic_letters
+    - government_agency_letters
+    - curator_or_producer_letters
+    - author_credentials_evidence
+    - explanatory_notes_on_authors
+    - evidence_of_author_reputation
+    - evidence_of_recognized_organization_status
+    output_structure:
+    - intro_argument
+    - list_of_documents
+    - author_1_authority
+    - achievement_recognized_by_author_1
+    - why_recognition_is_significant
+    - repeat_for_key_authors
+    - cumulative_recognition_summary
+    - criterion_conclusion
+    step_ids:
+    - criterion_5_authority_of_recognizer
+    - criterion_5_achievement_recognized
+    - criterion_5_significance
+    - criterion_5_conclusion
+    citation_rule: Each factual claim must cite a specific Exhibit and page placeholder. Use page placeholders at drafting
+      stage and resolve after assembly.
+    risk_flags:
+    - generic_recommendation_about_good_character
+    - author_not_shown_as_recognized_expert
+    - letter_does_not_describe_specific_achievement
+    - letter_has_no_basis_of_knowledge
+    llm_writing_notes:
+    - This is often a core O-1B Arts criterion, but letters must be precise and achievement-focused.
+    - Use fewer stronger letters rather than many vague letters.
+    validation_checks:
+    - criterion_is_listed_in_case_config.claimed_criteria.primary_or_secondary_before_including_in_cover_letter
+    - all_referenced_evidence_items_exist_in_evidence_inventory
+    - each_required_element_has_at_least_one_evidence_item_or_is_marked_risky
+    - no_unsupported_superlatives
+    - page_placeholders_marked_for_resolution_after_pdf_assembly
+  criterion_6_high_remuneration:
+    number: 6
+    key: criterion_6_high_remuneration
+    section: B.6
+    title: Evidence that the beneficiary has either commanded a high salary or will command a high salary or other substantial
+      remuneration for services in relation to others in the field.
+    cover_text: Evidence that {preferred_reference} has commanded, or will command, a high salary or other substantial remuneration
+      in relation to others in the field.
+    applicable_tracks:
+    - arts
+    - mptv
+    regulatory_focus: Past or future compensation is high relative to others working in the same field, measured against reliable
+      comparison data and using a like-for-like comparison.
+    legal_test:
+      required_elements:
+      - beneficiary_past_or_future_compensation_is_documented
+      - comparison_group_is_relevant_to_field_and_location
+      - comparison_data_is_reliable
+      - salary_or_remuneration_metric_matches_beneficiary_pay_structure
+      - compensation_is_high_relative_to_others
+      uscis_considerations:
+      - future compensation may be evaluated through credibility of contracts or offer letters
+      - government wage survey data may be useful
+      - broad occupations may be insufficient comparisons
+      - user-reported salary data may be weak if sample is small or unreliable
+      - location and currency matter for non-US earnings
+      - artists may be paid daily/project rates and hours may need explanation
+      preponderance_note: For each required element, draft the paragraph so that the claimed fact is more likely than not
+        based on the documents cited.
+    accepted_evidence_forms:
+    - contracts
+    - reliable_salary_surveys
+    - pay_statements
+    - tax_documents
+    - industry_compensation_reports
+    - other_reliable_evidence
+    classic_cases:
+    - artist project fees above market for comparable performers/designers
+    - future U.S. contract compensation above field benchmarks
+    - documented daily rate above comparable artists in same location/field
+    evidence_blocks:
+    - employment_contracts
+    - offer_letters
+    - pay_statements
+    - tax_documents
+    - invoices
+    - bank_records
+    - project_fee_agreements
+    - royalty_statements
+    - wage_surveys
+    - government wage data
+    - industry compensation reports
+    - expert explanation of compensation norms
+    output_structure:
+    - intro_argument
+    - list_of_documents
+    - beneficiary_compensation_fact
+    - comparison_data_explanation
+    - like_for_like_comparison
+    - location_currency_time_period_adjustment
+    - future_compensation_credibility_if_applicable
+    - criterion_conclusion
+    step_ids:
+    - criterion_6_compensation_fact
+    - criterion_6_comparison_data
+    - criterion_6_high_relative_analysis
+    - criterion_6_conclusion
+    citation_rule: Each factual claim must cite a specific Exhibit and page placeholder. Use page placeholders at drafting
+      stage and resolve after assembly.
+    risk_flags:
+    - converted_foreign_income_to_usd_without_local_context
+    - comparison_to_wrong_occupation
+    - annual_salary_compared_to_project_fee_without hours or duration
+    - user_reported_salary_site_only
+    - unpaid_or_nominal_contract
+    llm_writing_notes:
+    - 'Explain compensation model clearly: salary, hourly, daily, project-based, royalty, or mixed.'
+    - If pay is irregular but industry-normal, explain the industry norm and use appropriate comparison data.
+    validation_checks:
+    - criterion_is_listed_in_case_config.claimed_criteria.primary_or_secondary_before_including_in_cover_letter
+    - all_referenced_evidence_items_exist_in_evidence_inventory
+    - each_required_element_has_at_least_one_evidence_item_or_is_marked_risky
+    - no_unsupported_superlatives
+    - page_placeholders_marked_for_resolution_after_pdf_assembly
+  comparable_evidence:
+    key: comparable_evidence
+    section: B.Comparable
+    title: Comparable evidence for O-1B Arts, if a listed criterion is not readily applicable
+    applicable_tracks:
+    - arts
+    not_applicable_to:
+    - mptv
+    use_only_if: A specific listed criterion is not readily applicable to the beneficiary’s occupation and the substitute
+      evidence is genuinely comparable to that criterion.
+    legal_test:
+      required_elements:
+      - identify_specific_criterion_not_readily_applicable
+      - explain_why_not_readily_applicable_to_occupation
+      - identify_substitute_evidence
+      - explain_why_substitute_evidence_is_comparable
+      - still_meet_at_least_three_separate_criteria_total
+      uscis_considerations:
+      - general_unsupported_assertion_is_not_probative
+      - cannot_use_comparable_evidence_merely_because_beneficiary_cannot_satisfy_a_readily_applicable_criterion
+      - criterion_need_not_be entirely inapplicable, but must not be easily applicable to the job/profession
+    output_structure:
+    - criterion_not_readily_applicable
+    - occupation_specific_explanation
+    - description_of_comparable_evidence
+    - comparability_analysis
+    - conclusion
+    evidence_blocks:
+    - occupation_explanation
+    - industry_norms
+    - substitute_evidence
+    - expert_explanation_of_comparability
+    step_ids:
+    - comparable_evidence_applicability
+    - comparable_evidence_comparability
+    - comparable_evidence_conclusion
+    risk_flags:
+    - case_is_mptv
+    - criterion_is_readily_applicable
+    - substitute_evidence_not_comparable
+    - generic_statement_without_details
+evidence_model:
+  evidence_item_schema:
+    id: '{EXHIBIT_OR_SUBEXHIBIT_ID}'
+    title: '{DOCUMENT_TITLE}'
+    page_range: '{PAGE_RANGE}'
+    evidence_type: '{primary|secondary|testimonial|official|media|contract|translation|explanatory_note}'
+    submitted_as: '{initial|new|resubmitted|draft}'
+    language: '{English|Russian|Other}'
+    translation_required: '{true|false}'
+    proves:
+    - '{FACT_1}'
+    - '{FACT_2}'
+    supports_legal_elements:
+    - '{CRITERION_KEY.required_element}'
+    use_in_sections:
+    - '{section_id_or_criterion_key}'
+    citation_text: '(Please kindly refer to Exhibit {id}, page {page_range}: {title}.)'
+    production_notes:
+    - '{update_page_after_pdf_assembly}'
+    - '{verify_translation_certificate}'
+  recommended_exhibit_map:
+    '0': 'General beneficiary documents: CV, passport, education, portfolio, biography'
+    0-1: Testimonial / significant recognition letters and explanatory notes
+    '1': Petitioner / U.S. Agent documents
+    '2': Consultation / Advisory Opinion
+    '3': Employment, contracts, compensation terms, itinerary, project plan
+    '4': 'Criterion 1: Lead/starring participant in distinguished productions or events'
+    '5': 'Criterion 2: Published recognition'
+    '6': 'Criterion 3: Lead/starring/critical role for distinguished organizations'
+    '7': 'Criterion 4: Major commercial or critically acclaimed successes'
+    '8': 'Criterion 5: Significant recognition from organizations/critics/government/experts'
+    '9': 'Criterion 6: High salary or substantial remuneration'
+    '10': Comparable evidence for O-1B Arts, if used
+  primary_secondary_logic:
+    primary_evidence_examples:
+    - contracts
+    - official credits
+    - award certificates
+    - publication copies
+    - pay statements
+    - tax records
+    - official advisory opinion
+    - organizational charts
+    - programs
+    secondary_evidence_examples:
+    - screenshots
+    - media profiles of organization
+    - traffic data
+    - ratings data
+    - explanatory notes
+    - archive pages
+    - photos
+    testimonial_evidence_examples:
+    - recognized expert letters
+    - critic testimonials
+    - organization letters
+    - government agency letters
+    rule: Primary evidence proves the core fact; secondary evidence proves context, scale, reputation, recognition, or reliability.
+divider_pages:
+  enabled: true
+  types:
+    exhibit_group:
+      title_template: Exhibit {exhibit_number}. {exhibit_title}
+      include:
+      - section_or_criterion_name
+      - short_purpose
+      - document_list
+      - page_range_placeholder
+      style: large_centered_heading
+    subexhibit:
+      title_template: '{exhibit_number}.{sub_number}. {document_title}'
+      include:
+      - evidence_type
+      - submitted_as
+      - translation_note
+      - proves_list
+      style: standard_heading
+    original_document_separator:
+      title_template: Original Document
+      include:
+      - document_title
+      - language
+      style: small_centered_heading
+    english_translation_separator:
+      title_template: English Translation
+      include:
+      - document_title
+      - certificate_note_if_applicable
+      style: small_centered_heading
+    explanatory_note_separator:
+      title_template: Explanatory Note
+      include:
+      - what_the_note_explains
+      - sources_used
+      style: small_centered_heading
+  generation_rule: Divider pages must be generated from evidence_inventory, not manually invented by the LLM.
+validation_rules:
+  required_before_drafting:
+  - case_config.beneficiary.full_legal_name is not placeholder
+  - case_config.petitioner.type is selected
+  - case_config.o1b_track is arts or mptv
+  - case_config.field.field_name and specialization are set
+  - case_config.requested_validity has start and end dates
+  - consultation.status is selected
+  - at least one eligibility path selected
+  required_before_final_document:
+  - all page XX placeholders resolved
+  - current USCIS forms, editions, fees, and filing address verified
+  - all claimed criteria have evidence satisfying required elements or are marked risky/backup
+  - cover letter lists only claimed criteria
+  - MPTV case does not include comparable evidence
+  - Arts case using comparable evidence includes specific non-applicability and comparability analysis
+  - Criteria 1 and 3 include both past and prospective evidence unless not claimed
+  - all non-English documents have translations and certificate notes where required
+  - citation format consistent throughout
+  - beneficiary pronouns consistent throughout
+  - O-1B terminology used consistently and EB-1A/O-1A language removed
+  red_flags_for_human_review:
+  - petitioner_is_beneficiary_owned_company_without_clear_control_or_governance_explanation
+  - three_year_validity_requested_without itinerary or project plan covering full period
+  - advisory_opinion_missing_or_from_wrong_field
+  - MPTV classification unclear for internet/new_media/content_project
+  - salary criterion based only on weak user-reported data
+  - published materials are self-published or social media only
+  - future U.S. work not connected to past acclaim/achievement
+  - roles are described as critical without measurable/significant explanation
+prompt_registry:
+  cover_letter_header: Generate the formal cover heading, USCIS address placeholder, RE line, petitioner/beneficiary identification,
+    classification, petition type, and requested validity period.
+  cover_letter_o1b_track_summary: 'Explain the selected O-1B track and standard: distinction for Arts or extraordinary achievement
+    for MPTV. Do not use EB-1A language.'
+  criterion_1_past_lead_role: For each past production/event, state the event, date, venue/organizer, beneficiary role, and
+    why the role was lead/starring using public-facing evidence.
+  criterion_1_event_reputation: Explain distinguished reputation of the production/event using critical reviews, attendance,
+    commercial success, publicity, venue/organizer reputation, or similar indicators.
+  criterion_2_publication_fact: Summarize each publication with title, date, author, publication, what it says about the beneficiary
+    or work, and why it recognizes an achievement.
+  criterion_2_publication_status: Explain why each publication qualifies by audience, circulation, readership, viewership,
+    trade relevance, editorial status, or reputation.
+  criterion_3_role_significance: Explain hierarchy, responsibilities, scope, and why the role was lead/starring/critical for
+    a distinguished organization or establishment.
+  criterion_4_success_majority: Explain why the commercial or critical success is major in the relevant field and connect
+    it to the beneficiary’s role or work.
+  criterion_5_authority_of_recognizer: Describe the author/organization/critic/government agency authority, expertise, basis
+    of knowledge, and why the recognition is significant.
+  criterion_6_high_relative_analysis: Compare documented compensation to reliable field/location/occupation benchmarks and
+    explain why the comparison is like-for-like.
+  employment_summary: Describe the proposed U.S. role, duties, dates, compensation, locations, contracts, and how the work
+    continues in the area of extraordinary ability/achievement.
+  totality_summary: Summarize why the record as a whole establishes distinction or extraordinary achievement without repeating
+    every criterion.
