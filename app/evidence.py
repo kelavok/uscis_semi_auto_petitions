@@ -4,6 +4,7 @@ import csv
 import hashlib
 import logging
 import re
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
@@ -16,6 +17,7 @@ from .workflow import (
     extract_docx_text,
     load_case,
 )
+from .file_rules import is_office_temporary_file, is_prompt_sidecar
 
 
 INDEX_FIELDS = [
@@ -511,8 +513,16 @@ def _extract_text(file_path: Path, loaded: LoadedCase, doc_id: str) -> Extractio
         text = file_path.read_text(encoding="utf-8-sig", errors="replace")
         status = "text_extracted"
     elif suffix in DOCX_EXTENSIONS:
-        text = extract_docx_text(file_path)
-        status = "text_extracted" if text.strip() else "docx_no_extractable_text"
+        try:
+            text = extract_docx_text(file_path)
+            status = "text_extracted" if text.strip() else "docx_no_extractable_text"
+        except (OSError, KeyError, ValueError, zipfile.BadZipFile) as exc:
+            text = ""
+            status = "docx_invalid_or_corrupt"
+            note = (
+                "The file has a .docx extension but is not a readable Word ZIP package. "
+                f"Scanner continued without text extraction: {exc}"
+            )
     elif suffix in PDF_EXTENSIONS:
         text, status, note = _extract_pdf_text(file_path)
     elif suffix in IMAGE_EXTENSIONS:
@@ -672,12 +682,28 @@ def _iter_source_files(loaded: LoadedCase) -> list[tuple[Path, str]]:
         if not root.exists():
             continue
         for path in sorted(root.rglob("*")):
-            if path.is_file() and path.name != ".gitkeep":
+            if (
+                path.is_file()
+                and path.name != ".gitkeep"
+                and not is_prompt_sidecar(path)
+                and not is_office_temporary_file(path)
+            ):
                 files.append((path, source_kind))
     return files
 
 
 def _configured_source_paths(loaded: LoadedCase) -> list[tuple[str, str]]:
+    if str(loaded.config.get("task_type", "")) == "eb1a_rfe_response":
+        rfe_paths = [
+            ("source_rfe_new_originals", "original"),
+            ("source_rfe_new_translations", "translation"),
+            ("source_initial_filing_memo", "initial_filing_memo"),
+            ("source_rfe_notice", "rfe_notice"),
+            ("source_rfe_strategy", "rfe_strategy"),
+        ]
+        paths = loaded.config.get("paths", {})
+        if isinstance(paths, dict):
+            return [(key, kind) for key, kind in rfe_paths if key in paths]
     defaults = [
         ("source_originals", "original"),
         ("source_translations", "translation"),
@@ -753,14 +779,19 @@ def _document_type(path: Path) -> str:
 
 
 def _infer_category(loaded: LoadedCase, file_path: Path, source_kind: str) -> str:
-    source_key = _source_key_for_kind(loaded, source_kind)
-    if not source_key:
-        return source_kind
-    source_root = loaded.case_dir / _case_path_value(loaded.config, source_key)
-    try:
-        relative_parts = file_path.relative_to(source_root).parts
-    except ValueError:
-        return source_kind
+    relative_parts: tuple[str, ...] = ()
+    matches: list[tuple[int, tuple[str, ...]]] = []
+    paths = loaded.config.get("paths", {})
+    if isinstance(paths, dict):
+        for path_value in paths.values():
+            source_root = loaded.case_dir / Path(str(path_value))
+            try:
+                candidate_parts = file_path.relative_to(source_root).parts
+            except ValueError:
+                continue
+            matches.append((len(source_root.parts), candidate_parts))
+    if matches:
+        relative_parts = max(matches, key=lambda item: item[0])[1]
     if not relative_parts:
         return source_kind
     top_folder = relative_parts[0]

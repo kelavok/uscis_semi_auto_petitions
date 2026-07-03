@@ -13,6 +13,7 @@ from .workflow import (
     load_case,
     output_stem,
     PromptOptions,
+    selected_documents_for_step,
 )
 
 
@@ -54,6 +55,7 @@ class LLMUnit:
     latest_prompt: str
     output_file: str
     validated_file: str
+    selected_documents: tuple[tuple[str, str], ...]
 
     @property
     def key(self) -> str:
@@ -147,6 +149,20 @@ def _build_unit(
     action: Any,
 ) -> LLMUnit:
     step_id = str(step.get("step_id", ""))
+    unit_title = str(step.get("title", step_id))
+    unit_objective = str(step.get("objective", "")).strip()
+    if step.get("rfe_strategy_units") and episode_id:
+        from .rfe_strategy import get_strategy_unit
+
+        strategy_unit = get_strategy_unit(case_dir, episode_id, config)
+        if strategy_unit:
+            unit_title = str(strategy_unit.get("title", unit_title))
+            criterion = str(strategy_unit.get("criterion_role", criterion))
+            strategy = str(strategy_unit.get("strategy", "")).strip()
+            unit_objective = (
+                f"Draft {strategy_unit.get('section_type', 'RFE')} unit '{unit_title}'."
+                + (f" Controlling unit strategy: {strategy}" if strategy else "")
+            )
     options = PromptOptions(episode_id=episode_id, episode_folder=episode_folder)
     destination = destination_for_step(step, options)
     destination_path = case_dir / destination if destination else Path("__missing__")
@@ -177,10 +193,15 @@ def _build_unit(
     else:
         status = "pending"
     current = action.step_id == step_id and (action.episode_id or "") == episode_id
+    loaded = load_case(str(config.get("case_id", case_dir.name)))
+    selected_documents = tuple(
+        (row["document_id"], row["title"])
+        for row in selected_documents_for_step(loaded, step, options)
+    )
     return LLMUnit(
         step_id=step_id,
-        title=str(step.get("title", step_id)),
-        objective=str(step.get("objective", "")).strip(),
+        title=unit_title,
+        objective=unit_objective,
         episode_id=episode_id,
         episode_folder=episode_folder,
         criterion=criterion,
@@ -193,6 +214,7 @@ def _build_unit(
         latest_prompt=latest_prompt_path.name if latest_prompt_path.exists() else "",
         output_file=output_path.name if output_path.exists() else "",
         validated_file=validated_path.name if validated_path.exists() else "",
+        selected_documents=selected_documents,
     )
 
 

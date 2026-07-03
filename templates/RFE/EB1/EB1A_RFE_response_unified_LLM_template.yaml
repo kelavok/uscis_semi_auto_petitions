@@ -1,0 +1,785 @@
+schema_version: 1
+template_role: company_specific_eb1a_rfe_response_llm_interaction_and_script_assembly_map
+template_name: EB-1A RFE Response Company Draft YAML Structure
+template_date: '2026-07-01'
+created_for: LLM-driven drafting and script assembly under the new company RFE draft template
+source_references:
+- rfe draft template.docx - company-required EB-1A RFE response structure with cover letter, criterion-by-criterion rebuttal,
+  and final merits section
+- EB1A_RFE_response_unified_LLM_template(1).txt - prior unified LLM RFE response template with issue matrix, direct RFE-response
+  workflow, evidence labels, continued work, substantial benefit, final merits, and attachment/divider logic
+- USCIS Policy Manual, Volume 6, Part F, Chapter 2 - EB-1A extraordinary ability adjudication, two-step analysis, final merits,
+  continued work, and criterion logic
+- 8 CFR 204.5(h) - EB-1A regulatory criteria; verify current language before filing
+scope:
+  visa_classification: EB-1A
+  form: Form I-140
+  statutory_basis: INA § 203(b)(1)(A)
+  document_type: Response to Request for Evidence for Alien of Extraordinary Ability
+  company_template_order_is_mandatory: true
+  final_filing_language: English
+  instruction_language: Russian + English drafting blocks
+  core_rfe_method: Quote the RFE, identify the disputed issue, answer only that issue, cite relevant evidence, and conclude.
+  default_standard:
+    extraordinary_ability: Level of expertise indicating that the individual is one of the small percentage who have risen
+      to the very top of the field of endeavor.
+    eligibility_summary:
+    - extraordinary ability in sciences, arts, education, business, or athletics
+    - sustained national or international acclaim
+    - achievements recognized in the field through extensive documentation
+    - intention to continue work in the area of expertise
+    - entry will substantially benefit the United States prospectively
+    evidentiary_path: One-time major internationally recognized award or at least three of ten regulatory criteria, followed
+      by final merits analysis where applicable.
+  do_not_use:
+  - O-1B distinction terminology
+  - O-1A nonimmigrant language
+  - Form I-129 language
+  - NIW national importance framework as a substitute for EB-1A substantial benefit
+  - new biography-style petition where the RFE only requires narrow rebuttal
+  - claims that USCIS accepted a criterion unless the RFE expressly says so
+  - arguments on issues not disputed in the RFE unless needed for navigation or final merits
+company_template_principles:
+  primary_rule: Do not write about issues that the officer did not dispute in the RFE.
+  subheading_rule: Create clear, specific subheadings so the officer can immediately understand what exact RFE objection is
+    being answered.
+  answer_rule: Begin with the rebuttal, not with a generic restatement of the criterion.
+  evidence_rule: Use only evidence relevant to the exact RFE defect unless a broader context is necessary.
+  conclusion_rule: Every criterion section ends with a conclusion listing the elements or RFE points successfully rebutted.
+  non_duplication_rule: Previously submitted evidence may be cited and referenced without duplication unless resubmission
+    is strategic or requested.
+  officer_name_rule: If the RFE identifies an office chief or officer, use the company cover style with Dear Ms./Mr. [Name]
+    and officer; otherwise use Dear Officer.
+case_config:
+  case_metadata:
+    rfe_response_date: '{MONTH_DAY_YEAR}'
+    case_number: '{CASE_NUMBER}'
+    rfe_date: '{RFE_DATE}'
+    receipt_date: '{RECEIPT_DATE}'
+    uscis_office_or_service_center: '{USCIS_OFFICE_OR_SERVICE_CENTER}'
+    uscis_office_chief_name: '{USCIS_OFFICE_CHIEF_NAME_IF_KNOWN}'
+    address_line: TO USCIS
+  petitioner_beneficiary:
+    full_name: '{FIRST_AND_LAST_NAME}'
+    preferred_reference: '{Mr./Ms. Last Name}'
+    short_reference: '{Last Name}'
+    pronouns:
+      subject: '{he/she/they}'
+      object: '{him/her/them}'
+      possessive: '{his/her/their}'
+    field: '{FIELD}'
+    sub_field: '{SUB_FIELD}'
+    specialization: '{SPECIALIZATION}'
+  rfe_status_summary:
+    criteria_claimed_in_initial_petition:
+    - '{criterion_i}'
+    - '{criterion_iii}'
+    - '{criterion_v}'
+    - '{criterion_viii}'
+    - '{criterion_ix}'
+    criteria_expressly_recognized_by_uscis: []
+    criteria_disputed_in_rfe: []
+    criteria_unclear_or_not_discussed: []
+    continued_work_disputed: '{true|false}'
+    substantial_benefit_disputed: '{true|false}'
+    final_merits_disputed: '{true|false}'
+    general_evidence_reliability_disputed: '{true|false}'
+  filing_strategy:
+    default_order: follow_company_template_order
+    allowed_order_override: only if strategy requires evidentiary-strength order and cover letter explains it
+    resubmit_evidence_policy: '{resubmit_full|cite_initial_only|mixed}'
+    attachment_label: '{Exhibits|Attachments}'
+    citation_style: (Refer to Exhibit {id}, pages {page_range}.)
+rfe_issue_matrix_schema:
+  purpose: Internal matrix used before drafting. It tells the LLM exactly what to rebut and what not to waste oxygen on.
+  fields:
+    issue_id: '{RFE_ISSUE_ID}'
+    topic: '{criterion_i|criterion_ii|criterion_iii|criterion_iv|criterion_v|criterion_vi|criterion_vii|criterion_viii|criterion_ix|criterion_x|continued_work|substantial_benefit|final_merits|general_reliability}'
+    exact_rfe_quote: '{QUOTE_FROM_RFE}'
+    status_in_rfe: '{accepted|not_accepted|unclear|overlooked|general_concern}'
+    officer_disputed_elements:
+    - '{element_1}'
+    - '{element_2}'
+    elements_not_disputed_do_not_discuss:
+    - '{element}'
+    initial_evidence_referenced:
+    - '{EXHIBIT_OR_PAGE}'
+    new_evidence_added:
+    - '{EXHIBIT_OR_ATTACHMENT}'
+    response_strategy: '{direct_rebuttal|resubmit_overlooked_evidence|cure_gap_with_new_evidence|deprioritize_weak_criterion|legal_standard_correction}'
+    subheading_candidates:
+    - '{clear_subheading_1}'
+    - '{clear_subheading_2}'
+evidence_item_schema:
+  id: '{EXHIBIT_ID}'
+  title: '{DOCUMENT_TITLE}'
+  group: '{criterion_i|criterion_ii|criterion_iii|criterion_iv|criterion_v|criterion_vi|criterion_vii|criterion_viii|criterion_ix|criterion_x|final_merits|continued_work|substantial_benefit|general_reliability}'
+  page_range: '{PAGES_FROM_TO}'
+  evidence_status: '{previously_submitted|resubmitted|new_evidence|not_duplicated_reference_only}'
+  evidence_type: '{primary|secondary|testimonial|official|media|contract|salary_comparison|translation|explanatory_note}'
+  language: '{English|Russian|Other}'
+  translation_required: '{true|false}'
+  proves:
+  - '{specific_fact_or_legal_element}'
+  rfe_defect_cured:
+  - '{officer_objection_addressed}'
+  use_in_sections:
+  - '{section_key}'
+  source_reliability_note: '{why this evidence is reliable/probative}'
+  citation_format: '(Refer to Exhibit {id}: {title}, pages {page_range}.)'
+document_render_order:
+- cover_letter
+- optional_general_matters_if_triggered
+- criterion_1_awards_if_disputed
+- criterion_2_memberships_if_disputed
+- criterion_3_published_material_if_disputed
+- criterion_4_judging_if_disputed
+- criterion_5_original_contributions_if_disputed
+- criterion_6_scholarly_articles_if_disputed
+- criterion_7_display_if_disputed
+- criterion_8_leading_or_critical_role_if_disputed
+- criterion_9_high_salary_if_disputed
+- criterion_10_commercial_success_if_disputed
+- optional_continued_work_if_triggered
+- optional_substantial_benefit_if_triggered
+- final_merits_determination_if_triggered
+- conclusion_if_company_wants_separate_conclusion
+- exhibit_or_attachment_index
+- technical_separator_pages
+- evidence_blocks
+sections:
+  cover_letter:
+    heading: TO USCIS / RE line / Petitioner / Case No.
+    purpose: Identify the RFE response, beneficiary, field/sub-field, criteria addressed, criteria recognized by USCIS, and
+      the relationship to the original filing.
+    company_template_fields:
+    - date
+    - TO USCIS
+    - 'RE: I-140 Petition for Alien of Extraordinary Ability in FIELD (EB-1A) - SUB-FIELD'
+    - 'Petitioner: {BENEFICIARY_NAME}'
+    - 'Case No.: {CASE_NUMBER}'
+    - Dear {OFFICER_OR_OFFICERS}
+    drafting_rules:
+    - List only criteria actually addressed in the RFE response, unless the cover needs to summarize all initially claimed
+      criteria for context.
+    - Separate criteria recognized by USCIS from criteria still disputed.
+    - Do not list a criterion as recognized unless the RFE expressly recognizes it.
+    - Preserve the company template sentence explaining that previously submitted evidence is cited where relevant and not
+      duplicated when unnecessary.
+    - If none of the criteria were recognized, say so directly or omit the recognized-criteria block.
+    template: '[month ___, 20__]
+
+      TO USCIS
+
+
+      RE: I-140 Petition for Alien of Extraordinary Ability in [FIELD] (EB-1A) - [SUB-FIELD]
+
+      Petitioner: [BENEFICIARY FULL NAME]
+
+      Case No.: [CASE NUMBER]
+
+
+      Dear [Ms./Mr. USCIS office chief name, if known] and Officer:
+
+
+      Please accept this response to the Request for Evidence regarding the Form I-140 petition filed on behalf of Mr./Ms.
+      [FIRST AND LAST NAME] under INA § 203(b)(1)(A), who is a specialist in the field of [FIELD], and especially in [SPECIALIZATION].
+
+
+      We respectfully submit the enclosed additional evidence and explanations in response to the issues raised in the Request
+      for Evidence. This response provides additional documentary evidence and legal explanation in support of the remaining
+      criteria addressed in the RFE, namely:
+
+      [LIST ONLY CRITERIA ADDRESSED IN THIS RESPONSE]
+
+
+      [IF APPLICABLE]
+
+      USCIS recognized that Mr./Ms. [FIRST AND LAST NAME] satisfies the following criteria:
+
+      [LIST ONLY EXPRESSLY RECOGNIZED CRITERIA]
+
+
+      For the convenience of the adjudicating officer, this response also cites and references evidence previously submitted
+      with the original petition where relevant. Many supporting documents referenced throughout this response were already
+      included in the initial filing and are therefore not duplicated herein in order to avoid making the present response
+      unnecessarily voluminous and duplicative.
+
+
+      Accordingly, we respectfully request that USCIS consider this response together with the evidence, exhibits, and legal
+      arguments submitted in the original petition as part of the total evidentiary record.
+
+
+      Respectfully submitted,
+
+      [ATTORNEY / REPRESENTATIVE / BENEFICIARY NAME]
+
+      '
+  criteria:
+    criterion_1_awards:
+      heading: Criterion 1. Evidence of receipt of lesser nationally or internationally recognized prizes or awards for excellence
+      regulatory_label: Criterion (i)
+      exhibit_line: Exhibits from XX to XX, Pages from XX to XX.
+      rfe_quote_block: 'In the RFE, the officer states: “{INSERT EXACT RFE QUOTE}”'
+      answer_heading: 'Answer:'
+      company_specific_instruction: Do not repeat receipt of the award if USCIS already accepts that the beneficiary received
+        it. Proceed directly to the disputed element, such as national/international recognition, excellence, organizer confirmation,
+        direct URL, or award significance.
+      disputed_issue_catalog:
+      - receipt_of_award_not_proven
+      - award_not_nationally_or_internationally_recognized
+      - award_not_for_excellence
+      - award_not_in_field
+      - award_organizer_not_authoritative
+      - no_direct_url_or_official_confirmation
+      - media_coverage_insufficient
+      - award_is_local_internal_or_participation_based
+      legal_elements:
+      - beneficiary received the award
+      - award was for excellence
+      - award is nationally or internationally recognized
+      - award relates to the field
+      targeted_subheadings_examples:
+      - The Award Has National Recognition in the Field
+      - The Award Is Granted for Excellence Rather Than Participation
+      - The Organizer’s Official Confirmation Establishes Receipt of the Award
+      - Major Media Coverage Confirms the Award’s Public and Professional Recognition
+      - The Jury Composition and Selection Process Confirm the Award’s Professional Level
+      response_structure:
+      - id: award_name
+        instruction: Start with the specific award name as an episode heading.
+      - id: disputed_element_subsections
+        instruction: Create subsections only for disputed elements. If receipt is undisputed, omit receipt subsection.
+      - id: evidence_analysis
+        instruction: Use official confirmation, rules, jury, number of participants, media coverage, rankings, direct URLs,
+          and organizer materials.
+      - id: conclusion
+        instruction: Conclude with specific facts rebutted, such as media recognition, jury level, competitive selection,
+          or direct organizer confirmation.
+      conclusion_template: Mr./Ms. [LAST NAME] satisfies Criterion (i). The totality of the evidence, including [SPECIFIC
+        EVIDENCE RESPONSIVE TO RFE], establishes that [AWARD NAME] is a nationally / internationally recognized prize or award
+        for excellence in [FIELD].
+    criterion_2_memberships:
+      heading: Criterion 2. Evidence of petitioner’s membership in associations in the field for which classification is sought
+        that require outstanding achievement of their members, as judged by recognized national or international experts in
+        their disciplines or fields.
+      regulatory_label: Criterion (ii)
+      exhibit_line: Exhibits from XX to XX, Pages from XX to XX.
+      company_specific_instruction: If USCIS accepts membership but disputes outstanding-achievement requirements, do not
+        re-prove membership. Begin with membership standards and expert adjudication.
+      disputed_issue_catalog:
+      - membership_not_proven
+      - association_not_in_field
+      - membership_not_outstanding_achievement_based
+      - no_expert_judgment
+      - membership_level_wrong_or_general
+      - fee_or_education_based_membership
+      legal_elements:
+      - membership in association
+      - association is in field
+      - membership requires outstanding achievements
+      - recognized national or international experts judge admission
+      targeted_subheadings_examples:
+      - Membership Candidates Are Required to Demonstrate Outstanding Achievements
+      - Admission Is Judged by Recognized Experts in the Field
+      - Mr./Ms. [LAST NAME] Holds the Qualifying Membership Level
+      - The Association Operates in the Same Field as the Beneficiary
+      response_structure:
+      - id: association_name
+        instruction: Use one association per episode.
+      - id: subsections
+        instruction: 'Address only disputed elements: membership fact, admission requirements, expert adjudication, field
+          relevance.'
+      - id: evidence
+        instruction: Use membership certificate, bylaws, admission rules, committee composition, expert profiles, correspondence,
+          and association profile.
+      - id: conclusion
+        instruction: List all regulatory elements established and RFE concerns rebutted.
+      weak_criterion_strategy: If evidence shows only fee-based/general membership, add a strategic-deprioritization note
+        and focus on stronger criteria.
+    criterion_3_published_material:
+      heading: Criterion 3. Published material about the petitioner in professional or major trade publications or other major
+        media. The materials must relate to the petitioner's work in the field for which classification is sought.
+      regulatory_label: Criterion (iii)
+      exhibit_line: Exhibits from XX to XX, Pages from XX to XX.
+      company_specific_instruction: 'If USCIS does not dispute that publications are about the petitioner, do not retell article
+        content. Address the exact defects: URL, author, date, title, media status, audience, traffic, professional-publication
+        status, or editorial nature.'
+      disputed_issue_catalog:
+      - not_about_beneficiary
+      - not_about_work_in_field
+      - missing_title_date_author
+      - screenshots_unreadable_or_no_url
+      - publication_not_major_media
+      - publication_not_professional_trade
+      - self_promotional_or_paid_material
+      - no_audience_or_circulation_data
+      - no_editorial_oversight
+      legal_elements:
+      - published material
+      - about beneficiary or beneficiary’s work
+      - related to field
+      - in professional/major trade/major media
+      - title/date/author where available
+      episode_heading: Publication about Mr./Ms. [LAST NAME] in the online/print edition “[PUBLICATION NAME]”
+      targeted_subheadings_examples:
+      - The Publication About Mr./Ms. [LAST NAME] Contains the Publication Date, Author, and Article Title
+      - Updated Screenshots Clearly Show the URL, Article Title, Author, and Publication Date
+      - The Publication Qualifies as a Professional Trade Publication
+      - The Publication Qualifies as Major Media Based on Audience and Rankings
+      - The Material Relates Directly to Mr./Ms. [LAST NAME]’s Work in the Field
+      - The Article Was Editorial Material, Not Paid Advertising
+      episode_structure:
+      - id: fact_of_publication_if_disputed
+        fields:
+        - publication_name
+        - publication_type
+        - article_title
+        - publication_date
+        - author
+        - link
+        instruction: Include only if RFE disputes formal publication details.
+      - id: about_beneficiary_if_disputed
+        instruction: Explain how the material discusses beneficiary/work/achievement if disputed.
+      - id: publication_status
+        instruction: Describe major media or professional trade status using history, traffic, circulation, rankings, awards,
+          registration, intended audience, editor, partners, and field focus.
+      - id: conclusion
+        instruction: Tie updated documents and publication status to the criterion.
+    criterion_4_judging:
+      heading: Criterion 4. Evidence of the petitioner’s participation on a panel, or individually, as a judge of the work
+        of others in the same or in an allied field of specialization for which classification is sought.
+      regulatory_label: Criterion (iv)
+      exhibit_line: Exhibits from XX to XX, Pages from XX to XX.
+      company_specific_instruction: 'Begin immediately with the officer’s specific concern: routine duties, no formal designation,
+        no proof of actual judging, no same/allied field, or insufficient documentation.'
+      disputed_issue_catalog:
+      - actual_judging_not_proven
+      - only_invitation_not_participation
+      - routine_employment_duties
+      - not_same_or_allied_field
+      - no_formal_designation
+      - judging_role_unclear
+      - event_or_body_not_explained
+      legal_elements:
+      - participation as judge individually or on panel
+      - judged work of others
+      - same or allied field
+      targeted_subheadings_examples:
+      - The Beneficiary’s Service as a Judge Is Confirmed by Multiple Documents
+      - The Evaluation Was Not Part of the Beneficiary’s Standard Employment Duties
+      - The Beneficiary Was Formally Designated in a Judging Capacity
+      - The Judged Work Was in the Same or Allied Field
+      - The Judging Was Independent and Substantive
+      evidence_types:
+      - appointment_letter
+      - invitation
+      - judging_protocol
+      - certificate
+      - thank_you_letter
+      - event_rules
+      - jury_list
+      - job_description_showing_not_routine
+      - field_explanation
+      conclusion_rule: 'State exactly what was proven: official designation, actual participation, work of others, same/allied
+        field, non-routine nature if disputed.'
+    criterion_5_original_contributions:
+      heading: Criterion 5. Evidence of the petitioner’s original scientific, scholarly, or business-related contributions
+        of major significance in the field.
+      regulatory_label: Criterion (v)
+      exhibit_line: Exhibits from XX to XX, Pages from XX to XX.
+      company_specific_instruction: Proceed directly to rebutting the officer’s arguments. Do not describe the whole career.
+        Identify contribution(s), originality, major significance, independent use, implementation, citations, adoption, or
+        measurable effects.
+      disputed_issue_catalog:
+      - not_original
+      - not_major_significance
+      - letters_not_corroborated
+      - ordinary_job_duties
+      - impact_limited_to_employer
+      - citations_insufficient
+      - no_independent_use
+      - no_measurable_outcomes
+      - field_too_narrow_not_explained
+      legal_elements:
+      - original contribution
+      - scientific/scholarly/artistic/athletic/business-related contribution
+      - major significance in the field
+      strategy_notes:
+      - If the field is a narrow technical niche, explain why niche-specific citation/implementation levels should be evaluated
+        in that context.
+      - Do not rely on recommendation letters alone; immediately show who uses the work and what objective documents corroborate
+        it.
+      - If citations are modest, describe the field size, citing authors’ authority, and qualitative importance of the citations.
+      contribution_episode_model:
+        episode_heading: 'Contribution [N]: [CONTRIBUTION NAME]'
+        subsections:
+        - title: The Contribution Is Original
+          instruction: Explain what was created/developed by the beneficiary and how evidence proves authorship/origination.
+        - title: The Contribution Has Been Implemented or Used by Independent Organizations
+          instruction: Identify users, organizations, contracts, implementation records, letters, product data, or adoption
+            evidence.
+        - title: The Contribution Has Major Significance in the Field
+          instruction: Show measurable results, citations, adoption, commercialization, technical effect, institutional use,
+            or field reliance.
+        - title: Independent Evidence Corroborates the Contribution Beyond Recommendation Letters
+          instruction: Use publications, implementation documents, IP records, citations, manuals, contracts, software records,
+            third-party use.
+      targeted_subheadings_examples:
+      - The Officer’s Concern Regarding Lack of Independent Corroboration Is Addressed by Implementation Evidence
+      - The Contribution Belongs to a Highly Specialized Engineering / Business / Scientific Niche
+      - The Contribution Produced Measurable Results in Real-World Operations
+      - Independent Researchers and Organizations Have Relied on the Contribution
+      conclusion_template: 'Mr./Ms. [LAST NAME] satisfies Criterion (v) because the evidence establishes: (1) the contribution
+        lies in [FIELD]; (2) the contribution is original; and (3) the contribution has major significance, as shown by [IMPLEMENTATION
+        / CITATIONS / MEASURABLE RESULTS / INDEPENDENT USE].'
+    criterion_6_scholarly_articles:
+      heading: Criterion 6. The person's authorship of scholarly articles in the field, in professional or major trade publications
+        or other major media.
+      regulatory_label: Criterion (vi)
+      exhibit_line: Exhibits from XX to XX, Pages from XX to XX.
+      company_specific_instruction: 'Proceed directly to the disputed issue: scholarly nature, journal status, URL issue,
+        authorship, field relevance, or self-serving source objection.'
+      disputed_issue_catalog:
+      - authorship_not_proven
+      - article_not_scholarly
+      - publication_not_professional_or_major_trade
+      - self_serving_journal_evidence
+      - no_url_on_pdf
+      - no_independent_database_indexing
+      - not_in_field
+      - missing_translation
+      legal_elements:
+      - authorship
+      - scholarly article
+      - in the field
+      - professional/major trade publication or major media
+      targeted_subheadings_examples:
+      - The Published Materials Qualify as Scholarly Articles
+      - Independent Databases Confirm the Journals’ Scholarly Status
+      - Downloaded Scholarly PDFs Do Not Display URLs on Every Page, but Direct Source Links Are Provided
+      - The Journals Are Recognized Scientific Publications in the Field
+      - The Articles Are Authored by Mr./Ms. [LAST NAME] and Concern [FIELD]
+      evidence_types:
+      - article_copy
+      - journal_page
+      - publisher_confirmation
+      - ISSN_record
+      - peer_review_policy
+      - editorial_board
+      - indexing_database
+      - government_journal_list
+      - Google_Scholar
+      - OpenAlex
+      - DOAJ
+      - RSCI_or_local_database
+      conclusion_rule: State that authorship, scholarly nature, field relevance, and qualifying publication status are established.
+    criterion_7_display:
+      heading: Criterion 7. Display of the person's work in the field at artistic exhibitions or showcases.
+      regulatory_label: Criterion (vii)
+      exhibit_line: Exhibits from XX to XX, Pages from XX to XX.
+      company_specific_instruction: Use only for arts/design/display cases. If USCIS disputes the nature of the event, prove
+        artistic exhibition/showcase. If USCIS disputes authorship, prove the displayed work was beneficiary’s work.
+      disputed_issue_catalog:
+      - event_not_artistic_exhibition_or_showcase
+      - display_not_proven
+      - work_not_beneficiarys
+      - portfolio_only
+      - venue_or_event_not_explained
+      - no_catalog_program_or_photo
+      legal_elements:
+      - beneficiary’s work
+      - displayed in field
+      - artistic exhibition or showcase
+      targeted_subheadings_examples:
+      - The Event Was an Artistic Exhibition or Showcase
+      - The Displayed Works Were Mr./Ms. [LAST NAME]’s Works
+      - Catalogues, Brochures, and Press Releases Confirm Public Display
+      - The Venue and Curatorial Selection Establish the Exhibition Context
+      evidence_types:
+      - exhibition_catalogue
+      - program
+      - invitation
+      - poster
+      - photos
+      - press_release
+      - organizer_letter
+      - venue_profile
+      - curatorial_selection_evidence
+      - media_coverage
+      conclusion_rule: State that the evidence proves public display of beneficiary’s own work at artistic exhibitions/showcases.
+    criterion_8_leading_or_critical_role:
+      heading: Criterion 8. The person has performed in a leading or critical role for organizations or establishments that
+        have a distinguished reputation.
+      regulatory_label: Criterion (viii)
+      exhibit_line: Exhibits from XX to XX, Pages from XX to XX.
+      company_specific_instruction: Immediately address hierarchy, role significance, detailed letters, organizational reputation,
+        and whether the claimed role is leading, critical, or both. Do not simply repeat job title.
+      disputed_issue_catalog:
+      - distinguished_reputation_not_proven
+      - leading_role_not_proven
+      - critical_role_not_proven
+      - no_hierarchy_or_org_chart
+      - letters_too_general
+      - ordinary_employment
+      - impact_on_organization_not_shown
+      - only_departmental_impact
+      - role_not_beyond_necessary_services
+      legal_elements:
+      - leading or critical role
+      - organization or establishment
+      - distinguished reputation
+      targeted_subheadings_examples:
+      - The Petition Claims a Critical Role, Not Merely a Senior Title
+      - The Organizational Structure Confirms Mr./Ms. [LAST NAME]’s Position and Scope of Responsibility
+      - The Beneficiary’s Work Was Critical to [Department / Organization / Project] Outcomes
+      - Objective Metrics Confirm the Beneficiary’s Impact on the Organization
+      - The Organization Possesses a Distinguished Reputation Based on Rankings, Scale, Clients, and Awards
+      episode_structure:
+      - id: role_scope
+        instruction: Identify role, hierarchy, duties, reporting line, scope, employees/budget/regions/projects where relevant.
+      - id: impact
+        instruction: 'Use objective evidence: revenue, users, workload, products, operational materials, standards, cost savings,
+          awards, company growth, crisis outcomes, major projects.'
+      - id: letters
+        instruction: Use executive/supervisor letters only where detailed and supported by documents.
+      - id: organization_reputation
+        instruction: Use rankings, scale, clients, awards, media, partnerships, reputation evidence.
+      conclusion_template: Mr./Ms. [LAST NAME] satisfies Criterion (viii). The submitted organizational structure, objective
+        evidence of [impact], detailed executive letters, and independent evidence of [ORGANIZATION]’s distinguished reputation
+        collectively establish [his/her/their] leading / critical role.
+    criterion_9_high_salary:
+      heading: Criterion 9. The person has commanded a high salary, or other significantly high remuneration for services,
+        in relation to others in the field.
+      regulatory_label: Criterion (ix)
+      exhibit_line: Exhibits from XX to XX, Pages from XX to XX.
+      company_specific_instruction: If USCIS accepts that the amount was received but disputes comparison, proceed immediately
+        to objective salary comparison. Do not re-prove payment unless payment is disputed.
+      disputed_issue_catalog:
+      - actual_payment_not_proven
+      - comparison_data_absent
+      - wrong_comparator
+      - wrong_location
+      - wrong_year
+      - wrong_seniority
+      - salary_documents_not_reliable
+      - currency_conversion_unclear
+      - only_average_salary_not_enough
+      - project_fee_comparison_invalid
+      legal_elements:
+      - commanded high salary/remuneration
+      - in relation to others in the field
+      - reliable evidence
+      targeted_subheadings_examples:
+      - Comparison to Other Professionals in the Field
+      - The Salary Comparison Uses Objective Sources for the Same Region and Comparable Position
+      - Mr./Ms. [LAST NAME]’s Remuneration Exceeded Comparable Benchmarks by [X] Times
+      - The Salary Evidence Confirms Actual Payment and Official Reporting
+      - The Comparison Sources Are Authoritative and Reliable
+      salary_episode_structure:
+      - id: beneficiary_salary
+        instruction: State year, role, location, amount, gross/net if relevant, source documents.
+      - id: comparison_sources
+        instruction: Compare against objective sources matching field, role, year, geography, seniority where possible.
+      - id: source_description
+        instruction: Briefly describe the authority and methodology of each comparison source.
+      - id: table
+        instruction: 'End with comparison table: Source, Beneficiary Salary, Source Salary, Exceeding Times.'
+      table_schema:
+      - source
+      - beneficiary_annual_salary_usd_or_local
+      - source_annual_salary_usd_or_local
+      - exceeding_times
+      - year
+      - location
+      - occupation_match_note
+      conclusion_rule: State that the comparative data establishes high salary/remuneration in relation to others in the field.
+    criterion_10_commercial_success_performing_arts:
+      heading: Criterion 10. Commercial successes in the performing arts, as shown by box office receipts or record, cassette,
+        compact disk, or video sales.
+      regulatory_label: Criterion (x)
+      exhibit_line: Exhibits from XX to XX, Pages from XX to XX.
+      company_specific_instruction: Use only when performing arts commercial success is actually claimed and disputed. This
+        criterion is narrow; do not force it into non-performing-arts cases.
+      disputed_issue_catalog:
+      - not_performing_arts
+      - commercial_success_not_proven
+      - sales_or_receipts_missing
+      - success_not_attributable_to_beneficiary
+      - data_not_reliable
+      legal_elements:
+      - performing arts
+      - commercial success
+      - box office receipts or sales/records/videos or comparable listed evidence
+      targeted_subheadings_examples:
+      - Box Office Receipts Confirm Commercial Success
+      - Sales and Streaming Data Demonstrate Commercial Success in the Performing Arts
+      - The Commercial Success Is Directly Attributable to Mr./Ms. [LAST NAME]’s Role
+      evidence_types:
+      - box_office_receipts
+      - ticket_sales
+      - record_sales
+      - streaming_metrics
+      - royalties
+      - distribution_reports
+      - platform_reports
+      conclusion_rule: State commercial success in performing arts and link it to beneficiary’s work.
+  final_merits_determination:
+    heading: FINAL MERITS DETERMINATION
+    trigger: Use when the RFE challenges final merits, sustained acclaim, top-of-field status, or overall extraordinary ability
+      even if some criteria are met.
+    purpose: Highlight key facts that collectively demonstrate sustained national or international acclaim and top-level professional
+      standing.
+    company_template_logic: Use a narrative synthesis showing career progression, objective recognition, media, judging, contributions,
+      roles, salary, and consistency of intended work. Do not simply restate each criterion.
+    required_analysis:
+    - sustained acclaim over time
+    - recognition beyond immediate employers or acquaintances
+    - objective evidence of high-level standing
+    - impact or recognition in the field
+    - consistency between area of acclaim and intended U.S. work if relevant
+    - why the record as a whole shows one of the small percentage at the top of the field
+    drafting_structure:
+    - id: opening_synthesis
+      instruction: State the beneficiary’s national/international recognition level and career arc.
+    - id: objective_recognition
+      instruction: Summarize awards, media, judging, publications, salary, roles, independent evidence.
+    - id: not_by_chance
+      instruction: Explain how recognition followed sustained work and achievements, not isolated luck.
+    - id: accepted_or_satisfied_criteria
+      instruction: Use satisfied criteria as support, but do not argue that three criteria automatically wins.
+    - id: conclusion
+      instruction: Conclude that totality establishes sustained acclaim and top-of-field position.
+    avoid:
+    - mechanical criterion summaries
+    - recommendation-letter-only argument
+    - new unsupported achievements
+    - EB-1A boilerplate detached from RFE objections
+  conclusion:
+    heading: Conclusion
+    use_if: Use if company wants a separate conclusion after final merits or if final merits is not included.
+    template: For the reasons set forth above, the response directly addresses the concerns raised in the RFE, provides additional
+      documentary evidence and legal explanation, and demonstrates that Mr./Ms. [LAST NAME] satisfies the EB-1A requirements
+      under INA § 203(b)(1)(A) and 8 CFR § 204.5(h). We respectfully request approval of the petition.
+optional_sections:
+  general_matters_and_evidence_reliability:
+    trigger: Use if RFE attacks screenshots, unreliable internet sources, open-source platforms, inaccessible links, translations,
+      explanatory notes, or private/testimonial evidence.
+    placement: after cover letter before criteria, unless company requests criterion-specific placement
+    subsections:
+    - Classification of evidence
+    - Primary vs secondary evidence
+    - Screenshots and website links
+    - Explanatory notes
+    - Conclusion for general matters
+    llm_instruction: Keep this short and procedural. Do not overdefend weak evidence; explain what function each evidence
+      type serves.
+  continued_work:
+    trigger: Use if RFE disputes continued work / intent to continue work / plans in the United States.
+    placement: after criteria or before final merits depending on company preference; if RFE makes it a threshold issue, place
+      before final merits.
+    required_elements:
+    - intended work in U.S.
+    - same area of expertise
+    - clear evidence such as statement, contracts, employer letters, business plan, commitments
+    llm_instruction: Do not insert automatically; the new company draft template does not default to this section, but EB-1A
+      RFEs often require it.
+  prospective_substantial_benefit:
+    trigger: Use if RFE disputes whether beneficiary’s entry will substantially benefit the United States prospectively.
+    placement: near continued work or before final merits
+    required_elements:
+    - beneficiary-specific benefit mechanism
+    - connection to U.S. work
+    - field-specific practical benefit
+    - supporting evidence
+    llm_instruction: Do not mechanically import NIW national-importance language. Show how this beneficiary’s entry creates
+      prospective U.S. benefit.
+  attachments_and_separator_pages:
+    trigger: Use during script assembly after drafting.
+    main_separator_schema:
+      title: Exhibit / Attachment [X]
+      section_or_criterion: '{SECTION_OR_CRITERION_NAME}'
+      evidence_status: '{previously_submitted|resubmitted|new|mixed}'
+      page_range: '{XX-XX}'
+      purpose: This attachment contains evidence submitted to address the RFE concern that {RFE_CONCERN}.
+      contents:
+      - '{document list with short purpose}'
+    individual_document_separator_schema:
+      title: Exhibit / Attachment [X.Y] - {DOCUMENT_TITLE}
+      source: '{SOURCE}'
+      date: '{DATE}'
+      language: '{LANGUAGE_AND_TRANSLATION_STATUS}'
+      purpose: This document proves that {SPECIFIC_FACT}.
+      relevant_rfe_issue: '{QUOTE_OR_SUMMARY}'
+global_drafting_rules:
+  rfe_first_rule:
+  - 'Every criterion section begins with: In the RFE, the officer states: “[quote]”.'
+  - The Answer section begins immediately after the quote.
+  - Do not spend paragraphs restating undisputed elements.
+  subheading_rules:
+  - Every answer must be broken into clear subheadings that describe the exact rebuttal point.
+  - Use titles like “The Publication Contains the Date, Author, and Article Title,” not vague titles like “Additional Evidence.”
+  - If the officer disputes only one element, draft only that element plus a brief conclusion.
+  evidence_rules:
+  - Every factual assertion must identify evidence or cite a page/exhibit.
+  - New evidence must be identified as new only where it is new.
+  - Previously submitted evidence should be cited to original exhibit/page where possible.
+  - Do not copy the original petition section unless the RFE requires a full reconstruction.
+  tone_rules:
+  - Respectful, direct, professional.
+  - No emotional language.
+  - No marketing adjectives unless tied to evidence.
+  - Use “respectfully” where correcting a factual mistake by USCIS, but do not overuse it.
+validation_rules:
+  pre_drafting:
+  - RFE issue matrix must be completed before drafting.
+  - Every quoted RFE issue must map to at least one response subsection or be expressly marked as not addressed for strategy
+    reasons.
+  - Every claimed criterion in the cover must exist in sections.criteria or in an optional section.
+  - Do not generate criterion sections that were neither disputed nor strategically needed.
+  content_validation:
+  - No section may answer an issue not disputed unless marked as contextual or final merits support.
+  - Every criterion section must include exact RFE quote, Answer heading, at least one targeted rebuttal subsection, and conclusion.
+  - Each conclusion must list the specific RFE objections rebutted.
+  - No “XX” page references in final filing.
+  - All non-English documents must have translation labels.
+  - If criterion is weak, the strategy must allow acknowledgment or deprioritization instead of overclaiming.
+  legal_validation:
+  - Use 8 CFR 204.5(h)(3)(i)-(x) criterion numbering for EB-1A.
+  - Do not use O-1B criterion numbering or Form I-129 language.
+  - If final merits is challenged, include final merits section and do not call it a mere conclusion.
+  - If continued work or substantial benefit is challenged, insert optional sections even if the company draft does not show
+    them in the default skeleton.
+llm_interaction_workflow:
+- step_id: extract_rfe_issues
+  goal: Extract exact RFE quotes, disputed elements, accepted criteria, unclear criteria, and general concerns.
+- step_id: build_issue_matrix
+  goal: Create rfe_issue_matrix and mark do_not_discuss elements.
+- step_id: map_evidence_to_defects
+  goal: Map existing and new evidence to each RFE defect.
+- step_id: select_render_sections
+  goal: Choose which criterion sections and optional sections to render under the company template.
+- step_id: draft_cover_letter
+  goal: Draft the cover in the company style.
+- step_id: draft_criterion_responses
+  goal: Draft each criterion as quote + answer + targeted subheadings + conclusion.
+- step_id: draft_final_merits_if_triggered
+  goal: Draft final merits narrative only if RFE challenges it or strategy requires it.
+- step_id: assemble_exhibit_index_and_dividers
+  goal: Generate exhibit/attachment index and purpose-driven divider pages.
+- step_id: run_validation
+  goal: Check RFE coverage, no undisputed overdiscussion, citations, page placeholders, criterion consistency, and terminology.
+prompt_registry:
+  extract_rfe_issues: Read the RFE and extract exact quotes. Classify each issue as accepted, not accepted, unclear, overlooked,
+    general concern, continued work, substantial benefit, or final merits. Do not draft argument yet.
+  build_issue_matrix: Build a table of RFE issues. For each issue, identify the exact disputed elements and the elements not
+    disputed that should not be discussed.
+  map_evidence_to_defects: For each RFE defect, map already submitted evidence and new evidence. State what each document
+    proves and whether it is resubmitted, new, or cited from the initial filing only.
+  draft_criterion_response_generic: 'Draft one criterion response using the company template: heading, exhibits line, exact
+    RFE quote, Answer, targeted subheadings, direct rebuttal, evidence citations, conclusion. Do not discuss undisputed elements.'
+  draft_final_merits: Draft the final merits determination as a synthesis of objective evidence and sustained acclaim. Do
+    not merely repeat criterion summaries.
+  validate_response: Check that every RFE quote is answered, no undisputed issues are overdiscussed, every claim has evidence,
+    all criteria listed in the cover are rendered or intentionally omitted, and page placeholders are resolved before final
+    filing.

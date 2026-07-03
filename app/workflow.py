@@ -13,6 +13,8 @@ from xml.etree import ElementTree
 
 from .cli_support import CASE_ROOT, PROJECT_ROOT, case_path
 from .simple_yaml import load_yaml_subset
+from .json_input import parse_llm_json_object
+from .file_rules import is_office_temporary_file, prompt_sidecar_kind
 
 
 TEXT_EXTENSIONS = {".txt", ".md", ".csv", ".json", ".yaml", ".yml"}
@@ -174,9 +176,14 @@ def render_prompt(
     parts.append("")
     parts.extend(render_instruction_hierarchy(loaded, step, runtime_instruction_files))
     parts.append("")
-    parts.append("## Evidence available for this step")
+    parts.append("## Evidence and controlling strategy available for this step")
     parts.append("")
-    parts.append(render_evidence_context(loaded, step, options))
+    if _truthy_config(step.get("rfe_strategy_units", False)):
+        from .rfe_strategy import render_strategy_unit_context
+
+        parts.append(render_strategy_unit_context(loaded, options.episode_id))
+    else:
+        parts.append(render_evidence_context(loaded, step, options))
     parts.append("")
     included_drafts = _normalize_path_list(step.get("include_draft_steps", []))
     if included_drafts:
@@ -202,6 +209,11 @@ def render_prompt(
         + "If this step is only an intake/template-review step, put concise notes "
         "or acknowledgement into `draft_text` and use the structured arrays for "
         "questions, unsupported claims, and quality flags."
+    )
+    parts.append(
+        "Before responding, verify that the object parses as strict JSON. Escape every double quote "
+        "inside a string as `\\\"`, encode line breaks inside strings as `\\n`, do not use Markdown "
+        "code fences, and do not leave trailing commas."
     )
     parts.append("")
     return "\n".join(parts)
@@ -285,6 +297,7 @@ def render_final_output_guardrails(
         "Use one consistent English name and abbreviation for every organization; define an alternate/source-language acronym once only if needed.",
         "Do not use the word `episode` in petition text. Use `criterion`, `section`, `submitted evidence`, or `record` as appropriate.",
         "In `used_documents`, provide a concise, descriptive English `document_title` for every cited document. Do not copy a raw filename or leave a Russian-only title.",
+        "Every `used_documents[].document_id` must be copied exactly from the Technical document selection in this prompt (format `DOC####`). Never invent semantic IDs for an RFE quote, strategy, exhibit group, or explanatory material. If no indexed documents are listed, return `used_documents: []`.",
     ]
     if technical_step:
         lines.append("This is a technical intake/review step, so concise internal notes are allowed in `draft_text`.")
@@ -349,6 +362,11 @@ def render_case_context(case: dict[str, Any]) -> str:
                 f"- rfe.response_deadline: {rfe_metadata.get('response_deadline', '')}",
                 f"- rfe.uscis_address: {rfe_metadata.get('uscis_address', '')}",
                 f"- rfe.petition_type: {rfe_metadata.get('petition_type', '')}",
+                f"- rfe.response_date: {rfe_metadata.get('rfe_response_date', '')}",
+                f"- rfe.uscis_office_or_service_center: {rfe_metadata.get('uscis_office_or_service_center', '')}",
+                f"- rfe.officer_name: {rfe_metadata.get('officer_name', '')}",
+                f"- rfe.office_chief_name: {rfe_metadata.get('office_chief_name', '')}",
+                f"- rfe.salutation: {rfe_metadata.get('salutation', '')}",
             ]
         )
     rfe_response = case.get("rfe_response", {})
@@ -534,7 +552,36 @@ def render_evidence_files(
 ) -> str:
     parts: list[str] = []
     for file_path in files:
+        if is_office_temporary_file(file_path):
+            continue
         rel = file_path.relative_to(loaded.case_dir)
+        sidecar_kind = prompt_sidecar_kind(file_path)
+        if sidecar_kind:
+            if sidecar_kind == "info":
+                label = "Folder-local instructions and explanatory notes"
+                purpose = (
+                    "apply these additional instructions and explanations only while analyzing "
+                    "and drafting from documents in this exact folder"
+                )
+            else:
+                label = "Auxiliary extract for non-machine-readable documents"
+                purpose = (
+                    "use only to understand partially or wholly non-machine-readable documents "
+                    "located in this exact folder"
+                )
+            parts.extend(
+                [
+                    f"#### {label} for folder `{rel.parent.as_posix()}`",
+                    f"- source_type: prompt-only folder sidecar ({sidecar_kind}.txt)",
+                    "- indexing_policy: do not add to document/exhibit indexes, used_documents, citations, or final bundle",
+                    f"- scope: {purpose}",
+                    "- evidence_policy: this sidecar is not independent evidence; rely on and cite the underlying documents",
+                    "",
+                    _fenced(read_textual_file(file_path, EVIDENCE_TEXT_LIMIT), "text"),
+                    "",
+                ]
+            )
+            continue
         doc_rows = document_index.get(_normalize_slashes(rel.as_posix()), [])
         doc_row = doc_rows[0] if doc_rows else {}
         doc_id = doc_row.get("document_id", "")
@@ -583,6 +630,76 @@ def read_document_index(loaded: LoadedCase) -> dict[str, list[dict[str, str]]]:
     return result
 
 
+def selected_documents_for_step(
+    loaded: LoadedCase, step: dict[str, Any], options: PromptOptions | None = None
+) -> list[dict[str, str]]:
+    """Return the indexed documents that the matching prompt will actually receive."""
+    options = options or PromptOptions()
+    if _truthy_config(step.get("rfe_strategy_units", False)) and options.episode_id:
+        from .rfe_strategy import selected_documents_for_unit
+
+        return selected_documents_for_unit(loaded, options.episode_id)
+
+    files: list[Path] = []
+    sources = step.get("evidence_sources", [])
+    if isinstance(sources, list) and sources:
+        for source in sources:
+            if not isinstance(source, dict):
+                continue
+            path_key = str(source.get("path_key", ""))
+            if not path_key:
+                continue
+            try:
+                source_root = loaded.case_dir / _case_path_value(loaded.config, path_key)
+            except SystemExit:
+                continue
+            folder_value = str(source.get("folder", "."))
+            folder = source_root if folder_value in {"", "."} else source_root / folder_value
+            evidence_folder = (
+                _episode_folder_for(folder, options)
+                if _truthy_config(source.get("use_episode_folder", False))
+                else folder
+            )
+            if evidence_folder.exists():
+                files.extend(path for path in evidence_folder.rglob("*") if path.is_file())
+    else:
+        role_map = folder_role_map(loaded.config)
+        for role in _normalize_path_list(step.get("evidence_folder_roles", [])):
+            folder_name = str(role_map.get(role, role))
+            for source_key in ("source_originals", "source_translations", "source_other"):
+                try:
+                    source_root = loaded.case_dir / _case_path_value(loaded.config, source_key)
+                except SystemExit:
+                    continue
+                for evidence_folder in _episode_folders_for(source_root / folder_name, options, step):
+                    files.extend(path for path in evidence_folder.rglob("*") if path.is_file())
+
+    document_index = read_document_index(loaded)
+    selected: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for path in sorted(set(files)):
+        if path.name == ".gitkeep" or is_office_temporary_file(path) or prompt_sidecar_kind(path):
+            continue
+        try:
+            relative_path = path.relative_to(loaded.case_dir).as_posix()
+        except ValueError:
+            continue
+        rows = document_index.get(_normalize_slashes(relative_path), [])
+        row = rows[0] if rows else {}
+        document_id = str(row.get("document_id", "")).strip()
+        if not document_id or document_id in seen:
+            continue
+        selected.append(
+            {
+                "document_id": document_id,
+                "title": str(row.get("display_title") or row.get("original_file_name") or path.stem),
+                "file_path": relative_path,
+            }
+        )
+        seen.add(document_id)
+    return selected
+
+
 def import_llm_output(
     case_id: str,
     step_id: str,
@@ -601,8 +718,9 @@ def import_llm_output(
     if not source.exists():
         raise SystemExit(f"LLM output file not found: {source}")
     try:
-        data = json.loads(source.read_text(encoding="utf-8-sig"))
-    except json.JSONDecodeError as exc:
+        parsed = parse_llm_json_object(source.read_text(encoding="utf-8-sig"))
+        data = parsed.data
+    except ValueError as exc:
         raise SystemExit(f"Invalid JSON output file: {source} ({exc})") from exc
     validate_llm_output(data, loaded, step_id, options)
     if step_id not in {"opening_context_intake", "template_review"}:
@@ -930,6 +1048,10 @@ def _first_repeatable_gap(loaded: LoadedCase, step: dict[str, Any]) -> NextActio
 
 
 def _repeatable_episode_candidates(loaded: LoadedCase, step: dict[str, Any]) -> list[tuple[str, str]]:
+    if _truthy_config(step.get("rfe_strategy_units", False)):
+        from .rfe_strategy import list_strategy_units
+
+        return list_strategy_units(loaded)
     if step.get("evidence_sources"):
         return _repeatable_candidates_from_evidence_sources(loaded, step)
     scoped_terms = _episode_folder_terms(step)

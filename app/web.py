@@ -24,8 +24,20 @@ from .evidence import (
     scan_documents,
     unlink_translation,
 )
-from .memo_builder import apply_case_intake, build_working_memo, parse_machine_template
+from .memo_builder import (
+    apply_case_intake,
+    build_working_memo,
+    parse_machine_template,
+    refresh_case_sources,
+)
+from .json_input import parse_llm_json_object
 from .progress import CaseProgress, build_case_progress
+from .rfe_strategy import (
+    apply_strategy_output,
+    build_strategy_bootstrap_prompt,
+    import_evidence_and_scan_inputs,
+    load_strategy_manifest,
+)
 from .stages import LLMStage, LLMUnit, build_llm_stage
 from .workflow import (
     _case_path_value,
@@ -76,6 +88,12 @@ class PetitionsHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         try:
             parsed = urlparse(self.path)
+            if parsed.path == "/favicon.ico":
+                self._send_bytes(
+                    Path(__file__).resolve().parents[1] / "free-icon-robot-3398643.png",
+                    "image/png",
+                )
+                return
             if parsed.path == "/":
                 self._send_html(render_home(parsed.query))
                 return
@@ -140,13 +158,14 @@ class PetitionsHandler(BaseHTTPRequestHandler):
             else:
                 route = _action_route(action)
                 destination = f"{route}?case={quote(destination_case)}&message={quote(message)}"
-                if action == "build_prompt" and data.get("step"):
+                if action in {"build_prompt", "refresh_unit_documents"} and data.get("step"):
                     step_id = data.get("step", "")
                     episode_id = data.get("episode_id", "")
                     destination += f"&step={quote(step_id)}"
                     if episode_id:
                         destination += f"&episode={quote(episode_id)}"
-                    destination += f"&prompt={quote(output_stem(step_id, episode_id) + '.latest.prompt.md')}"
+                    if action == "build_prompt":
+                        destination += f"&prompt={quote(output_stem(step_id, episode_id) + '.latest.prompt.md')}"
                 elif action == "run_next":
                     prompts = latest_prompts(destination_case)
                     if prompts:
@@ -196,6 +215,15 @@ class PetitionsHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_bytes(self, path: Path, content_type: str) -> None:
+        body = path.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Cache-Control", "public, max-age=86400")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def _redirect(self, location: str) -> None:
         self.send_response(303)
         self.send_header("Location", location)
@@ -213,6 +241,76 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
     if action == "scan_documents":
         summary = scan_documents(case_id)
         return f"Scanned {summary.scanned_files} file(s); added {summary.added_rows}, updated {summary.updated_rows}."
+    if action == "refresh_intake_sources":
+        loaded = load_case(case_id)
+        if str(loaded.config.get("task_type", "")) == "eb1a_rfe_response":
+            imports = loaded.config.get("source_imports", {})
+            if not isinstance(imports, dict):
+                imports = {}
+            imported = import_evidence_and_scan_inputs(
+                case_id,
+                str(imports.get("initial_filing_memo", "")),
+                str(imports.get("rfe_new_documents", "")),
+            )
+            refreshed_files = imported.copied_files
+        else:
+            refreshed_files = refresh_case_sources(case_id).source_files_copied
+        scanned = scan_documents(case_id)
+        linked = link_translations(case_id)
+        return (
+            f"Refreshed intake sources ({refreshed_files} new or changed file(s)); "
+            f"reindexed {scanned.scanned_files} document(s) and linked "
+            f"{linked.linked_translations} translation(s). The memorandum was not changed."
+        )
+    if action == "refresh_unit_documents":
+        scanned = scan_documents(case_id)
+        linked = link_translations(case_id)
+        return (
+            f"Refreshed document list: {scanned.scanned_files} scanned, "
+            f"{scanned.added_rows} added, {scanned.updated_rows} updated, "
+            f"{linked.linked_translations} translation(s) linked."
+        )
+    if action == "build_rfe_strategy_prompt":
+        summary = build_strategy_bootstrap_prompt(
+            case_id,
+            data.get("strategy_path", ""),
+            data.get("rfe_path", ""),
+        )
+        return f"Created strategy bootstrap prompt {summary.prompt_path.name}."
+    if action == "import_rfe_strategy_output":
+        output_text = data.get("strategy_output_json", "").strip()
+        if not output_text:
+            raise ValueError("Paste the strategy bootstrap JSON first.")
+        try:
+            parsed_strategy = parse_llm_json_object(output_text)
+            output = parsed_strategy.data
+        except ValueError as exc:
+            raise ValueError(f"Invalid strategy JSON: {exc}") from exc
+        summary = apply_strategy_output(case_id, output)
+        memo = build_working_memo(case_id)
+        repair = (
+            f" Automatic JSON repair applied: {'; '.join(parsed_strategy.repair_notes)}."
+            if parsed_strategy.repaired
+            else ""
+        )
+        return (
+            f"Accepted strategy manifest with {summary.unit_count} drafting unit(s); "
+            f"built {memo.docx_path.name}.{repair}"
+        )
+    if action == "import_rfe_evidence":
+        imported = import_evidence_and_scan_inputs(
+            case_id,
+            data.get("initial_memo_path", ""),
+            data.get("new_documents_path", ""),
+        )
+        scanned = scan_documents(case_id)
+        linked = link_translations(case_id)
+        memo = build_working_memo(case_id)
+        return (
+            f"Imported {imported.copied_files} file(s), scanned {scanned.scanned_files}, "
+            f"partitioned {imported.initial_sections} initial-filing section(s), and linked "
+            f"{linked.linked_translations} translation(s); rebuilt {memo.docx_path.name} from actual evidence folders."
+        )
     if action == "apply_intake":
         summary = apply_case_intake(
             case_id,
@@ -366,12 +464,10 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
         if not output_text:
             raise ValueError("Paste JSON output first.")
         try:
-            output_data = json.loads(output_text)
-        except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"Output was not accepted: invalid JSON at line {exc.lineno}, column {exc.colno}. "
-                "Correct the response or ask the LLM to return only one JSON object."
-            ) from exc
+            parsed_output = parse_llm_json_object(output_text)
+            output_data = parsed_output.data
+        except ValueError as exc:
+            raise ValueError(f"Output was not accepted: {exc}") from exc
         loaded = load_case(case_id)
         step_data = find_step(loaded.workflow, step)
         try:
@@ -396,7 +492,9 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
                 "Use Retry/overwrite from the LLM workspace if replacement is intentional."
             )
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(output_text + "\n", encoding="utf-8")
+        output_path.write_text(
+            json.dumps(output_data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
         validated = import_llm_output(case_id, step, str(output_path), episode_id=episode_id, force=force)
         if data.get("insert_after_import") == "on":
             target = insert_section(case_id, step, episode_id=episode_id, force=force)
@@ -405,7 +503,12 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
                 f"Validated {validated.name}, inserted {target.name}, and refreshed working_memo.docx.\n\n"
                 f"{next_report}"
             )
-        return f"Validated output {validated.name}."
+        repair = (
+            f" Automatic JSON repair applied: {'; '.join(parsed_output.repair_notes)}."
+            if parsed_output.repaired
+            else ""
+        )
+        return f"Validated output {validated.name}.{repair}"
     if action == "insert_section":
         step = data.get("step", "").strip()
         episode_id = data.get("episode_id", "").strip() or None
@@ -520,15 +623,14 @@ def render_intake_page(case_id: str, params: dict[str, list[str]]) -> str:
         {alert(_single(params, 'error'), 'error')}
         <section class="panel">
           <h1>Intake & evidence</h1>
-          <div class="button-row">
-            {post_button(case_id, "build_working_memo", "Build working memo")}
-            {post_button(case_id, "scan_documents", "Scan documents")}
-            {post_button(case_id, "link_translations", "Auto-link translations")}
-            <a class="action-link" href="/translations?case={quote(case_id)}">Review translation links</a>
-          </div>
+          {'' if task_type == 'eb1a_rfe_response' else '<div class="button-row">'}
+          {'' if task_type == 'eb1a_rfe_response' else post_button(case_id, "build_working_memo", "Build working memo")}
+          {'' if task_type == 'eb1a_rfe_response' else post_button(case_id, "scan_documents", "Scan documents")}
+          {'' if task_type == 'eb1a_rfe_response' else post_button(case_id, "link_translations", "Auto-link translations")}
+          {'' if task_type == 'eb1a_rfe_response' else f'<a class="action-link" href="/translations?case={quote(case_id)}">Review translation links</a>'}
+          {'' if task_type == 'eb1a_rfe_response' else '</div>'}
         </section>
-        {render_intake_panel(case_id, task_type)}
-        {render_rfe_panel(case_id) if task_type == 'eb1a_rfe_response' else ''}
+        {render_rfe_panel(case_id) if task_type == 'eb1a_rfe_response' else render_intake_panel(case_id, task_type)}
         <section class="panel"><h2>Evidence status</h2><pre>{escape(status)}</pre></section>
         """,
     )
@@ -632,6 +734,15 @@ def _render_llm_unit(case_id: str, unit: LLMUnit, selected_key: str = "") -> str
         "pending": "Pending",
     }
     episode = f"<small>Episode: {escape(unit.episode_folder or unit.episode_id)}</small>" if unit.episode_id else ""
+    document_list = "".join(
+        f"<li><code>{escape(document_id)}</code> — {escape(title)}</li>"
+        for document_id, title in unit.selected_documents
+    )
+    documents = (
+        f"<details><summary>Documents for prompt ({len(unit.selected_documents)})</summary><ul>{document_list}</ul></details>"
+        if unit.selected_documents
+        else "<small>Documents for prompt: none indexed</small>"
+    )
     prompt_links = "".join(
         f'<a href="/llm?case={quote(case_id)}&step={quote(unit.step_id)}&episode={quote(unit.episode_id)}&prompt={quote(prompt_id)}">{escape(prompt_id)}</a>'
         for prompt_id in unit.prompt_ids
@@ -647,6 +758,12 @@ def _render_llm_unit(case_id: str, unit: LLMUnit, selected_key: str = "") -> str
       <div class="llm-unit-title"><a class="unit-select" href="/llm?case={quote(case_id)}&step={quote(unit.step_id)}&episode={quote(unit.episode_id)}"><strong>{escape(unit.title)}</strong></a><span>{escape(status_labels.get(unit.status, unit.status))}</span></div>
       <small>{escape(unit.criterion_label)}</small>{episode}
       <code>{escape(unit.key)}</code>
+      {documents}
+      <form method="post" class="document-refresh-form">
+        <input type="hidden" name="action" value="refresh_unit_documents"><input type="hidden" name="case" value="{escape(case_id)}">
+        <input type="hidden" name="step" value="{escape(unit.step_id)}"><input type="hidden" name="episode_id" value="{escape(unit.episode_id)}">
+        <button type="submit" class="secondary small-button">Refresh documents</button>
+      </form>
       <div class="prompt-id-list">{prompt_links}</div>
       {retry}
     </article>
@@ -691,7 +808,19 @@ def _render_llm_current(
     if prompt_text:
         prompt_section = f"""
         <section class="panel">
-          <div class="progress-heading"><div><h2>Current prompt</h2><p class="muted"><code>{escape(selected_prompt)}</code></p></div><button type="button" class="secondary" data-copy-target="current-prompt">Copy prompt</button></div>
+          <div class="progress-heading"><div><h2>Current prompt</h2><p class="muted"><code>{escape(selected_prompt)}</code></p></div>
+            <div class="button-row">
+              <form method="post" data-confirm-submit="Refresh this generated prompt from the current documents and instructions?">
+                <input type="hidden" name="action" value="build_prompt"><input type="hidden" name="case" value="{escape(case_id)}">
+                <input type="hidden" name="step" value="{escape(unit.step_id)}"><input type="hidden" name="episode_id" value="{escape(unit.episode_id)}">
+                <input type="hidden" name="episode_folder" value="{escape(unit.episode_folder)}"><input type="hidden" name="force" value="on">
+                <input type="hidden" name="redo_step" value="{escape(unit.step_id)}"><input type="hidden" name="redo_episode" value="{escape(unit.episode_id)}">
+                <input type="hidden" name="custom_instructions" value="{escape(custom_instructions, quote=True)}">
+                <button type="submit" class="secondary">Refresh prompt</button>
+              </form>
+              <button type="button" class="secondary" data-copy-target="current-prompt">Copy prompt</button>
+            </div>
+          </div>
           <textarea id="current-prompt" readonly rows="18">{escape(prompt_text)}</textarea>
         </section>
         """
@@ -782,6 +911,14 @@ def _render_llm_current(
       {episode_text}
       <p>{escape(unit.objective)}</p>
       <p class="muted">You may work on any drafting unit. Importing a valid response inserts its petition text into Word and updates progress.</p>
+      <details open><summary><strong>Documents for this prompt ({len(unit.selected_documents)})</strong></summary>
+        {('<ul>' + ''.join(f'<li><code>{escape(document_id)}</code> — {escape(title)}</li>' for document_id, title in unit.selected_documents) + '</ul>') if unit.selected_documents else '<p class="muted small">No indexed documents are currently assigned to this prompt.</p>'}
+        <form method="post" class="document-refresh-form">
+          <input type="hidden" name="action" value="refresh_unit_documents"><input type="hidden" name="case" value="{escape(case_id)}">
+          <input type="hidden" name="step" value="{escape(unit.step_id)}"><input type="hidden" name="episode_id" value="{escape(unit.episode_id)}">
+          <button type="submit" class="secondary small-button">Refresh document list</button>
+        </form>
+      </details>
     </section>
     {warning_html}{action_section}{custom_section}{prompt_section}{output_section}
     """
@@ -1029,6 +1166,7 @@ def page(title: str, body: str) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/png" href="/favicon.ico">
   <title>{escape(title)}</title>
   <style>
     :root {{ --bg:#f6f7fb; --panel:#fff; --ink:#1f2937; --muted:#6b7280; --line:#d8dee9; --brand:#1d4ed8; }}
@@ -1062,6 +1200,9 @@ def page(title: str, body: str) -> str:
     button {{ border:0; border-radius:10px; padding:10px 14px; background:var(--brand); color:#fff; font-weight:600; cursor:pointer; }}
     button:disabled {{ background:#9ca3af; cursor:not-allowed; }}
     button.secondary {{ background:#374151; }}
+    button.small-button {{ padding:6px 9px; font-size:.82rem; }}
+    .document-refresh-form {{ margin-top:8px; }}
+    .document-refresh-form input {{ display:none; }}
     pre {{ white-space:pre-wrap; background:#0f172a; color:#e5e7eb; border-radius:12px; padding:14px; overflow:auto; max-height:420px; }}
     .alert {{ border-radius:12px; padding:12px 14px; margin-bottom:16px; white-space:pre-wrap; }}
     .ok {{ background:#ecfdf5; border:1px solid #a7f3d0; }}
@@ -1291,7 +1432,7 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
         + "</div></fieldset>"
     )
     template_default = {
-        "eb1a_rfe_response": "templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.txt",
+        "eb1a_rfe_response": "templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.yaml",
         "o1b_petition": "templates/O1B/MEMO O-1В_ver.1.0.docx",
     }.get(task_type, "templates/EB1A/EB1A_unified_template_LLM.docx")
     if task_type == "eb1a_rfe_response":
@@ -1441,6 +1582,12 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
         {source_inputs_html}
         <button data-dirty-submit="true"{submit_disabled}>{submit_label}</button>
       </form>
+      <form method="post" class="inline-form" data-confirm-submit="Refresh the remembered source folders and rebuild the document index? The working memorandum will not be changed.">
+        <input type="hidden" name="action" value="refresh_intake_sources">
+        <input type="hidden" name="case" value="{escape(case_id)}">
+        <button type="submit" class="secondary">Refresh sources + document index</button>
+        <span class="muted small">Uses the saved folder paths even when the intake fields have not changed.</span>
+      </form>
       <hr>
       <form method="post" class="stack">
         <input type="hidden" name="action" value="build_working_memo">
@@ -1453,6 +1600,115 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
 
 
 def render_rfe_panel(case_id: str) -> str:
+    return _render_rfe_strategy_panel(case_id)
+
+
+def _render_rfe_strategy_panel(case_id: str) -> str:
+    loaded = load_case(case_id)
+    imports = loaded.config.get("source_imports", {})
+    if not isinstance(imports, dict):
+        imports = {}
+    manifest = load_strategy_manifest(loaded.case_dir)
+    prompt = read_case_file_or_empty(case_id, "generated_prompts/rfe_strategy_bootstrap.latest.prompt.md")
+    manifest_status = (
+        f"Accepted: {len(manifest.get('units', []))} drafting unit(s)."
+        if manifest
+        else "Not accepted yet. Build the bootstrap prompt and paste the LLM JSON below."
+    )
+
+    def saved(key: str) -> str:
+        return escape(str(imports.get(key, "")), quote=True)
+
+    prompt_block = (
+        f"""
+        <div class="progress-heading"><div><strong>Generated bootstrap prompt</strong></div>
+          <div class="button-row">
+            <form method="post" data-confirm-submit="Refresh the strategy prompt from the saved strategy and RFE files?">
+              <input type="hidden" name="action" value="build_rfe_strategy_prompt"><input type="hidden" name="case" value="{escape(case_id)}">
+              <input type="hidden" name="strategy_path" value="{saved('rfe_strategy_file')}"><input type="hidden" name="rfe_path" value="{saved('rfe_notice_file')}">
+              <button type="submit" class="secondary">Refresh prompt</button>
+            </form>
+            <button type="button" class="secondary" data-copy-target="rfe-bootstrap-prompt">Copy prompt</button>
+          </div>
+        </div>
+        <textarea id="rfe-bootstrap-prompt" rows="18" readonly>{escape(prompt)}</textarea>
+        """
+        if prompt
+        else '<p class="muted small">The prompt will appear here after both source files are imported.</p>'
+    )
+    evidence_disabled = "" if manifest else " disabled"
+    return f"""
+    <section class="panel">
+      <h2>RFE Stage 1A - strategy bootstrap</h2>
+      <p class="muted small">
+        Select the human strategy and the full RFE notice. The script copies both into the case,
+        extracts their text, combines them with the base RFE template and produces one prompt.
+      </p>
+      <form method="post" class="stack" data-dirty-watch="true">
+        <input type="hidden" name="action" value="build_rfe_strategy_prompt">
+        <input type="hidden" name="case" value="{escape(case_id)}">
+        <label>Human strategy file (.docx/.txt/.md)
+          <input name="strategy_path" value="{saved('rfe_strategy_file')}" placeholder="C:\\path\\strategy.docx" required>
+        </label>
+        <label>Full RFE notice (.pdf/.docx/.txt)
+          <input name="rfe_path" value="{saved('rfe_notice_file')}" placeholder="C:\\path\\RFE.pdf" required>
+        </label>
+        <button>Import sources + build strategy prompt</button>
+      </form>
+      {prompt_block}
+    </section>
+
+    <section class="panel">
+      <h2>RFE Stage 1B - accept strategy output</h2>
+      <p><strong>{escape(manifest_status)}</strong></p>
+      <p class="muted small">
+        Paste the JSON returned by the LLM. Validation creates
+        <code>case_strategy/strategy_manifest.json</code>, per-unit strategy files,
+        <code>rfe_response_plan.md</code>, and a substantially populated working Word response
+        cloned from the company DOCX template.
+      </p>
+      <form method="post" class="stack">
+        <input type="hidden" name="action" value="import_rfe_strategy_output">
+        <input type="hidden" name="case" value="{escape(case_id)}">
+        <textarea name="strategy_output_json" rows="18" placeholder='{{"case_id": "{escape(case_id)}", ...}}' required></textarea>
+        <button>Validate strategy + build working template</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>RFE Stage 1C - import and scan the record</h2>
+      <p class="muted small">
+        This step unlocks after the strategy is accepted. The initial filing is represented only
+        by its memorandum; its criterion sections and document lists are extracted automatically.
+        New evidence may contain <code>originals</code>/<code>translations</code>; otherwise the
+        selected folder is treated as originals. Criterion and episode subfolders are preserved.
+      </p>
+      <form method="post" class="stack">
+        <input type="hidden" name="action" value="import_rfe_evidence">
+        <input type="hidden" name="case" value="{escape(case_id)}">
+        <label>Initial filing memorandum
+          <input name="initial_memo_path" value="{saved('initial_filing_memo')}" placeholder="C:\\path\\initial_filing_memo.docx" required{evidence_disabled}>
+        </label>
+        <label>New RFE documents folder
+          <input name="new_documents_path" value="{saved('rfe_new_documents')}" placeholder="C:\\path\\new_docs" required{evidence_disabled}>
+        </label>
+        <button{evidence_disabled}>Import, scan, partition initial filing, link translations</button>
+      </form>
+      <form method="post" class="inline-form" data-confirm-submit="Refresh the saved initial-filing memorandum and RFE evidence folders? The working memorandum will not be changed.">
+        <input type="hidden" name="action" value="refresh_intake_sources">
+        <input type="hidden" name="case" value="{escape(case_id)}">
+        <button type="submit" class="secondary"{evidence_disabled}>Refresh imported record + document index</button>
+        <span class="muted small">Reuses the saved paths and leaves the memorandum untouched.</span>
+      </form>
+      <div class="button-row">
+        <a class="action-link" href="/translations?case={quote(case_id)}">Review translation links</a>
+        <a class="action-link" href="/llm?case={quote(case_id)}">Continue to LLM drafting</a>
+      </div>
+    </section>
+    """
+
+
+def _legacy_render_rfe_panel(case_id: str) -> str:
     instructions = read_case_file(case_id, "user_case_instructions.md")
     plan = read_case_file(case_id, "rfe_response_plan.md")
     browser_notes = read_case_file_or_empty(
@@ -1687,9 +1943,13 @@ def _action_route(action: str) -> str:
         "scan_documents",
         "link_translations",
         "save_rfe_notes",
+        "build_rfe_strategy_prompt",
+        "import_rfe_strategy_output",
+        "import_rfe_evidence",
+        "refresh_intake_sources",
     }:
         return "/intake"
-    if action in {"run_next", "build_prompt", "import_output", "insert_section"}:
+    if action in {"run_next", "build_prompt", "import_output", "insert_section", "refresh_unit_documents"}:
         return "/llm"
     if action in {"build_index", "separators", "separator_pdfs", "bundle_dry_run", "bundle_build"}:
         return "/layout"

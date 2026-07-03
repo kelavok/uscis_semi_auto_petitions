@@ -17,7 +17,12 @@ from app.bundle_workflow import (
     render_separator_pdfs,
 )
 from app.evidence import link_translations, manual_link_translation, scan_documents, unlink_translation
-from app.memo_builder import apply_case_intake, build_working_memo, parse_machine_template
+from app.memo_builder import (
+    apply_case_intake,
+    build_working_memo,
+    parse_machine_template,
+    refresh_case_sources,
+)
 from app.stages import build_llm_stage
 from app.workflow import find_step, load_yaml_file
 from app.simple_yaml import load_yaml_subset
@@ -310,6 +315,14 @@ class CliSmokeTests(unittest.TestCase):
                 }
             ]
             self.assertEqual(len(phase_units), 4)
+            documents_by_step = {
+                unit.step_id: {title for _document_id, title in unit.selected_documents}
+                for unit in phase_units
+            }
+            self.assertEqual(documents_by_step["o1b_criterion_iii_role"], {"role"})
+            self.assertEqual(documents_by_step["o1b_criterion_iii_reputation"], {"reputation"})
+            self.assertEqual(documents_by_step["o1b_criterion_vi_compensation"], {"pay"})
+            self.assertEqual(documents_by_step["o1b_criterion_vi_comparison"], {"wage"})
             self.assertEqual(
                 {unit.episode_id for unit in phase_units if "criterion_iii" in unit.step_id},
                 {"Studio_Alpha"},
@@ -521,10 +534,12 @@ class CliSmokeTests(unittest.TestCase):
 
             self.assertTrue((case_dir / "source_documents" / "rfe" / "notice").is_dir())
             self.assertTrue((case_dir / "source_documents" / "initial_filing" / "memorandum").is_dir())
-            self.assertTrue((case_dir / "source_documents" / "rfe_response" / "new_documents" / "issues").is_dir())
+            self.assertTrue((case_dir / "source_documents" / "rfe_response" / "new_documents" / "originals").is_dir())
+            self.assertTrue((case_dir / "source_documents" / "rfe_response" / "new_documents" / "translations").is_dir())
+            self.assertTrue((case_dir / "case_strategy" / "units").is_dir())
             self.assertTrue((case_dir / "rfe_response_plan.md").exists())
             self.assertTrue(
-                (case_dir / "source_documents" / "rfe_response" / "new_documents" / "issues" / "1. Награды").is_dir()
+                (case_dir / "source_documents" / "rfe_response" / "new_documents" / "originals" / "1. Награды").is_dir()
             )
             config = (case_dir / "case_config.yaml").read_text(encoding="utf-8")
             self.assertIn("task_type: eb1a_rfe_response", config)
@@ -532,6 +547,8 @@ class CliSmokeTests(unittest.TestCase):
             self.assertIn("drafting_objective: Prepare EB-1A RFE response", config)
             self.assertNotIn("procedural_context: Initial EB-1A petition", config)
             self.assertIn("source_rfe_notice: source_documents/rfe/notice", config)
+            self.assertNotIn("source_initial_filing_originals:", config)
+            self.assertIn("strategy_manifest: case_strategy/strategy_manifest.json", config)
             self.assertIn("rfe_metadata:", config)
 
     def test_unimplemented_task_type_is_rejected_before_case_folder_is_created(self) -> None:
@@ -690,14 +707,13 @@ class CliSmokeTests(unittest.TestCase):
 
     def test_machine_templates_are_parseable_for_working_memo_builder(self) -> None:
         eb1a = parse_machine_template(Path("templates/EB1A/EB1A_unified_template_LLM.docx"))
-        rfe = parse_machine_template(Path("templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.txt"))
+        rfe = Path("templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.yaml").read_text(encoding="utf-8")
         self.assertGreaterEqual(eb1a.placeholder_count, 10)
         self.assertGreaterEqual(eb1a.section_count, 20)
         self.assertIn("__BENEFICIARY_FULL_NAME__", eb1a.placeholders)
-        self.assertGreaterEqual(rfe.section_count, 10)
-        self.assertGreaterEqual(rfe.placeholder_count, 10)
-        self.assertIn("[CASE_NO]", rfe.placeholders)
-        self.assertTrue(any("COVER LETTER" in section.title for section in rfe.sections))
+        self.assertIn("visa_classification: EB-1A", rfe)
+        self.assertIn("cover_letter:", rfe)
+        self.assertIn("criterion_1_awards:", rfe)
 
     def test_apply_intake_and_build_working_memo_docx(self) -> None:
         with TemporaryDirectory() as temp:
@@ -811,8 +827,19 @@ class CliSmokeTests(unittest.TestCase):
                     "case_001",
                     template_path="templates/EB1A/machine_template.txt",
                 )
+                (external_originals / "new-original.txt").write_text(
+                    "Updated original", encoding="utf-8"
+                )
+                refreshed = refresh_case_sources("case_001")
 
             self.assertGreaterEqual(intake.fields_updated, 4)
+            self.assertEqual(refreshed.source_files_copied, 1)
+            self.assertEqual(
+                (case_dir / "source_documents" / "originals" / "new-original.txt").read_text(
+                    encoding="utf-8"
+                ),
+                "Updated original",
+            )
             self.assertTrue(summary.docx_path.exists())
             self.assertTrue(summary.markdown_path.exists())
             self.assertTrue(summary.template_report_path.exists())

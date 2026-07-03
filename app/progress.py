@@ -46,6 +46,9 @@ def build_case_progress(case_id: str) -> CaseProgress:
     intake_complete = all(_clean_value(value) for value in intake_values)
     if task_type == "eb1a_petition":
         intake_complete = intake_complete and bool(config.get("claimed_criteria"))
+    elif task_type == "eb1a_rfe_response":
+        manifest = loaded.case_dir / "case_strategy" / "strategy_manifest.json"
+        intake_complete = manifest.exists() and manifest.stat().st_size > 0
 
     working_memo = loaded.case_dir / _configured_path(config, "final_memo", "final_memo") / "working_memo.docx"
     working_complete = working_memo.exists() and working_memo.stat().st_size > 0
@@ -62,7 +65,22 @@ def build_case_progress(case_id: str) -> CaseProgress:
     draft_root = loaded.case_dir / _configured_path(config, "draft_sections", "draft_sections")
     draft_files = _meaningful_files(draft_root, {".md", ".txt"})
     final_overview = any("final_overview" in path.name for path in draft_files)
-    drafting_complete = bool(draft_files) and final_overview
+    if task_type == "eb1a_rfe_response":
+        try:
+            import json
+
+            manifest_data = json.loads(
+                (loaded.case_dir / "case_strategy/strategy_manifest.json").read_text(
+                    encoding="utf-8-sig"
+                )
+            )
+            expected = len(manifest_data.get("units", []))
+        except (OSError, ValueError, TypeError):
+            expected = 0
+        rfe_drafts = [path for path in draft_files if "draft_sections\\rfe\\sections" in str(path) or "/draft_sections/rfe/sections/" in path.as_posix()]
+        drafting_complete = expected > 0 and len(rfe_drafts) >= expected
+    else:
+        drafting_complete = bool(draft_files) and final_overview
 
     exhibit_path = loaded.case_dir / _configured_path(config, "exhibit_index", "indexes/exhibit_index.csv")
     exhibit_rows = _read_csv(exhibit_path)

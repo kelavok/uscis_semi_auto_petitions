@@ -191,13 +191,11 @@ def _rfe_case_config_text(text: str) -> str:
             marker,
             marker
             + "  source_rfe_notice: source_documents/rfe/notice\n"
-            + "  source_rfe_issues: source_documents/rfe/issues\n"
+            + "  source_rfe_strategy: source_documents/rfe/strategy\n"
             + "  source_initial_filing_memo: source_documents/initial_filing/memorandum\n"
-            + "  source_initial_filing_issues: source_documents/initial_filing/issues\n"
-            + "  source_initial_filing_evidence: source_documents/initial_filing/evidence\n"
-            + "  source_rfe_new_issue_documents: source_documents/rfe_response/new_documents/issues\n"
-            + "  source_rfe_new_evidence: source_documents/rfe_response/new_documents/evidence\n"
-            + "  source_rfe_strategy: source_documents/rfe_response/strategy\n",
+            + "  source_rfe_new_originals: source_documents/rfe_response/new_documents/originals\n"
+            + "  source_rfe_new_translations: source_documents/rfe_response/new_documents/translations\n"
+            + "  rfe_strategy_root: case_strategy\n",
         )
     if "rfe_metadata:" not in text:
         text += (
@@ -212,10 +210,12 @@ def _rfe_case_config_text(text: str) -> str:
             "\n"
             "rfe_response:\n"
             "  plan_file: rfe_response_plan.md\n"
-            "  template_file: templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.txt\n"
+            "  template_file: templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.yaml\n"
+            "  human_template_file: templates/RFE/EB1/rfe draft template.docx\n"
+            "  strategy_manifest: case_strategy/strategy_manifest.json\n"
             "  attachment_label: Attachment\n"
             "  initial_filing_label: Initial Filing Exhibit\n"
-            "  default_issue_step: rfe_issue_response\n"
+            "  default_issue_step: rfe_dynamic_section\n"
             "\n"
             "rfe_folder_roles:\n"
             "  rfe_notice: .\n"
@@ -233,14 +233,14 @@ def _rfe_case_config_text(text: str) -> str:
 def _create_eb1a_rfe_structure(target: Path) -> None:
     rfe_directories = [
         "source_documents/rfe/notice",
-        "source_documents/rfe/issues",
+        "source_documents/rfe/strategy",
         "source_documents/initial_filing/memorandum",
-        "source_documents/initial_filing/issues",
-        "source_documents/initial_filing/evidence",
-        "source_documents/rfe_response/new_documents/issues",
-        "source_documents/rfe_response/new_documents/evidence",
-        "source_documents/rfe_response/strategy",
-        "draft_sections/rfe/issues",
+        "source_documents/rfe_response/new_documents/originals",
+        "source_documents/rfe_response/new_documents/translations",
+        "case_strategy/raw",
+        "case_strategy/units",
+        "case_strategy/initial_filing_sections",
+        "draft_sections/rfe/sections",
     ]
     for relative in rfe_directories:
         folder = target / relative
@@ -249,14 +249,13 @@ def _create_eb1a_rfe_structure(target: Path) -> None:
         if not keep.exists():
             keep.write_text("", encoding="utf-8")
 
-    source = PROJECT_ROOT / "templates" / "EB1A" / "case_folders_template"
+    source = PROJECT_ROOT / "templates" / "RFE" / "EB1" / "case_folders_template" / "new_docs"
+    if not source.exists():
+        source = PROJECT_ROOT / "templates" / "EB1A" / "case_folders_template"
     if source.exists():
         for destination in [
-            target / "source_documents" / "initial_filing" / "evidence",
-            target / "source_documents" / "rfe_response" / "new_documents" / "evidence",
-            target / "source_documents" / "rfe" / "issues",
-            target / "source_documents" / "initial_filing" / "issues",
-            target / "source_documents" / "rfe_response" / "new_documents" / "issues",
+            target / "source_documents" / "rfe_response" / "new_documents" / "originals",
+            target / "source_documents" / "rfe_response" / "new_documents" / "translations",
         ]:
             _copy_children_if_missing(source, destination)
 
@@ -280,7 +279,7 @@ def _create_eb1a_rfe_structure(target: Path) -> None:
         "  strategy: [write instructions]\n",
     )
     _write_if_missing(
-        target / "source_documents" / "rfe_response" / "strategy" / "README.md",
+        target / "source_documents" / "rfe" / "strategy" / "README.md",
         "# RFE strategy notes\n\n"
         "Put additional strategy notes here if they should be included in RFE prompts.\n"
         "Highest-priority custom instructions should also go into `user_case_instructions.md`.\n",

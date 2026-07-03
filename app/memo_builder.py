@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import filecmp
 import re
 import shutil
 import zipfile
@@ -15,7 +16,7 @@ from .workflow import extract_docx_text, folder_role_map, load_case, load_yaml_f
 
 DEFAULT_TEMPLATE_BY_TASK_TYPE = {
     "eb1a_petition": "templates/EB1A/EB1A_unified_template_LLM.docx",
-    "eb1a_rfe_response": "templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.txt",
+    "eb1a_rfe_response": "templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.yaml",
     "o1b_petition": "templates/O1B/MEMO O-1В_ver.1.0.docx",
 }
 
@@ -47,6 +48,45 @@ O1B_CRITERION_STEP_BY_ROLE = {
     "significant_recognition": ("o1b_criterion_v_episode", "Significant recognition"),
     "high_salary": ("o1b_criterion_vi_compensation", "High salary or substantial remuneration"),
     "comparable_evidence": ("o1b_comparable_evidence_episode", "Comparable evidence (Arts only)"),
+}
+
+RFE_CRITERION_TEMPLATE_KEY_BY_ROLE = {
+    "awards": "criterion_1_awards",
+    "memberships": "criterion_2_memberships",
+    "media": "criterion_3_published_material",
+    "judging": "criterion_4_judging",
+    "original_contribution": "criterion_5_original_contributions",
+    "scholarly_articles": "criterion_6_scholarly_articles",
+    "exhibitions": "criterion_7_display",
+    "leading_critical_role": "criterion_8_leading_or_critical_role",
+    "high_salary": "criterion_9_high_salary",
+    "commercial_success": "criterion_10_commercial_success_performing_arts",
+}
+
+RFE_CRITERION_ROMAN_BY_ROLE = {
+    "awards": "i",
+    "memberships": "ii",
+    "media": "iii",
+    "judging": "iv",
+    "original_contribution": "v",
+    "scholarly_articles": "vi",
+    "exhibitions": "vii",
+    "leading_critical_role": "viii",
+    "high_salary": "ix",
+    "commercial_success": "x",
+}
+
+RFE_CRITERION_HEADING_BY_ROLE = {
+    "awards": "Criterion 1. Evidence of receipt of lesser nationally or internationally recognized prizes or awards for excellence",
+    "memberships": "Criterion 2. Evidence of petitioner's membership in associations in the field for which classification is sought that require outstanding achievement of their members, as judged by recognized national or international experts in their disciplines or fields.",
+    "media": "Criterion 3. Published material about the petitioner in professional or major trade publications or other major media. The materials must relate to the petitioner's work in the field for which classification is sought.",
+    "judging": "Criterion 4. Evidence of the petitioner's participation on a panel, or individually, as a judge of the work of others in the same or in an allied field of specialization for which classification is sought.",
+    "original_contribution": "Criterion 5. Evidence of the petitioner's original scientific, scholarly, or business-related contributions of major significance in the field.",
+    "scholarly_articles": "Criterion 6. The person's authorship of scholarly articles in the field, in professional or major trade publications or other major media.",
+    "exhibitions": "Criterion 7. Display of the person's work in the field at artistic exhibitions or showcases.",
+    "leading_critical_role": "Criterion 8. The person has performed in a leading or critical role for organizations or establishments that have a distinguished reputation.",
+    "high_salary": "Criterion 9. The person has commanded a high salary, or other significantly high remuneration for services, in relation to others in the field.",
+    "commercial_success": "Criterion 10. Commercial successes in the performing arts, as shown by box office receipts or record, cassette, compact disk, or video sales.",
 }
 
 # Backward-compatible alias for EB-1A-specific callers and tests.
@@ -86,6 +126,34 @@ class IntakeSummary:
     fields_updated: int
     source_files_copied: int
     source_files_skipped: int
+
+
+def refresh_case_sources(case_id: str) -> IntakeSummary:
+    """Refresh remembered external source folders without changing intake data."""
+    loaded = load_case(case_id)
+    config = dict(loaded.config)
+    source_imports = config.get("source_imports", {})
+    if not isinstance(source_imports, dict):
+        source_imports = {}
+    copied = 0
+    skipped = 0
+    for key in ("source_originals", "source_translations", "source_other"):
+        raw_path = str(source_imports.get(key, "")).strip()
+        if not raw_path:
+            continue
+        refreshed, unchanged = _copy_source_folder(
+            Path(_clean_user_path(raw_path)),
+            loaded.case_dir / _path_from_config(config, key),
+            refresh_existing=True,
+        )
+        copied += refreshed
+        skipped += unchanged
+    return IntakeSummary(
+        config_path=loaded.case_dir / "case_config.yaml",
+        fields_updated=0,
+        source_files_copied=copied,
+        source_files_skipped=skipped,
+    )
 
 
 def apply_case_intake(
@@ -275,6 +343,9 @@ def render_markdown_skeleton(
 
 def write_docx(path: Path, case_id: str, config: dict[str, Any], skeleton: list[dict[str, Any]]) -> None:
     task_type = str(config.get("task_type", ""))
+    if task_type == "eb1a_rfe_response":
+        _write_rfe_company_docx(path, config, path.parent.parent)
+        return
     if task_type == "eb1a_petition":
         document_xml = _eb1a_document_xml(config, path.parent.parent)
     elif task_type == "o1b_petition":
@@ -299,6 +370,316 @@ def write_docx(path: Path, case_id: str, config: dict[str, Any], skeleton: list[
         archive.writestr("word/numbering.xml", _numbering_xml())
         if task_type == "o1b_petition":
             archive.writestr("word/footer1.xml", _o1b_footer_xml())
+
+
+def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) -> None:
+    """Build the RFE working file inside the company DOCX's native style system."""
+    try:
+        from docx import Document  # type: ignore
+        from docx.enum.style import WD_STYLE_TYPE  # type: ignore
+        from docx.enum.text import WD_ALIGN_PARAGRAPH  # type: ignore
+        from docx.oxml.ns import qn  # type: ignore
+        from docx.shared import Inches, Pt, RGBColor  # type: ignore
+    except ModuleNotFoundError as exc:
+        raise SystemExit(
+            "python-docx is required to build the company-formatted RFE working memorandum."
+        ) from exc
+
+    from .rfe_strategy import effective_strategy_units, load_strategy_manifest
+
+    response_config = config.get("rfe_response", {})
+    if not isinstance(response_config, dict):
+        response_config = {}
+    human_template_value = str(
+        response_config.get(
+            "human_template_file", "templates/RFE/EB1/rfe draft template.docx"
+        )
+    )
+    human_template = _resolve_project_or_case_template(case_dir, human_template_value)
+    if not human_template.exists():
+        raise SystemExit(f"RFE company Word template not found: {human_template}")
+    yaml_value = str(
+        response_config.get(
+            "template_file",
+            "templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.yaml",
+        )
+    )
+    yaml_path = _resolve_project_or_case_template(case_dir, yaml_value)
+    yaml_template = load_yaml_file(yaml_path) if yaml_path.exists() else {}
+    manifest = load_strategy_manifest(case_dir)
+    manifest["units"] = effective_strategy_units(case_dir, config)
+
+    document = Document(str(human_template))
+    body = document._element.body
+    for child in list(body):
+        if child.tag != qn("w:sectPr"):
+            body.remove(child)
+
+    normal = document.styles["Normal"]
+    normal.font.name = "Times New Roman"
+    normal.font.size = Pt(12)
+    normal._element.rPr.rFonts.set(qn("w:ascii"), "Times New Roman")
+    normal._element.rPr.rFonts.set(qn("w:hAnsi"), "Times New Roman")
+    normal.paragraph_format.line_spacing = 1.5
+    normal.paragraph_format.space_after = Pt(10)
+    normal.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    for heading_name, size in (("Heading 1", 16), ("Heading 2", 14), ("Heading 3", 12)):
+        style = document.styles[heading_name]
+        style.font.name = "Times New Roman"
+        style.font.size = Pt(size)
+        style.font.bold = True
+        style._element.rPr.rFonts.set(qn("w:ascii"), "Times New Roman")
+        style._element.rPr.rFonts.set(qn("w:hAnsi"), "Times New Roman")
+        style.paragraph_format.keep_with_next = True
+        style.paragraph_format.space_before = Pt(12)
+        style.paragraph_format.space_after = Pt(8)
+        style.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+    def ensure_style(name: str, *, italic: bool = False, gray: bool = False, indent: float = 0.0):
+        if name in [style.name for style in document.styles]:
+            style = document.styles[name]
+        else:
+            style = document.styles.add_style(name, WD_STYLE_TYPE.PARAGRAPH)
+            style.base_style = normal
+        style.font.name = "Times New Roman"
+        style.font.size = Pt(12)
+        style.font.italic = italic
+        style._element.rPr.rFonts.set(qn("w:ascii"), "Times New Roman")
+        style._element.rPr.rFonts.set(qn("w:hAnsi"), "Times New Roman")
+        if gray:
+            style.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+        style.paragraph_format.left_indent = Inches(indent)
+        style.paragraph_format.line_spacing = 1.5
+        style.paragraph_format.space_after = Pt(8)
+        return style
+
+    ensure_style("RFE Quote", italic=True, indent=0.25)
+    ensure_style("Drafting Note", italic=True, gray=True)
+    ensure_style("Script Placeholder", gray=True)
+
+    metadata = manifest.get("case_metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+    full_name = str(metadata.get("beneficiary_full_name") or _get(config, "beneficiary.full_name"))
+    preferred = str(metadata.get("preferred_reference") or _get(config, "beneficiary.preferred_reference"))
+    field = str(metadata.get("field") or config.get("field", ""))
+    specialization = str(metadata.get("specialization") or config.get("specialization", ""))
+    case_number = str(metadata.get("case_number") or _get(config, "rfe_metadata.case_number"))
+
+    def add_text(text: str = "", *, style: str = "Normal", bold: bool = False, italic: bool = False, align=None):
+        paragraph = document.add_paragraph(style=style)
+        if align is not None:
+            paragraph.alignment = align
+        run = paragraph.add_run(text)
+        run.bold = bold
+        run.italic = italic
+        run.font.name = "Times New Roman"
+        run._element.get_or_add_rPr().rFonts.set(qn("w:ascii"), "Times New Roman")
+        run._element.get_or_add_rPr().rFonts.set(qn("w:hAnsi"), "Times New Roman")
+        return paragraph
+
+    def add_label_value(label: str, value: str):
+        paragraph = document.add_paragraph(style="Normal")
+        label_run = paragraph.add_run(label)
+        label_run.bold = True
+        label_run.font.name = "Times New Roman"
+        value_run = paragraph.add_run(value)
+        value_run.font.name = "Times New Roman"
+        return paragraph
+
+    def add_criterion_line(role: str):
+        roman = RFE_CRITERION_ROMAN_BY_ROLE.get(role, "")
+        title = _rfe_criterion_heading(yaml_template, role)
+        description = re.sub(r"^Criterion\s+\d+\.\s*", "", title).strip()
+        paragraph = document.add_paragraph(style="Normal")
+        prefix = paragraph.add_run(f"Criterion ({roman}).")
+        prefix.bold = True
+        paragraph.add_run(f" {description}")
+        return paragraph
+
+    response_date = str(metadata.get("rfe_response_date", "")).strip()
+    add_text(response_date or "[RFE RESPONSE DATE TO BE CONFIRMED]")
+    add_text("TO USCIS", bold=True)
+    add_label_value(
+        "RE: ",
+        f"I-140 Petition for Alien of Extraordinary Ability in {field or '[FIELD]'} (EB-1A) - {specialization or '[SPECIALIZATION]'}",
+    ).paragraph_format.space_before = Pt(10)
+    add_label_value("Petitioner: ", full_name or "[BENEFICIARY NAME]")
+    add_label_value("Case No.: ", case_number or "[CASE NUMBER]")
+    office = str(metadata.get("uscis_office_or_service_center", "")).strip()
+    if office:
+        add_label_value("USCIS Office: ", office)
+    rfe_date = str(metadata.get("rfe_date", "")).strip()
+    if rfe_date:
+        add_label_value("RFE Date: ", rfe_date)
+    deadline = str(metadata.get("response_deadline", "")).strip()
+    if deadline:
+        add_label_value("Response Deadline: ", deadline)
+    add_text(str(metadata.get("salutation", "")).strip() or "Dear Officer:")
+    add_text(
+        f"Please accept this response to the Request for Evidence regarding the Form I-140 petition filed on behalf of {full_name or '[BENEFICIARY NAME]'} under INA § 203(b)(1)(A), who is a specialist in the field of {field or '[FIELD]'}, and especially in {specialization or '[SPECIALIZATION]'}."
+    )
+    add_text(
+        "We respectfully submit the enclosed additional evidence and explanations in response to the issues raised in the Request for Evidence. This response provides additional documentary evidence and legal explanation in support of the remaining criteria addressed in the RFE, namely:"
+    )
+    addressed_roles = list(
+        dict.fromkeys(
+            str(unit.get("criterion_role", ""))
+            for unit in manifest.get("units", [])
+            if unit.get("criterion_role")
+        )
+    )
+    for role in addressed_roles:
+        add_criterion_line(role)
+    accepted = [
+        str(role)
+        for role in manifest.get("accepted_criteria", [])
+        if str(role) in RFE_CRITERION_ROMAN_BY_ROLE
+    ]
+    if accepted:
+        paragraph = add_text(
+            f"USCIS recognized that {preferred or full_name or '[BENEFICIARY]'} satisfies the following criteria:",
+            bold=True,
+        )
+        paragraph.paragraph_format.space_before = Pt(12)
+        paragraph.paragraph_format.space_after = Pt(12)
+        for role in accepted:
+            add_criterion_line(role)
+    add_text(
+        "For the convenience of the adjudicating officer, this response also cites and references evidence previously submitted with the original petition where relevant. Many supporting documents referenced throughout this response were already included in the initial filing and are therefore not duplicated herein in order to avoid making the present response unnecessarily voluminous and duplicative."
+    )
+    add_text(
+        "Accordingly, we respectfully request that USCIS consider this response together with the evidence, exhibits, and legal arguments submitted in the original petition as part of the total evidentiary record."
+    )
+    closing = add_text("Respectfully submitted,")
+    closing.paragraph_format.space_before = Pt(12)
+    submitter = str(metadata.get("submitter_name", "")).strip() or full_name or "[SUBMITTER NAME]"
+    title = str(metadata.get("submitter_title", "")).strip()
+    add_text(submitter, bold=True)
+    if title:
+        add_text(title, bold=True)
+
+    units = [unit for unit in manifest.get("units", []) if isinstance(unit, dict)]
+    body_units = [
+        unit
+        for unit in units
+        if str(unit.get("section_type", "")) not in {"cover_letter", "attachments"}
+    ]
+    grouped: list[tuple[str, list[dict[str, Any]]]] = []
+    group_index: dict[str, int] = {}
+    for unit in body_units:
+        role = str(unit.get("criterion_role", ""))
+        key = f"criterion:{role}" if role else f"section:{unit.get('section_id') or unit.get('unit_id')}"
+        if key not in group_index:
+            group_index[key] = len(grouped)
+            grouped.append((key, []))
+        grouped[group_index[key]][1].append(unit)
+
+    for key, group in grouped:
+        document.add_page_break()
+        first = group[0]
+        role = str(first.get("criterion_role", ""))
+        section_type = str(first.get("section_type", ""))
+        heading = _rfe_criterion_heading(yaml_template, role) if role else str(first.get("section_title") or first.get("title") or "RFE Response Section")
+        add_text(heading, style="Heading 1")
+        if role:
+            add_text(
+                "Exhibits from XX to XX, Pages from XX to XX.",
+                align=WD_ALIGN_PARAGRAPH.CENTER,
+            )
+
+        issues: list[dict[str, Any]] = []
+        seen_issues: set[str] = set()
+        for unit in group:
+            for issue in unit.get("rfe_issues", []):
+                issue_id = str(issue.get("issue_id", ""))
+                if issue_id and issue_id not in seen_issues:
+                    issues.append(issue)
+                    seen_issues.add(issue_id)
+        if issues:
+            label = add_text("In the RFE, the officer states:", bold=True)
+            label.paragraph_format.space_before = Pt(12)
+            label.paragraph_format.space_after = Pt(6)
+            for issue in issues:
+                quote = str(issue.get("exact_rfe_quote", "")).strip()
+                if quote:
+                    cleaned_quote = quote.strip("“”\"")
+                    add_text(f"“{cleaned_quote}”", style="RFE Quote")
+            answer = add_text("Answer:", bold=True)
+            answer.paragraph_format.line_spacing = 1.15
+
+        for unit in group:
+            title_text = str(unit.get("title", "")).strip()
+            if len(group) > 1 or role or title_text != heading:
+                add_text(title_text or str(unit.get("unit_id", "")), style="Heading 2")
+            starter = str(unit.get("starter_text", "")).strip()
+            for paragraph_text in re.split(r"\n\s*\n", starter):
+                if paragraph_text.strip():
+                    add_text(paragraph_text.strip())
+            for subheading in unit.get("planned_subheadings", []):
+                if str(subheading).strip():
+                    add_text(str(subheading).strip(), style="Heading 3")
+            strategy = str(unit.get("strategy", "")).strip()
+            if strategy:
+                add_text(f"Drafting direction (internal): {strategy}", style="Drafting Note")
+            unit_id = str(unit.get("unit_id", ""))
+            draft_path = case_dir / "draft_sections/rfe/sections" / f"{unit_id}.md"
+            if draft_path.exists():
+                draft_text = draft_path.read_text(encoding="utf-8-sig", errors="replace").strip()
+                for paragraph_text in re.split(r"\n\s*\n", draft_text):
+                    if paragraph_text.strip():
+                        add_text(paragraph_text.strip())
+            else:
+                add_text(
+                    f"[LLM SECTION PLACEHOLDER: rfe_dynamic_section / episode_id={unit_id}]",
+                    style="Script Placeholder",
+                )
+        if role:
+            add_text("Conclusion", style="Heading 2")
+            add_text(
+                f"[DRAFTING PLACEHOLDER: conclude specifically how the submitted evidence rebuts the RFE objections to Criterion ({RFE_CRITERION_ROMAN_BY_ROLE.get(role, '')}).]",
+                style="Script Placeholder",
+            )
+
+    document.add_page_break()
+    add_text("Attachments / Evidence Index", style="Heading 1")
+    add_text(
+        "[SCRIPT PLACEHOLDER: generated from indexes/exhibit_index.csv after evidence pagination is finalized]",
+        style="Script Placeholder",
+    )
+
+    for section in document.sections:
+        section.top_margin = Inches(1)
+        section.right_margin = Inches(1)
+        section.bottom_margin = Inches(1)
+        section.left_margin = Inches(1)
+        section.header_distance = Inches(0.5)
+        section.footer_distance = Inches(0.5)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    document.save(str(path))
+
+
+def _resolve_project_or_case_template(case_dir: Path, value: str) -> Path:
+    candidate = Path(value)
+    if candidate.is_absolute():
+        return candidate
+    project_candidate = PROJECT_ROOT / candidate
+    if project_candidate.exists():
+        return project_candidate
+    return case_dir / candidate
+
+
+def _rfe_criterion_heading(yaml_template: dict[str, Any], role: str) -> str:
+    key = RFE_CRITERION_TEMPLATE_KEY_BY_ROLE.get(role, "")
+    sections = yaml_template.get("sections", {}) if isinstance(yaml_template, dict) else {}
+    criteria = sections.get("criteria", {}) if isinstance(sections, dict) else {}
+    data = criteria.get(key, {}) if isinstance(criteria, dict) else {}
+    if isinstance(data, dict) and data.get("heading"):
+        return str(data["heading"])
+    if role in RFE_CRITERION_HEADING_BY_ROLE:
+        return RFE_CRITERION_HEADING_BY_ROLE[role]
+    fallback = EB1A_CRITERION_STEP_BY_ROLE.get(role, ("", role.replace("_", " ").title()))[1]
+    return fallback
 
 
 def _read_template_text(path: Path) -> str:
@@ -484,42 +865,49 @@ def _rfe_skeleton(
                 _substitute("Specialization: __SPECIALIZATION__", config),
             ],
         },
+    ]
+    from .rfe_strategy import load_strategy_manifest
+
+    manifest = load_strategy_manifest(case_dir)
+    for unit in manifest.get("units", []):
+        unit_id = str(unit.get("unit_id", ""))
+        draft_path = case_dir / "draft_sections" / "rfe" / "sections" / f"{unit_id}.md"
+        starter = str(unit.get("starter_text", "")).strip()
+        if draft_path.exists():
+            draft_text = draft_path.read_text(encoding="utf-8-sig", errors="replace").strip()
+            paragraphs = [part.strip() for part in re.split(r"\n\s*\n", draft_text) if part.strip()]
+        else:
+            paragraphs = [part.strip() for part in re.split(r"\n\s*\n", starter) if part.strip()]
+            paragraphs.append(
+                f"[LLM SECTION PLACEHOLDER: rfe_dynamic_section / episode_id={unit_id}]"
+            )
+        skeleton.append(
+            {
+                "level": 1 if not unit.get("criterion_role") else 2,
+                "title": str(unit.get("title", unit_id)),
+                "paragraphs": paragraphs,
+                "inferred": True,
+                "unit_id": unit_id,
+                "criterion_role": str(unit.get("criterion_role", "")),
+            }
+        )
+    skeleton.append(
         {
             "level": 1,
-            "title": "Cover Letter / Procedural Introduction",
-            "paragraphs": ["[LLM SECTION PLACEHOLDER: rfe_cover_letter]"],
-        },
-    ]
-    for issue in _rfe_issues_from_folders(case_dir):
+            "title": "Attachments / Evidence Index",
+            "paragraphs": ["[SCRIPT PLACEHOLDER: generated from indexes/exhibit_index.csv]"],
+        }
+    )
+    if not any(item.get("inferred") for item in skeleton):
         skeleton.append(
             {
                 "level": 1,
-                "title": f"RFE Issue: {issue}",
-                "paragraphs": [f"[LLM SECTION PLACEHOLDER: rfe_issue_response / episode_id={safe_path_component(issue)}]"],
-                "inferred": True,
+                "title": "Strategy bootstrap required",
+                "paragraphs": [
+                    "[SCRIPT PLACEHOLDER: accept the RFE strategy JSON to generate the case-specific structure]"
+                ],
             }
         )
-    skeleton.extend(
-        [
-            {
-                "level": 1,
-                "title": "Final Merits Determination",
-                "paragraphs": ["[LLM SECTION PLACEHOLDER: rfe_final_merits]"],
-            },
-            {
-                "level": 1,
-                "title": "Conclusion",
-                "paragraphs": ["[LLM SECTION PLACEHOLDER: rfe_conclusion]"],
-            },
-            {
-                "level": 1,
-                "title": "Attachments / Evidence Index",
-                "paragraphs": ["[SCRIPT PLACEHOLDER: generated from indexes/exhibit_index.csv]"],
-            },
-        ]
-    )
-    if not any(item.get("inferred") for item in skeleton):
-        skeleton.extend(_template_fallback_sections(report, prefix="[TEMPLATE STRUCTURE PLACEHOLDER]"))
     return skeleton
 
 
@@ -681,14 +1069,21 @@ def _template_fallback_sections(report: TemplateParseReport, *, prefix: str) -> 
 
 
 def _resolve_template_path(config: dict[str, Any], template_path: str) -> Path:
+    task_type = str(config.get("task_type", ""))
     if template_path.strip():
         path = Path(template_path.strip())
-        return path if path.is_absolute() else PROJECT_ROOT / path
-    task_type = str(config.get("task_type", ""))
+        resolved = path if path.is_absolute() else PROJECT_ROOT / path
+        if task_type != "eb1a_rfe_response" or resolved.exists():
+            return resolved
+        # Existing browser forms/case configs may still submit the retired TXT path.
+        return PROJECT_ROOT / DEFAULT_TEMPLATE_BY_TASK_TYPE["eb1a_rfe_response"]
     configured = config.get("rfe_response", {}).get("template_file", "") if isinstance(config.get("rfe_response"), dict) else ""
     value = configured or DEFAULT_TEMPLATE_BY_TASK_TYPE.get(task_type, DEFAULT_TEMPLATE_BY_TASK_TYPE["eb1a_petition"])
     path = Path(str(value))
-    return path if path.is_absolute() else PROJECT_ROOT / path
+    resolved = path if path.is_absolute() else PROJECT_ROOT / path
+    if task_type == "eb1a_rfe_response" and not resolved.exists():
+        return PROJECT_ROOT / DEFAULT_TEMPLATE_BY_TASK_TYPE["eb1a_rfe_response"]
+    return resolved
 
 
 def _parse_case_info_file(path_value: str) -> dict[str, str]:
@@ -819,7 +1214,9 @@ def _apply_updates(config: dict[str, Any], updates: dict[str, str]) -> int:
     return count
 
 
-def _copy_source_folder(source: Path, destination: Path) -> tuple[int, int]:
+def _copy_source_folder(
+    source: Path, destination: Path, *, refresh_existing: bool = False
+) -> tuple[int, int]:
     if not source.exists() or not source.is_dir():
         raise SystemExit(f"Source folder not found: {source}")
     copied = 0
@@ -831,8 +1228,13 @@ def _copy_source_folder(source: Path, destination: Path) -> tuple[int, int]:
         rel = item.relative_to(source)
         target = destination / rel
         if target.exists():
-            skipped += 1
-            continue
+            if (
+                not refresh_existing
+                or item.resolve() == target.resolve()
+                or filecmp.cmp(item, target, shallow=False)
+            ):
+                skipped += 1
+                continue
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(item, target)
         copied += 1

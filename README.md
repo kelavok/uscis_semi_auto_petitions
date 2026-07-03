@@ -636,6 +636,26 @@ available and receive the full episode as a safe fallback.
 
 ## EB1A RFE response track
 
+The RFE track is strategy-first. Its three stages are:
+
+1. Stage 1A/1B: provide a human strategy file and the full RFE, run the generated bootstrap prompt, then paste the standardized JSON output. The accepted output is stored in `case_strategy/strategy_manifest.json` and generates the case-specific working memorandum structure.
+2. Stage 1C/2: provide the initial filing memorandum and new RFE documents. The scanner partitions the memorandum by criterion, extracts its positions and document lists, preserves `originals`/`translations` for new evidence, and builds prompts for the ordered drafting units from the strategy manifest.
+3. Stage 3: build indexes, separator pages, and the final evidence bundle using the existing EB-1A layout process.
+
+The browser UI is the preferred path. CLI equivalents are:
+
+```powershell
+python -m app.draft rfe-bootstrap-prompt --case rfe_001 --strategy "C:\path\strategy.docx" --rfe "C:\path\RFE.pdf"
+python -m app.draft rfe-import-strategy --case rfe_001 --file "C:\path\strategy-output.json"
+python -m app.draft rfe-import-evidence --case rfe_001 --initial-memo "C:\path\initial-memo.docx" --new-docs "C:\path\new-docs"
+```
+
+The initial filing is represented only by its memorandum. Documents that must be resubmitted belong in the corresponding new-document folder. The new-document root may contain `originals/` and `translations/`; a strategy unit maps to that structure through its `source_folder` field.
+
+If a document folder contains `extracts.txt`, its text is added to the LLM prompt as folder-local orientation for screenshots, scans, or other partially/non-machine-readable documents. `extracts.txt` is never added to `document_index.csv`, exhibit indexes, citations, `used_documents`, or the final evidence bundle. It applies only to the underlying documents in the exact folder where it is stored.
+
+If a document folder contains `info.txt`, its text is added to the prompt as additional LLM instructions and explanatory context scoped only to that exact folder. Like `extracts.txt`, `info.txt` is never indexed, cited, added to `used_documents`, or included in the final evidence bundle.
+
 Для ответа на RFE создан отдельный task type:
 
 ```powershell
@@ -650,35 +670,38 @@ python -m app.draft init-case --case rfe_001 --task-type eb1a_rfe_response
 source_documents/
   rfe/
     notice/                         # полный текст RFE
-    issues/                         # куски RFE по issue/episode
+    strategy/                       # исходная human strategy
   initial_filing/
     memorandum/                     # исходный меморандум / petition letter
-    issues/                         # текст initial filing по соответствующим issue
-    evidence/                       # документы из первоначальной подачи
   rfe_response/
     new_documents/
-      issues/                       # новые документы по issue/episode
-      evidence/                     # общие новые документы
-    strategy/                       # дополнительные strategy notes
+      originals/                    # новые документы по критериям/эпизодам
+      translations/                 # переводы с той же структурой
+case_strategy/
+  strategy_manifest.json            # единый источник структуры и стратегии
+  units/<unit_id>/                  # стратегия и дословные RFE-цитаты по drafting unit
+  initial_filing_sections/          # автоматически выделенный текст initial filing по критериям
 ```
 
 Главные редактируемые файлы:
 
 - `user_case_instructions.md` — высший приоритет: стиль, стратегия, запреты, порядок;
-- `rfe_response_plan.md` — структура ответа, issue IDs, порядок разделов, episode folders;
-- `source_documents/rfe_response/strategy/*.md` — дополнительные заметки стратегии.
+- `case_strategy/strategy_manifest.json` — принятая структура ответа, issue IDs, дословные цитаты, критерии и эпизоды;
+- `rfe_response_plan.md` — человекочитаемое представление принятого manifest;
+- `prompt_instructions/*.md` — дополнительные инструкции для конкретного drafting unit.
 
 Для одного RFE issue используется repeatable step:
 
 ```powershell
-python -m app.draft build-prompt --case rfe_001 --step rfe_issue_response --episode-id awards_1 --episode-folder "1. Награды/1 episode"
+python -m app.draft build-prompt --case rfe_001 --step rfe_dynamic_section --episode-id awards_1 --episode-folder "1. Награды/1 episode"
 ```
 
 Prompt по этому шагу включает:
 
-- RFE text из `source_documents/rfe/issues/<episode_folder>`;
-- initial filing text/evidence list из `source_documents/initial_filing/issues/<episode_folder>`;
-- new RFE documents из `source_documents/rfe_response/new_documents/issues/<episode_folder>`;
-- case/user strategy instructions.
+- дословные RFE quotes и strategy из соответствующего `case_strategy/units/<unit_id>`;
+- выделенный текст initial filing по соответствующему критерию;
+- originals/translations initial filing из папки, указанной в `source_folder`;
+- originals/translations новых RFE-документов из той же папочной структуры;
+- case/user и unit-specific instructions.
 
 Если в критерии несколько эпизодов, сохраняется правило: один prompt — один episode.
