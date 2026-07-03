@@ -145,6 +145,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Scanned files: {summary.scanned_files}")
         print(f"Added index rows: {summary.added_rows}")
         print(f"Updated index rows: {summary.updated_rows}")
+        print(f"Removed auxiliary index rows: {summary.removed_rows}")
         print(f"Locked rows skipped: {summary.locked_rows_skipped}")
         print(f"Extracted text files: {summary.extracted_texts}")
         print(f"Non-text / visual files: {summary.non_text_files}")

@@ -1,3 +1,4 @@
+import csv
 import unittest
 import importlib.util
 import zipfile
@@ -265,6 +266,15 @@ class CliSmokeTests(unittest.TestCase):
                 (role_episode / "1 role and contribution/role.txt").write_text(
                     "role evidence", encoding="utf-8"
                 )
+                (role_episode / "1 role and contribution/extracts.txt").write_text(
+                    "The screenshot identifies the beneficiary as the project lead.", encoding="utf-8"
+                )
+                (role_episode / "1 role and contribution/info.md").write_text(
+                    "Emphasize the beneficiary's operational responsibility.", encoding="utf-8"
+                )
+                (role_episode / "1 role and contribution/README.md").write_text(
+                    "Treat the org chart and project screenshot as one evidence set.", encoding="utf-8"
+                )
                 (role_episode / "2 distinguished reputation").mkdir()
                 (role_episode / "2 distinguished reputation/reputation.txt").write_text(
                     "reputation evidence", encoding="utf-8"
@@ -304,6 +314,9 @@ class CliSmokeTests(unittest.TestCase):
             index_text = (case_dir / "indexes/document_index.csv").read_text(encoding="utf-8-sig")
             self.assertIn(",organization_role,", index_text)
             self.assertIn(",high_salary,", index_text)
+            self.assertNotIn("extracts.txt", index_text)
+            self.assertNotIn("info.md", index_text)
+            self.assertNotIn("README.md", index_text)
             phase_units = [
                 unit
                 for unit in stage.units
@@ -365,6 +378,13 @@ class CliSmokeTests(unittest.TestCase):
             self.assertIn("task_type: `o1b_petition`", role_prompt)
             self.assertIn("role.txt", role_prompt)
             self.assertNotIn("reputation.txt", role_prompt)
+            self.assertIn("The screenshot identifies the beneficiary as the project lead", role_prompt)
+            self.assertIn("prompt-only folder sidecar (extracts.txt)", role_prompt)
+            self.assertIn("Emphasize the beneficiary's operational responsibility", role_prompt)
+            self.assertIn("prompt-only folder sidecar (info.md)", role_prompt)
+            self.assertIn("Treat the org chart and project screenshot as one evidence set", role_prompt)
+            self.assertIn("prompt-only folder sidecar (README.md)", role_prompt)
+            self.assertIn("do not add to document/exhibit indexes", role_prompt)
             self.assertIn("primary exhibit for this section is Exhibit 4", role_prompt)
             step_order = [str(step.get("step_id")) for step in loaded.workflow["steps"]]
             self.assertLess(
@@ -1076,6 +1096,21 @@ class CliSmokeTests(unittest.TestCase):
             self.assertIn("text_extracted", index_text)
             self.assertIn("image_or_photo", index_text)
 
+            readme_path = source_dir / "README.md"
+            readme_path.write_text("Folder-only prompt guidance.", encoding="utf-8")
+            with (indexes_dir / "document_index.csv").open(
+                "a", encoding="utf-8", newline=""
+            ) as handle:
+                csv.DictWriter(handle, fieldnames=evidence_module.INDEX_FIELDS).writerow(
+                    {
+                        "document_id": "DOC9999",
+                        "original_file_name": "README.md",
+                        "display_title": "README",
+                        "file_path": readme_path.relative_to(case_dir).as_posix(),
+                        "manual_edit_lock": "true",
+                    }
+                )
+
             manual_description.write_text(
                 "# Manual description for DOC0002\n\n"
                 "## Description for LLM\n\n"
@@ -1089,9 +1124,11 @@ class CliSmokeTests(unittest.TestCase):
                 second_summary = scan_documents("case_001")
 
             self.assertEqual(second_summary.extracted_texts, 2)
+            self.assertEqual(second_summary.removed_rows, 1)
             index_text = (indexes_dir / "document_index.csv").read_text(encoding="utf-8")
             self.assertIn("manual_description_available", index_text)
             self.assertIn("manual_descriptions/DOC0002.md", index_text)
+            self.assertNotIn("README.md", index_text)
 
     def test_repeatable_episode_prompt_import_and_insert(self) -> None:
         with TemporaryDirectory() as temp:

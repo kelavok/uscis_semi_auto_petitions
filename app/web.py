@@ -240,7 +240,10 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
     validate_case_id(case_id)
     if action == "scan_documents":
         summary = scan_documents(case_id)
-        return f"Scanned {summary.scanned_files} file(s); added {summary.added_rows}, updated {summary.updated_rows}."
+        return (
+            f"Scanned {summary.scanned_files} file(s); added {summary.added_rows}, "
+            f"updated {summary.updated_rows}, removed {summary.removed_rows} auxiliary row(s)."
+        )
     if action == "refresh_intake_sources":
         loaded = load_case(case_id)
         if str(loaded.config.get("task_type", "")) == "eb1a_rfe_response":
@@ -268,6 +271,7 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
         return (
             f"Refreshed document list: {scanned.scanned_files} scanned, "
             f"{scanned.added_rows} added, {scanned.updated_rows} updated, "
+            f"{scanned.removed_rows} auxiliary row(s) removed, "
             f"{linked.linked_translations} translation(s) linked."
         )
     if action == "build_rfe_strategy_prompt":

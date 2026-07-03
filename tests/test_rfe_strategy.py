@@ -153,6 +153,10 @@ class RfeStrategyTests(unittest.TestCase):
                     "LLM instruction: emphasize the independent organizer confirmation first.",
                     encoding="utf-8",
                 )
+                (new_docs / "README.md").write_text(
+                    "Use the ceremony screenshot and organizer letter as one evidence set.",
+                    encoding="utf-8",
+                )
                 (new_docs / "broken_scan.docx").write_bytes(
                     b"This is an image export incorrectly named as a DOCX file."
                 )
@@ -169,6 +173,7 @@ class RfeStrategyTests(unittest.TestCase):
                 )
                 self.assertNotIn("extracts.txt", document_index)
                 self.assertNotIn("info.txt", document_index)
+                self.assertNotIn("README.md", document_index)
                 self.assertIn("broken_scan.docx", document_index)
                 self.assertIn("docx_invalid_or_corrupt", document_index)
                 self.assertNotIn("~$open_in_word.docx", document_index)
@@ -193,6 +198,8 @@ class RfeStrategyTests(unittest.TestCase):
                 self.assertIn("emphasize the independent organizer confirmation first", prompt_text)
                 self.assertIn("prompt-only folder sidecar (info.txt)", prompt_text)
                 self.assertIn("additional instructions and explanations", prompt_text)
+                self.assertIn("Use the ceremony screenshot and organizer letter as one evidence set", prompt_text)
+                self.assertIn("prompt-only folder sidecar (README.md)", prompt_text)
                 self.assertIn("Technical document selection for this unit", prompt_text)
                 self.assertIn("must be copied exactly", prompt_text)
 

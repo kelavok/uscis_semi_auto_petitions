@@ -62,6 +62,7 @@ class ScanSummary:
     scanned_files: int
     added_rows: int
     updated_rows: int
+    removed_rows: int
     locked_rows_skipped: int
     extracted_texts: int
     non_text_files: int
@@ -102,7 +103,14 @@ class ManualTranslationLinkSummary:
 def scan_documents(case_id: str) -> ScanSummary:
     loaded = load_case(case_id)
     index_path = loaded.case_dir / _case_path_value(loaded.config, "document_index")
-    rows = _read_index(index_path)
+    rows: list[dict[str, str]] = []
+    removed_rows = 0
+    for row in _read_index(index_path):
+        indexed_path = loaded.case_dir / _normalize_slashes(row.get("file_path", ""))
+        if is_prompt_sidecar(indexed_path) or is_office_temporary_file(indexed_path):
+            removed_rows += 1
+            continue
+        rows.append(row)
     by_path = {_normalize_slashes(row.get("file_path", "")): row for row in rows if row.get("file_path")}
     next_number = _next_document_number(rows)
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -172,6 +180,7 @@ def scan_documents(case_id: str) -> ScanSummary:
         scanned_files=scanned_files,
         added_rows=added_rows,
         updated_rows=updated_rows,
+        removed_rows=removed_rows,
         locked_rows_skipped=locked_rows_skipped,
         extracted_texts=extracted_texts,
         non_text_files=non_text_files,

@@ -654,7 +654,7 @@ The initial filing is represented only by its memorandum. Documents that must be
 
 If a document folder contains `extracts.txt`, its text is added to the LLM prompt as folder-local orientation for screenshots, scans, or other partially/non-machine-readable documents. `extracts.txt` is never added to `document_index.csv`, exhibit indexes, citations, `used_documents`, or the final evidence bundle. It applies only to the underlying documents in the exact folder where it is stored.
 
-If a document folder contains `info.txt`, its text is added to the prompt as additional LLM instructions and explanatory context scoped only to that exact folder. Like `extracts.txt`, `info.txt` is never indexed, cited, added to `used_documents`, or included in the final evidence bundle.
+If a document folder contains `info.txt`, `info.md`, `README.txt`, or `README.md`, its text is added to the prompt as additional LLM instructions and explanatory context scoped only to that exact folder. Like `extracts.txt`, these files are never indexed, cited, added to `used_documents`, or included in the final evidence bundle. This rule applies uniformly to EB-1A, O-1B, and RFE prompts.
 
 Для ответа на RFE создан отдельный task type:
 

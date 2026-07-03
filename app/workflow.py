@@ -456,40 +456,8 @@ def render_evidence_context(
                 parts.append(f"- missing: `{folder}`")
             parts.append("")
             continue
-        for file_path in files:
-            rel = file_path.relative_to(loaded.case_dir)
-            doc_rows = document_index.get(_normalize_slashes(rel.as_posix()), [])
-            doc_row = doc_rows[0] if doc_rows else {}
-            doc_id = doc_row.get("document_id", "")
-            display_title = doc_row.get("display_title", "")
-            extraction_status = doc_row.get("extraction_status", "")
-            text_extraction_path = doc_row.get("text_extraction_path", "")
-            translation_status = doc_row.get("translation_status", "")
-            relationship_type = doc_row.get("relationship_type", "")
-            parent_document_id = doc_row.get("parent_document_id", "")
-            parts.append(f"#### {rel}")
-            if doc_id or display_title:
-                parts.append(f"- document_id: {doc_id}")
-                parts.append(f"- display_title: {display_title}")
-                parts.append(f"- translation_status: {translation_status or '[not set]'}")
-                parts.append(f"- relationship_type: {relationship_type or '[not set]'}")
-                if parent_document_id:
-                    parts.append(f"- parent_document_id: {parent_document_id}")
-                    parts.append("- bundle_order_hint: original first, then this translation")
-                parts.append(f"- extraction_status: {extraction_status or '[not scanned]'}")
-            else:
-                parts.append("- document_id: [not indexed yet]")
-            parts.append("")
-            if text_extraction_path:
-                extracted = loaded.case_dir / text_extraction_path
-                parts.append(_fenced(read_textual_file(extracted, EVIDENCE_TEXT_LIMIT), "text"))
-            elif file_path.suffix.lower() in TEXT_EXTENSIONS | DOCX_EXTENSIONS:
-                parts.append(
-                    _fenced(read_textual_file(file_path, EVIDENCE_TEXT_LIMIT), _fence_language(file_path))
-                )
-            else:
-                parts.append("[Binary or unsupported file type: listed for reference only.]")
-            parts.append("")
+        parts.append(render_evidence_files(loaded, files, document_index))
+        parts.append("")
     return "\n".join(parts).strip()
 
 
@@ -557,7 +525,7 @@ def render_evidence_files(
         rel = file_path.relative_to(loaded.case_dir)
         sidecar_kind = prompt_sidecar_kind(file_path)
         if sidecar_kind:
-            if sidecar_kind == "info":
+            if sidecar_kind in {"info", "readme"}:
                 label = "Folder-local instructions and explanatory notes"
                 purpose = (
                     "apply these additional instructions and explanations only while analyzing "
@@ -572,7 +540,7 @@ def render_evidence_files(
             parts.extend(
                 [
                     f"#### {label} for folder `{rel.parent.as_posix()}`",
-                    f"- source_type: prompt-only folder sidecar ({sidecar_kind}.txt)",
+                    f"- source_type: prompt-only folder sidecar ({file_path.name})",
                     "- indexing_policy: do not add to document/exhibit indexes, used_documents, citations, or final bundle",
                     f"- scope: {purpose}",
                     "- evidence_policy: this sidecar is not independent evidence; rely on and cite the underlying documents",
