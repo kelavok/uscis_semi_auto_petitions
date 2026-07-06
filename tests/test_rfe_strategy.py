@@ -267,7 +267,11 @@ class RfeStrategyTests(unittest.TestCase):
                 self.assertEqual(refreshed.status.exhibit_count, 1)
                 self.assertTrue(refreshed.status.ready_for_separators)
                 self.assertFalse(refreshed.status.unsupported_documents)
-                self.assertIn("Evidence indexes ready", web.render_layout_page("rfe_test", {}))
+                layout_page = web.render_layout_page("rfe_test", {})
+                self.assertIn("Evidence indexes ready", layout_page)
+                self.assertIn("Select & prepare", layout_page)
+                self.assertIn("Prepare selected bundle", layout_page)
+                self.assertIn("Build selected PDF", layout_page)
                 refreshed_index = (case_dir / "indexes/document_index.csv").read_text(
                     encoding="utf-8-sig"
                 )

@@ -11,11 +11,15 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from .bundle_workflow import (
+    bundle_catalog,
     build_bundle_plan,
     build_evidence_bundle,
     build_exhibit_index,
     generate_separator_pages,
+    inspect_bundle_preparation,
     inspect_layout_index_status,
+    load_bundle_selection,
+    prepare_selected_bundle,
     refresh_layout_indexes,
     render_separator_pdfs,
 )
@@ -552,6 +556,24 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
     if action == "bundle_dry_run":
         summary = build_bundle_plan(case_id)
         return f"Bundle plan: {summary.ready_items} ready, {summary.missing_items} missing, {summary.unsupported_items} unsupported."
+    if action == "prepare_selected_bundle":
+        selected_exhibits = [
+            key.removeprefix("select_exhibit_")
+            for key, value in data.items()
+            if key.startswith("select_exhibit_") and value == "on"
+        ]
+        selected_documents = [
+            key.removeprefix("select_document_")
+            for key, value in data.items()
+            if key.startswith("select_document_") and value == "on"
+        ]
+        summary = prepare_selected_bundle(case_id, selected_exhibits, selected_documents)
+        return (
+            f"Prepared {len(summary.selection.exhibit_numbers)} exhibit(s) and "
+            f"{len(summary.selection.document_ids)} document(s): rendered "
+            f"{summary.separator_pdfs} separator PDF(s); plan has "
+            f"{summary.plan.missing_items} missing and {summary.plan.unsupported_items} unsupported item(s)."
+        )
     if action == "bundle_build":
         summary = build_evidence_bundle(case_id)
         return f"Built final PDF: {summary.final_pdf_path}."
@@ -729,6 +751,9 @@ def render_layout_page(case_id: str, params: dict[str, list[str]]) -> str:
     layout_percent = _stage_percent(progress, {"exhibits", "bundle"})
     index_status = inspect_layout_index_status(case_id)
     index_ready = index_status.ready_for_separators
+    catalog = bundle_catalog(case_id) if index_ready else []
+    selection = load_bundle_selection(case_id) if index_ready else None
+    preparation = inspect_bundle_preparation(case_id) if index_ready else None
     if not index_status.unique_used_documents:
         index_notice = (
             '<div class="alert error"><strong>No validated evidence selection found.</strong> '
@@ -760,6 +785,45 @@ def render_layout_page(case_id: str, params: dict[str, list[str]]) -> str:
         if index_status.unsupported_documents
         else ""
     )
+    selected_exhibits = set(selection.exhibit_numbers) if selection else set()
+    selected_documents = set(selection.document_ids) if selection else set()
+    exhibit_rows = []
+    for exhibit in catalog:
+        exhibit_number = str(exhibit["exhibit_number"])
+        documents = exhibit["documents"]
+        document_rows = "".join(
+            '<label class="bundle-document">'
+            f'<input type="checkbox" name="select_document_{escape(str(document.get("document_id", "")))}" '
+            f'data-exhibit="{escape(exhibit_number)}"'
+            f'{" checked" if str(document.get("document_id", "")) in selected_documents else ""}>'
+            f'<code>{escape(str(document.get("document_id", "")))}</code> '
+            f'<span>{escape(str(document.get("display_title", "") or document.get("original_file_name", "")))}</span>'
+            '</label>'
+            for document in documents
+        )
+        exhibit_rows.append(
+            f'<details class="bundle-exhibit" open><summary><label>'
+            f'<input type="checkbox" name="select_exhibit_{escape(exhibit_number)}" '
+            f'data-exhibit-toggle="{escape(exhibit_number)}"'
+            f'{" checked" if exhibit_number in selected_exhibits else ""}>'
+            f'<strong>Exhibit {escape(exhibit_number)} — {escape(str(exhibit["display_title"]))}</strong> '
+            f'<span class="muted">({len(documents)} documents)</span></label></summary>'
+            f'<div class="bundle-documents">{document_rows}</div></details>'
+        )
+    selector = (
+        '<form method="post" class="bundle-selection" data-bundle-selection>'
+        f'<input type="hidden" name="case" value="{escape(case_id)}">'
+        '<input type="hidden" name="action" value="prepare_selected_bundle">'
+        '<div class="button-row"><button type="button" class="secondary" data-select-all>Select all</button>'
+        '<button type="button" class="secondary" data-clear-all>Clear all</button></div>'
+        + "".join(exhibit_rows)
+        + f'<button{("" if index_ready else " disabled")}>Prepare selected bundle</button></form>'
+    ) if catalog else '<p class="muted">Refresh indexes to load the exhibit list.</p>'
+    preparation_ready = bool(preparation and preparation.ready_to_build)
+    preparation_text = preparation.reason if preparation else "Refresh indexes first."
+    phase_one_class = "done" if index_ready else "current"
+    phase_two_class = "done" if preparation_ready else ("current" if index_ready else "locked")
+    phase_three_class = "current" if preparation_ready else "locked"
     return page(
         f"Layout - {case_id}",
         f"""
@@ -773,15 +837,15 @@ def render_layout_page(case_id: str, params: dict[str, list[str]]) -> str:
           {index_notice}
           {unsupported_notice}
           <p class="muted small">Validated evidence references: {index_status.used_document_references}; unique documents: {index_status.unique_used_documents}; assigned: {index_status.assigned_used_documents}; exhibits: {index_status.exhibit_count}.</p>
-          <div class="button-row">
-            {post_button(case_id, "refresh_layout_indexes", "Refresh indexes")}
-            {post_button(case_id, "build_index", "Rebuild exhibit index", disabled=not index_ready)}
-            {post_button(case_id, "separators", "Generate separators", disabled=not index_ready)}
-            {post_button(case_id, "separator_pdfs", "Render separator PDFs", disabled=not index_ready)}
-            {post_button(case_id, "bundle_dry_run", "Bundle dry-run")}
-            {post_button(case_id, "bundle_build", "Build final bundle", disabled=not index_ready or bool(index_status.unsupported_documents))}
-          </div>
         </section>
+        <section class="bundle-pipeline">
+          <div class="pipeline-phase {phase_one_class}"><span class="phase-number">1</span><h2>Refresh indexes</h2><p>Rescan evidence and derive exhibit numbering from validated Stage 2 outputs.</p>{post_button(case_id, "refresh_layout_indexes", "Refresh indexes")}</div>
+          <div class="pipeline-arrow" aria-hidden="true">→</div>
+          <div class="pipeline-phase {phase_two_class}"><span class="phase-number">2</span><h2>Select & prepare</h2><p>Choose all or only the exhibits and documents you need. Separator generation, PDF rendering, and validation run together.</p><p class="muted small">{escape(preparation_text)}</p></div>
+          <div class="pipeline-arrow" aria-hidden="true">→</div>
+          <div class="pipeline-phase {phase_three_class}"><span class="phase-number">3</span><h2>Build PDF</h2><p>Assemble the prepared selection into one evidence bundle.</p>{post_button(case_id, "bundle_build", "Build selected PDF", disabled=not preparation_ready)}</div>
+        </section>
+        <section class="panel"><h2>Exhibits and documents</h2><p class="muted">Review the contents, select entire exhibits or individual documents, then prepare the selection.</p>{selector}</section>
         <section class="panel"><h2>Bundle status</h2><pre>{escape(_safe_text(lambda: build_status_report(case_id)))}</pre></section>
         """,
     )
@@ -1338,6 +1402,23 @@ def page(title: str, body: str) -> str:
     .source-actions {{ display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; }}
     .source-actions code {{ max-width:320px; overflow-wrap:anywhere; }}
     .folder-link {{ display:inline-flex; align-items:center; padding:9px 11px; border:1px solid #93c5fd; border-radius:9px; background:#eff6ff; font-size:.88rem; font-weight:600; }}
+    .bundle-pipeline {{ display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr); gap:12px; align-items:stretch; margin-bottom:18px; }}
+    .pipeline-phase {{ position:relative; background:#fff; border:1px solid var(--line); border-radius:16px; padding:20px; }}
+    .pipeline-phase.done {{ border-color:#86efac; background:#f0fdf4; }}
+    .pipeline-phase.current {{ border-color:#93c5fd; background:#eff6ff; }}
+    .pipeline-phase.locked {{ opacity:.62; background:#f3f4f6; }}
+    .pipeline-phase h2 {{ margin:8px 0; font-size:1.1rem; }}
+    .pipeline-phase p {{ font-size:.9rem; }}
+    .phase-number {{ display:grid; place-items:center; width:30px; height:30px; border-radius:50%; background:#dbeafe; color:#1e40af; font-weight:800; }}
+    .pipeline-phase.done .phase-number {{ background:#059669; color:#fff; }}
+    .pipeline-arrow {{ align-self:center; color:var(--muted); font-size:1.8rem; font-weight:800; }}
+    .bundle-selection {{ display:flex; flex-direction:column; gap:12px; }}
+    .bundle-exhibit {{ border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:#f9fafb; }}
+    .bundle-exhibit summary {{ cursor:pointer; }}
+    .bundle-exhibit summary label, .bundle-document {{ display:flex; align-items:flex-start; gap:9px; }}
+    .bundle-exhibit input {{ width:auto; flex:0 0 auto; }}
+    .bundle-documents {{ display:flex; flex-direction:column; gap:7px; margin:10px 0 2px 26px; }}
+    .bundle-document span {{ overflow-wrap:anywhere; }}
     @media (max-width: 850px) {{
       .hero, .columns {{ display:block; }}
       .check-grid {{ grid-template-columns:1fr; }}
@@ -1349,6 +1430,8 @@ def page(title: str, body: str) -> str:
       .review-list {{ max-height:45vh; }}
       .source-row {{ grid-template-columns:1fr; }}
       .source-actions {{ justify-content:flex-start; }}
+      .bundle-pipeline {{ grid-template-columns:1fr; }}
+      .pipeline-arrow {{ transform:rotate(90deg); justify-self:center; }}
     }}
   </style>
 </head>
@@ -1405,6 +1488,34 @@ def page(title: str, body: str) -> str:
         window.alert('Could not copy automatically. Please copy the prompt manually.');
       }}
     }});
+  }});
+  document.querySelectorAll('[data-bundle-selection]').forEach(function(form) {{
+    const all = Array.from(form.querySelectorAll('input[type="checkbox"]'));
+    const documentBoxes = Array.from(form.querySelectorAll('[data-exhibit]'));
+    const exhibitBoxes = Array.from(form.querySelectorAll('[data-exhibit-toggle]'));
+    const syncExhibit = function(exhibit) {{
+      const parent = form.querySelector('[data-exhibit-toggle="' + CSS.escape(exhibit) + '"]');
+      const children = documentBoxes.filter(function(box) {{ return box.dataset.exhibit === exhibit; }});
+      if (!parent || !children.length) return;
+      parent.checked = children.some(function(box) {{ return box.checked; }});
+      parent.indeterminate = parent.checked && !children.every(function(box) {{ return box.checked; }});
+    }};
+    exhibitBoxes.forEach(function(parent) {{
+      parent.addEventListener('change', function() {{
+        documentBoxes.filter(function(box) {{ return box.dataset.exhibit === parent.dataset.exhibitToggle; }})
+          .forEach(function(box) {{ box.checked = parent.checked; }});
+        parent.indeterminate = false;
+      }});
+      syncExhibit(parent.dataset.exhibitToggle || '');
+    }});
+    documentBoxes.forEach(function(box) {{
+      box.addEventListener('change', function() {{ syncExhibit(box.dataset.exhibit || ''); }});
+    }});
+    const setAll = function(checked) {{
+      all.forEach(function(box) {{ box.checked = checked; box.indeterminate = false; }});
+    }};
+    form.querySelector('[data-select-all]')?.addEventListener('click', function() {{ setAll(true); }});
+    form.querySelector('[data-clear-all]')?.addEventListener('click', function() {{ setAll(false); }});
   }});
 </script>
 </body>
@@ -2021,6 +2132,7 @@ def _action_route(action: str) -> str:
         "separators",
         "separator_pdfs",
         "bundle_dry_run",
+        "prepare_selected_bundle",
         "bundle_build",
     }:
         return "/layout"

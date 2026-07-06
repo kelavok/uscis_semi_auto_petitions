@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import re
 from dataclasses import dataclass
@@ -152,6 +153,171 @@ class LayoutIndexRefreshSummary:
     status: LayoutIndexStatus
 
 
+@dataclass(frozen=True)
+class BundleSelection:
+    exhibit_numbers: tuple[str, ...]
+    document_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class BundlePreparationSummary:
+    selection: BundleSelection
+    exhibit_pages: int
+    document_pages: int
+    separator_pdfs: int
+    plan: BundlePlanSummary
+
+
+@dataclass(frozen=True)
+class BundlePreparationStatus:
+    prepared: bool
+    ready_to_build: bool
+    selected_exhibits: int
+    selected_documents: int
+    expected_separator_pdfs: int
+    rendered_separator_pdfs: int
+    missing_items: int
+    unsupported_items: int
+    reason: str
+
+
+def bundle_catalog(case_id: str) -> list[dict[str, object]]:
+    loaded = load_case(case_id)
+    document_rows = _read_csv(
+        loaded.case_dir / _case_path_value(loaded.config, "document_index"), INDEX_FIELDS
+    )
+    exhibit_rows = _read_csv(
+        loaded.case_dir / _case_path_value(loaded.config, "exhibit_index"), EXHIBIT_FIELDS
+    )
+    documents_by_id = {
+        row.get("document_id", ""): row for row in document_rows if row.get("document_id")
+    }
+    catalog: list[dict[str, object]] = []
+    for exhibit in sorted(exhibit_rows, key=_exhibit_sort_key):
+        exhibit_number = exhibit.get("exhibit_number", "").strip()
+        if not exhibit_number:
+            continue
+        document_ids = [
+            part.strip()
+            for part in exhibit.get("document_ids", "").split(";")
+            if part.strip()
+        ]
+        documents = [documents_by_id[document_id] for document_id in document_ids if document_id in documents_by_id]
+        catalog.append(
+            {
+                "exhibit_number": exhibit_number,
+                "display_title": exhibit.get("display_title", "") or f"Exhibit {exhibit_number}",
+                "documents": documents,
+            }
+        )
+    return catalog
+
+
+def load_bundle_selection(case_id: str) -> BundleSelection:
+    loaded = load_case(case_id)
+    catalog = bundle_catalog(case_id)
+    all_exhibits = tuple(str(item["exhibit_number"]) for item in catalog)
+    all_documents = tuple(
+        str(document.get("document_id", ""))
+        for exhibit in catalog
+        for document in exhibit["documents"]
+        if document.get("document_id", "")
+    )
+    path = _bundle_selection_path(loaded)
+    if not path.exists():
+        return BundleSelection(all_exhibits, all_documents)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError, TypeError):
+        return BundleSelection(all_exhibits, all_documents)
+    valid_exhibits = set(all_exhibits)
+    valid_documents = set(all_documents)
+    exhibits = tuple(
+        value for value in (str(item) for item in data.get("selected_exhibits", [])) if value in valid_exhibits
+    )
+    documents = tuple(
+        value for value in (str(item) for item in data.get("selected_document_ids", [])) if value in valid_documents
+    )
+    return BundleSelection(exhibits, documents)
+
+
+def prepare_selected_bundle(
+    case_id: str, selected_exhibits: list[str], selected_document_ids: list[str]
+) -> BundlePreparationSummary:
+    loaded = load_case(case_id)
+    selection = _validated_bundle_selection(case_id, selected_exhibits, selected_document_ids)
+    _save_bundle_selection(loaded, selection)
+    separators = generate_separator_pages(case_id, selection=selection)
+    rendered = render_separator_pdfs(case_id)
+    plan = build_bundle_plan(case_id, selection=selection)
+    state = {
+        "selection_digest": _selection_digest(selection),
+        "index_digest": _bundle_index_digest(loaded),
+        "selected_exhibits": list(selection.exhibit_numbers),
+        "selected_document_ids": list(selection.document_ids),
+        "expected_separator_pdfs": separators.exhibit_pages_written + separators.document_pages_written,
+        "rendered_separator_pdfs": rendered.pdf_pages_written,
+        "missing_items": plan.missing_items,
+        "unsupported_items": plan.unsupported_items,
+    }
+    state_path = _bundle_preparation_path(loaded)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return BundlePreparationSummary(
+        selection=selection,
+        exhibit_pages=separators.exhibit_pages_written,
+        document_pages=separators.document_pages_written,
+        separator_pdfs=rendered.pdf_pages_written,
+        plan=plan,
+    )
+
+
+def inspect_bundle_preparation(case_id: str) -> BundlePreparationStatus:
+    loaded = load_case(case_id)
+    selection = load_bundle_selection(case_id)
+    state_path = _bundle_preparation_path(loaded)
+    if not state_path.exists():
+        return BundlePreparationStatus(
+            prepared=False,
+            ready_to_build=False,
+            selected_exhibits=len(selection.exhibit_numbers),
+            selected_documents=len(selection.document_ids),
+            expected_separator_pdfs=0,
+            rendered_separator_pdfs=0,
+            missing_items=0,
+            unsupported_items=0,
+            reason="Prepare the selected bundle first.",
+        )
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError, TypeError):
+        return BundlePreparationStatus(False, False, len(selection.exhibit_numbers), len(selection.document_ids), 0, 0, 0, 0, "Preparation state is unreadable; prepare again.")
+    if state.get("selection_digest") != _selection_digest(selection):
+        reason = "The bundle selection changed; prepare again."
+    elif state.get("index_digest") != _bundle_index_digest(loaded):
+        reason = "The evidence indexes changed; prepare again."
+    elif int(state.get("rendered_separator_pdfs", 0)) != int(state.get("expected_separator_pdfs", 0)):
+        reason = "Not all separator PDFs were rendered; prepare again."
+    elif int(state.get("missing_items", 0)):
+        reason = f"The prepared plan has {int(state.get('missing_items', 0))} missing item(s)."
+    elif int(state.get("unsupported_items", 0)):
+        reason = f"The prepared plan has {int(state.get('unsupported_items', 0))} unsupported item(s)."
+    else:
+        reason = "Ready to build."
+    ready = reason == "Ready to build."
+    return BundlePreparationStatus(
+        prepared=True,
+        ready_to_build=ready,
+        selected_exhibits=len(selection.exhibit_numbers),
+        selected_documents=len(selection.document_ids),
+        expected_separator_pdfs=int(state.get("expected_separator_pdfs", 0)),
+        rendered_separator_pdfs=int(state.get("rendered_separator_pdfs", 0)),
+        missing_items=int(state.get("missing_items", 0)),
+        unsupported_items=int(state.get("unsupported_items", 0)),
+        reason=reason,
+    )
+
+
 def inspect_layout_index_status(case_id: str) -> LayoutIndexStatus:
     loaded = load_case(case_id)
     document_index_path = loaded.case_dir / _case_path_value(loaded.config, "document_index")
@@ -245,6 +411,7 @@ def refresh_layout_indexes(case_id: str) -> LayoutIndexRefreshSummary:
     ]
     _write_csv(exhibit_index_path, exhibit_rows, EXHIBIT_FIELDS)
     exhibit_summary = build_exhibit_index(case_id)
+    _invalidate_bundle_preparation(loaded)
     status = inspect_layout_index_status(case_id)
     combined_conflicts = tuple(dict.fromkeys([*status.assignment_conflicts, *conflicts]))
     if combined_conflicts != status.assignment_conflicts:
@@ -476,13 +643,21 @@ def build_exhibit_index(case_id: str) -> ExhibitIndexSummary:
     )
 
 
-def generate_separator_pages(case_id: str) -> SeparatorSummary:
+def generate_separator_pages(
+    case_id: str, selection: BundleSelection | None = None
+) -> SeparatorSummary:
     loaded = load_case(case_id)
     document_index_path = loaded.case_dir / _case_path_value(loaded.config, "document_index")
     exhibit_index_path = loaded.case_dir / _case_path_value(loaded.config, "exhibit_index")
     bundle_root = loaded.case_dir / _case_path_value(loaded.config, "bundle_root")
     separators_dir = bundle_root / "separators" / "generated"
     separators_dir.mkdir(parents=True, exist_ok=True)
+    for stale_path in separators_dir.glob("*.md"):
+        stale_path.unlink()
+
+    selection = selection or load_bundle_selection(case_id)
+    selected_exhibits = set(selection.exhibit_numbers)
+    selected_documents = set(selection.document_ids)
 
     document_rows = _read_csv(document_index_path, INDEX_FIELDS)
     exhibit_rows = _read_csv(exhibit_index_path, EXHIBIT_FIELDS)
@@ -504,12 +679,22 @@ def generate_separator_pages(case_id: str) -> SeparatorSummary:
         "",
     ]
 
-    ordered_exhibits = sorted(exhibit_rows, key=_exhibit_sort_key)
+    ordered_exhibits = [
+        exhibit
+        for exhibit in sorted(exhibit_rows, key=_exhibit_sort_key)
+        if exhibit.get("exhibit_number", "").strip() in selected_exhibits
+    ]
     for exhibit_position, exhibit in enumerate(ordered_exhibits, start=1):
         exhibit_number = exhibit.get("exhibit_number", "").strip()
         if not exhibit_number:
             continue
-        document_ids = [part.strip() for part in exhibit.get("document_ids", "").split(";") if part.strip()]
+        document_ids = [
+            part.strip()
+            for part in exhibit.get("document_ids", "").split(";")
+            if part.strip() and part.strip() in selected_documents
+        ]
+        if not document_ids:
+            continue
         exhibit_file = separators_dir / f"{exhibit_position:03d}_exhibit_{_safe_filename(exhibit_number)}.md"
         exhibit_file.write_text(
             _render_exhibit_separator(exhibit, document_ids, documents_by_id),
@@ -574,6 +759,8 @@ def render_separator_pdfs(case_id: str) -> SeparatorPdfSummary:
 
     font_name = _register_pdf_font(pdfmetrics, TTFont)
     output_dir.mkdir(parents=True, exist_ok=True)
+    for stale_path in output_dir.glob("*.pdf"):
+        stale_path.unlink()
     markdown_files = [
         path
         for path in sorted(source_dir.glob("*.md"))
@@ -660,7 +847,9 @@ def render_separator_pdfs(case_id: str) -> SeparatorPdfSummary:
     )
 
 
-def build_bundle_plan(case_id: str) -> BundlePlanSummary:
+def build_bundle_plan(
+    case_id: str, selection: BundleSelection | None = None
+) -> BundlePlanSummary:
     loaded = load_case(case_id)
     document_index_path = loaded.case_dir / _case_path_value(loaded.config, "document_index")
     exhibit_index_path = loaded.case_dir / _case_path_value(loaded.config, "exhibit_index")
@@ -675,13 +864,23 @@ def build_bundle_plan(case_id: str) -> BundlePlanSummary:
         for row in document_rows
         if row.get("document_id")
     }
+    selection = selection or load_bundle_selection(case_id)
+    selected_exhibits = set(selection.exhibit_numbers)
+    selected_documents = set(selection.document_ids)
 
     items: list[dict[str, str]] = []
     sequence = 1
     ordered_exhibits = sorted(exhibit_rows, key=_exhibit_sort_key)
     for exhibit_position, exhibit in enumerate(ordered_exhibits, start=1):
         exhibit_number = exhibit.get("exhibit_number", "").strip()
-        if not exhibit_number:
+        if not exhibit_number or exhibit_number not in selected_exhibits:
+            continue
+        document_ids = [
+            part.strip()
+            for part in exhibit.get("document_ids", "").split(";")
+            if part.strip() and part.strip() in selected_documents
+        ]
+        if not document_ids:
             continue
         exhibit_separator = (
             bundle_root
@@ -703,7 +902,6 @@ def build_bundle_plan(case_id: str) -> BundlePlanSummary:
         )
         sequence += 1
 
-        document_ids = [part.strip() for part in exhibit.get("document_ids", "").split(";") if part.strip()]
         for document_position, document_id in enumerate(document_ids, start=1):
             document = documents_by_id.get(document_id)
             document_separator = (
@@ -774,7 +972,11 @@ def build_bundle_plan(case_id: str) -> BundlePlanSummary:
 
 def build_evidence_bundle(case_id: str) -> BundleBuildSummary:
     loaded = load_case(case_id)
-    plan_summary = build_bundle_plan(case_id)
+    preparation = inspect_bundle_preparation(case_id)
+    if not preparation.ready_to_build:
+        raise SystemExit(preparation.reason)
+    selection = load_bundle_selection(case_id)
+    plan_summary = build_bundle_plan(case_id, selection=selection)
     items = _read_plan_csv(plan_summary.plan_csv_path)
     if not items:
         raise SystemExit("Bundle plan is empty. Run 'Refresh indexes' and generate separator PDFs first.")
@@ -802,7 +1004,15 @@ def build_evidence_bundle(case_id: str) -> BundleBuildSummary:
     final_dir = bundle_root / "final"
     converted_dir.mkdir(parents=True, exist_ok=True)
     final_dir.mkdir(parents=True, exist_ok=True)
-    final_pdf_path = final_dir / "evidence_bundle.pdf"
+    catalog = bundle_catalog(case_id)
+    all_document_count = sum(len(exhibit["documents"]) for exhibit in catalog)
+    is_full_bundle = (
+        len(selection.exhibit_numbers) == len(catalog)
+        and len(selection.document_ids) == all_document_count
+    )
+    final_pdf_path = final_dir / (
+        "evidence_bundle.pdf" if is_full_bundle else "evidence_bundle_selected.pdf"
+    )
 
     writer = PdfWriter()
     merged_items = 0
@@ -869,6 +1079,112 @@ def order_documents_original_then_translation(rows: list[dict[str, str]]) -> lis
 
     ordered.extend(sorted(unpaired_translations, key=_document_sort_key))
     return ordered
+
+
+def _bundle_selection_path(loaded: LoadedCase) -> Path:
+    return (
+        loaded.case_dir
+        / _case_path_value(loaded.config, "bundle_root")
+        / "selection.json"
+    )
+
+
+def _bundle_preparation_path(loaded: LoadedCase) -> Path:
+    return (
+        loaded.case_dir
+        / _case_path_value(loaded.config, "bundle_root")
+        / "preparation.json"
+    )
+
+
+def _invalidate_bundle_preparation(loaded: LoadedCase) -> None:
+    path = _bundle_preparation_path(loaded)
+    if path.exists():
+        path.unlink()
+
+
+def _validated_bundle_selection(
+    case_id: str,
+    selected_exhibits: list[str],
+    selected_document_ids: list[str],
+) -> BundleSelection:
+    catalog = bundle_catalog(case_id)
+    requested_exhibits = {str(value).strip() for value in selected_exhibits if str(value).strip()}
+    requested_documents = {
+        str(value).strip() for value in selected_document_ids if str(value).strip()
+    }
+    catalog_exhibits = {str(item["exhibit_number"]) for item in catalog}
+    unknown_exhibits = requested_exhibits - catalog_exhibits
+    if unknown_exhibits:
+        raise ValueError(f"Unknown exhibit selection: {', '.join(sorted(unknown_exhibits))}.")
+
+    exhibits: list[str] = []
+    documents: list[str] = []
+    known_documents: set[str] = set()
+    for exhibit in catalog:
+        exhibit_number = str(exhibit["exhibit_number"])
+        exhibit_document_ids = [
+            str(document.get("document_id", ""))
+            for document in exhibit["documents"]
+            if document.get("document_id", "")
+        ]
+        known_documents.update(exhibit_document_ids)
+        selected_here = [
+            document_id
+            for document_id in exhibit_document_ids
+            if exhibit_number in requested_exhibits and document_id in requested_documents
+        ]
+        if selected_here:
+            exhibits.append(exhibit_number)
+            documents.extend(selected_here)
+
+    unknown_documents = requested_documents - known_documents
+    if unknown_documents:
+        raise ValueError(
+            f"Unknown document selection: {', '.join(sorted(unknown_documents))}."
+        )
+    if not documents:
+        raise ValueError("Select at least one document before preparing the bundle.")
+    return BundleSelection(tuple(exhibits), tuple(documents))
+
+
+def _save_bundle_selection(loaded: LoadedCase, selection: BundleSelection) -> None:
+    path = _bundle_selection_path(loaded)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "selected_exhibits": list(selection.exhibit_numbers),
+                "selected_document_ids": list(selection.document_ids),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    _invalidate_bundle_preparation(loaded)
+
+
+def _selection_digest(selection: BundleSelection) -> str:
+    payload = json.dumps(
+        {
+            "exhibits": list(selection.exhibit_numbers),
+            "documents": list(selection.document_ids),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _bundle_index_digest(loaded: LoadedCase) -> str:
+    digest = hashlib.sha256()
+    for key in ("document_index", "exhibit_index"):
+        path = loaded.case_dir / _case_path_value(loaded.config, key)
+        digest.update(key.encode("utf-8"))
+        digest.update(path.read_bytes() if path.exists() else b"[missing]")
+    return digest.hexdigest()
 
 
 def _read_csv(path: Path, fields: list[str]) -> list[dict[str, str]]:

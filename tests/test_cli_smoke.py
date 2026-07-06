@@ -12,6 +12,7 @@ from app import evidence as evidence_module
 from app import progress as progress_module
 from app import workflow as workflow_module
 from app.bundle_workflow import (
+    BundleSelection,
     build_bundle_plan,
     build_exhibit_index,
     generate_separator_pages,
@@ -1611,6 +1612,22 @@ class CliSmokeTests(unittest.TestCase):
             self.assertTrue(translation_page.exists())
             self.assertIn("DOC0001 - Award Original", exhibit_page.read_text(encoding="utf-8"))
             self.assertIn("translation of DOC0001", translation_page.read_text(encoding="utf-8"))
+
+            with (
+                patch.object(cli_support, "CASE_ROOT", case_root),
+                patch.object(workflow_module, "PROJECT_ROOT", root),
+            ):
+                selected = generate_separator_pages(
+                    "case_001", selection=BundleSelection(("E-1",), ("DOC0002",))
+                )
+
+            self.assertEqual(selected.document_pages_written, 1)
+            self.assertFalse(
+                (case_dir / "bundle" / "separators" / "generated" / "001_001_DOC0001.md").exists()
+            )
+            selected_exhibit = exhibit_page.read_text(encoding="utf-8")
+            self.assertNotIn("DOC0001 - Award Original", selected_exhibit)
+            self.assertIn("DOC0002 - Award Translation", selected_exhibit)
 
     def test_build_bundle_plan_reports_missing_separators_and_ready_source(self) -> None:
         with TemporaryDirectory() as temp:
