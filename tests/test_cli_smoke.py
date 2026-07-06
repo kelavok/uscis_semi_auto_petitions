@@ -660,6 +660,11 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(args.command, "build-index")
         self.assertEqual(args.case_id, "case_001")
 
+    def test_bundle_parser_accepts_refresh_indexes(self) -> None:
+        args = bundle.build_parser().parse_args(["refresh-indexes", "--case", "case_001"])
+        self.assertEqual(args.command, "refresh-indexes")
+        self.assertEqual(args.case_id, "case_001")
+
     def test_bundle_parser_accepts_separators(self) -> None:
         args = bundle.build_parser().parse_args(["separators", "--case", "case_001"])
         self.assertEqual(args.command, "separators")

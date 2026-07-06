@@ -1485,6 +1485,26 @@ def validate_llm_output(
             "used_documents contains document IDs that are not present in document_index.csv: "
             + ", ".join(unknown_ids)
         )
+    selection_enforced = evidence_based or _truthy_config(step.get("rfe_strategy_units", False))
+    if selection_enforced:
+        allowed_ids = {
+            row.get("document_id", "")
+            for row in selected_documents_for_step(loaded, step, options)
+            if row.get("document_id", "")
+        }
+        unselected_ids = sorted(
+            {
+                str(item.get("document_id", ""))
+                for item in data["used_documents"]
+                if str(item.get("document_id", "")) not in allowed_ids
+            }
+        )
+        if unselected_ids:
+            raise SystemExit(
+                "used_documents contains IDs that were not in this prompt's Technical document selection: "
+                + ", ".join(unselected_ids)
+                + ". Auxiliary info/readme/extract files may guide drafting but can never be cited."
+            )
     if not technical_step and evidence_based and not data["used_documents"]:
         raise SystemExit(
             f"{step_id} is an evidence-based drafting step, but used_documents is empty. "

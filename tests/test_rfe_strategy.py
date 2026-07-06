@@ -6,7 +6,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+from docx import Document
+
 from app import cli_support, web
+from app.bundle_workflow import inspect_layout_index_status, refresh_layout_indexes
 from app.evidence import scan_documents
 from app.memo_builder import build_working_memo
 from app.rfe_strategy import (
@@ -153,6 +156,9 @@ class RfeStrategyTests(unittest.TestCase):
                     "LLM instruction: emphasize the independent organizer confirmation first.",
                     encoding="utf-8",
                 )
+                info_docx = Document()
+                info_docx.add_paragraph("DOCX guidance: rely on the organizer letter, not this note.")
+                info_docx.save(new_docs / "info.docx")
                 (new_docs / "README.md").write_text(
                     "Use the ceremony screenshot and organizer letter as one evidence set.",
                     encoding="utf-8",
@@ -160,6 +166,7 @@ class RfeStrategyTests(unittest.TestCase):
                 (new_docs / "broken_scan.docx").write_bytes(
                     b"This is an image export incorrectly named as a DOCX file."
                 )
+                (new_docs / "citation.xlsx").write_bytes(b"unsupported spreadsheet placeholder")
                 (new_docs / "~$open_in_word.docx").write_bytes(b"Office lock file")
                 evidence = import_evidence_and_scan_inputs(
                     "rfe_test",
@@ -173,6 +180,7 @@ class RfeStrategyTests(unittest.TestCase):
                 )
                 self.assertNotIn("extracts.txt", document_index)
                 self.assertNotIn("info.txt", document_index)
+                self.assertNotIn("info.docx", document_index)
                 self.assertNotIn("README.md", document_index)
                 self.assertIn("broken_scan.docx", document_index)
                 self.assertIn("docx_invalid_or_corrupt", document_index)
@@ -197,11 +205,82 @@ class RfeStrategyTests(unittest.TestCase):
                 self.assertIn("do not add to document/exhibit indexes", prompt_text)
                 self.assertIn("emphasize the independent organizer confirmation first", prompt_text)
                 self.assertIn("prompt-only folder sidecar (info.txt)", prompt_text)
+                self.assertIn("DOCX guidance: rely on the organizer letter", prompt_text)
+                self.assertIn("prompt-only folder sidecar (info.docx)", prompt_text)
                 self.assertIn("additional instructions and explanations", prompt_text)
                 self.assertIn("Use the ceremony screenshot and organizer letter as one evidence set", prompt_text)
                 self.assertIn("prompt-only folder sidecar (README.md)", prompt_text)
                 self.assertIn("Technical document selection for this unit", prompt_text)
                 self.assertIn("must be copied exactly", prompt_text)
+
+                selected_document_id = next(
+                    document_id
+                    for document_id, title in award_unit.selected_documents
+                    if "organizer" in title.casefold()
+                )
+                spreadsheet_document_id = next(
+                    document_id
+                    for document_id, title in award_unit.selected_documents
+                    if "citation" in title.casefold()
+                )
+                validated_path = case_dir / "validated_outputs" / f"rfe_dynamic_section.{award_unit.episode_id}.json"
+                validated_path.write_text(
+                    json.dumps(
+                        {
+                            "case_id": "rfe_test",
+                            "task_type": "eb1a_rfe_response",
+                            "step_id": "rfe_dynamic_section",
+                            "episode_id": award_unit.episode_id,
+                            "draft_text": "Awards response.",
+                            "used_documents": [
+                                {
+                                    "document_id": selected_document_id,
+                                    "document_title": "Organizer letter",
+                                    "used_for": "award evidence",
+                                },
+                                {
+                                    "document_id": spreadsheet_document_id,
+                                    "document_title": "Citation table",
+                                    "used_for": "award evidence",
+                                },
+                            ],
+                            "unsupported_claims": [],
+                            "questions_for_user": [],
+                            "quality_flags": [],
+                            "revision_notes": [],
+                        },
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+                before_refresh = inspect_layout_index_status("rfe_test")
+                self.assertTrue(before_refresh.refresh_required)
+                before_layout = web.render_layout_page("rfe_test", {})
+                self.assertIn("Index refresh required", before_layout)
+                self.assertIn("Refresh indexes", before_layout)
+                next(case_dir.rglob("citation.xlsx")).with_suffix(".pdf").write_bytes(
+                    b"%PDF-1.4\n%%EOF\n"
+                )
+                refreshed = refresh_layout_indexes("rfe_test")
+                self.assertEqual(refreshed.replacement_documents_rebound, 1)
+                self.assertEqual(refreshed.status.assigned_used_documents, 2)
+                self.assertEqual(refreshed.status.exhibit_count, 1)
+                self.assertTrue(refreshed.status.ready_for_separators)
+                self.assertFalse(refreshed.status.unsupported_documents)
+                self.assertIn("Evidence indexes ready", web.render_layout_page("rfe_test", {}))
+                refreshed_index = (case_dir / "indexes/document_index.csv").read_text(
+                    encoding="utf-8-sig"
+                )
+                selected_row = next(
+                    line for line in refreshed_index.splitlines() if line.startswith(f"{selected_document_id},")
+                )
+                self.assertIn(",1,", selected_row)
+                spreadsheet_row = next(
+                    line
+                    for line in refreshed_index.splitlines()
+                    if line.startswith(f"{spreadsheet_document_id},")
+                )
+                self.assertIn("citation.pdf", spreadsheet_row)
 
                 stage = build_llm_stage("rfe_test")
                 self.assertEqual([unit.criterion for unit in stage.units], ["awards"])

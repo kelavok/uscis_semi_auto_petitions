@@ -1,13 +1,24 @@
 from __future__ import annotations
 
 import csv
+import json
 import re
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
 
-from .evidence import INDEX_FIELDS
-from .workflow import _case_path_value, _normalize_slashes, extract_docx_text, load_case
+from .evidence import INDEX_FIELDS, scan_documents
+from .file_rules import prompt_sidecar_kind
+from .workflow import (
+    _case_path_value,
+    _citation_plan_for_step,
+    _normalize_slashes,
+    extract_docx_text,
+    find_step,
+    load_case,
+    LoadedCase,
+    PromptOptions,
+)
 
 
 EXHIBIT_FIELDS = [
@@ -31,6 +42,21 @@ TEXT_SOURCE_EXTENSIONS = {".txt", ".md", ".csv", ".json", ".yaml", ".yml"}
 DOCX_SOURCE_EXTENSIONS = {".docx"}
 IMAGE_SOURCE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp"}
 PDF_SOURCE_EXTENSIONS = {".pdf"}
+AUTO_DOCUMENT_INDEX_NOTE = "Auto-assigned from validated LLM outputs."
+AUTO_EXHIBIT_INDEX_NOTE = "Generated/updated from document_index.csv."
+EXHIBIT_NUMBER_BY_ROLE = {
+    "awards": "1",
+    "memberships": "2",
+    "media": "3",
+    "judging": "4",
+    "original_contribution": "5",
+    "scholarly_articles": "6",
+    "exhibitions": "7",
+    "leading_critical_role": "8",
+    "high_salary": "9",
+    "commercial_success": "10",
+    "employment_plan": "11",
+}
 
 
 @dataclass(frozen=True)
@@ -84,6 +110,279 @@ class BundleBuildSummary:
     merged_items: int
     converted_items: int
     skipped_items: int
+
+
+@dataclass(frozen=True)
+class LayoutIndexStatus:
+    indexed_documents: int
+    used_document_references: int
+    unique_used_documents: int
+    assigned_used_documents: int
+    exhibit_count: int
+    stale_document_ids: tuple[str, ...]
+    assignment_conflicts: tuple[str, ...]
+    indexed_sidecars: tuple[str, ...]
+    unsupported_documents: tuple[str, ...]
+
+    @property
+    def refresh_required(self) -> bool:
+        return bool(
+            self.unique_used_documents
+            and (
+                self.assigned_used_documents != self.unique_used_documents
+                or not self.exhibit_count
+                or self.stale_document_ids
+                or self.assignment_conflicts
+                or self.indexed_sidecars
+            )
+        )
+
+    @property
+    def ready_for_separators(self) -> bool:
+        return bool(self.unique_used_documents and not self.refresh_required)
+
+
+@dataclass(frozen=True)
+class LayoutIndexRefreshSummary:
+    scanned_files: int
+    auxiliary_rows_removed: int
+    replacement_documents_rebound: int
+    documents_assigned: int
+    exhibit_summary: ExhibitIndexSummary
+    status: LayoutIndexStatus
+
+
+def inspect_layout_index_status(case_id: str) -> LayoutIndexStatus:
+    loaded = load_case(case_id)
+    document_index_path = loaded.case_dir / _case_path_value(loaded.config, "document_index")
+    exhibit_index_path = loaded.case_dir / _case_path_value(loaded.config, "exhibit_index")
+    document_rows = _read_csv(document_index_path, INDEX_FIELDS)
+    desired, conflicts, references = _desired_exhibit_assignments(loaded)
+    rows_by_id = {row.get("document_id", ""): row for row in document_rows if row.get("document_id")}
+    stale = sorted(document_id for document_id in desired if document_id not in rows_by_id)
+    assigned = sum(
+        1
+        for document_id, exhibit_number in desired.items()
+        if document_id in rows_by_id
+        and rows_by_id[document_id].get("exhibit_number", "").strip() == exhibit_number
+    )
+    indexed_sidecars = sorted(
+        row.get("document_id", "")
+        for row in document_rows
+        if prompt_sidecar_kind(Path(row.get("file_path", "")))
+    )
+    unsupported: list[str] = []
+    for document_id in desired:
+        row = rows_by_id.get(document_id)
+        if not row:
+            continue
+        status, note = _source_document_status(loaded.case_dir / row.get("file_path", ""))
+        if status in {"missing", "unsupported"}:
+            title = row.get("display_title", "") or row.get("original_file_name", "")
+            unsupported.append(
+                f"{document_id}: {title} — {note} [{row.get('file_path', '')}]"
+            )
+    exhibit_rows = _read_csv(exhibit_index_path, EXHIBIT_FIELDS)
+    return LayoutIndexStatus(
+        indexed_documents=len(document_rows),
+        used_document_references=references,
+        unique_used_documents=len(desired),
+        assigned_used_documents=assigned,
+        exhibit_count=sum(bool(row.get("exhibit_number", "").strip()) for row in exhibit_rows),
+        stale_document_ids=tuple(stale),
+        assignment_conflicts=tuple(conflicts),
+        indexed_sidecars=tuple(indexed_sidecars),
+        unsupported_documents=tuple(sorted(unsupported)),
+    )
+
+
+def refresh_layout_indexes(case_id: str) -> LayoutIndexRefreshSummary:
+    scan = scan_documents(case_id)
+    loaded = load_case(case_id)
+    document_index_path = loaded.case_dir / _case_path_value(loaded.config, "document_index")
+    exhibit_index_path = loaded.case_dir / _case_path_value(loaded.config, "exhibit_index")
+    document_rows = _read_csv(document_index_path, INDEX_FIELDS)
+    desired, conflicts, _references = _desired_exhibit_assignments(loaded)
+    replacements_rebound = _rebind_supported_replacements(loaded, document_rows, desired)
+    rows_by_id = {row.get("document_id", ""): row for row in document_rows if row.get("document_id")}
+
+    for row in document_rows:
+        if AUTO_DOCUMENT_INDEX_NOTE in row.get("notes", "") and not _truthy(row.get("manual_edit_lock", "")):
+            row["exhibit_number"] = ""
+            row["final_bundle_order"] = ""
+
+    desired_order = {document_id: index for index, document_id in enumerate(desired)}
+    assignments = sorted(
+        desired.items(),
+        key=lambda item: (_natural_sort_key(item[1]), desired_order[item[0]]),
+    )
+    assigned = 0
+    for bundle_order, (document_id, exhibit_number) in enumerate(assignments, start=1):
+        row = rows_by_id.get(document_id)
+        if not row:
+            continue
+        existing = row.get("exhibit_number", "").strip()
+        if _truthy(row.get("manual_edit_lock", "")) and existing and existing != exhibit_number:
+            conflicts.append(
+                f"{document_id} is locked to Exhibit {existing}, but validated output requires Exhibit {exhibit_number}."
+            )
+            continue
+        if not _truthy(row.get("manual_edit_lock", "")):
+            row["exhibit_number"] = exhibit_number
+            row["final_bundle_order"] = str(bundle_order)
+            row["user_approval_status"] = row.get("user_approval_status") or "pending"
+            row["notes"] = _merge_note(row.get("notes", ""), AUTO_DOCUMENT_INDEX_NOTE)
+        assigned += 1
+    _write_csv(document_index_path, document_rows, INDEX_FIELDS)
+
+    desired_exhibits = set(desired.values())
+    exhibit_rows = _read_csv(exhibit_index_path, EXHIBIT_FIELDS)
+    exhibit_rows = [
+        row
+        for row in exhibit_rows
+        if row.get("exhibit_number", "").strip() in desired_exhibits
+        or _truthy(row.get("manual_edit_lock", ""))
+    ]
+    _write_csv(exhibit_index_path, exhibit_rows, EXHIBIT_FIELDS)
+    exhibit_summary = build_exhibit_index(case_id)
+    status = inspect_layout_index_status(case_id)
+    combined_conflicts = tuple(dict.fromkeys([*status.assignment_conflicts, *conflicts]))
+    if combined_conflicts != status.assignment_conflicts:
+        status = LayoutIndexStatus(
+            indexed_documents=status.indexed_documents,
+            used_document_references=status.used_document_references,
+            unique_used_documents=status.unique_used_documents,
+            assigned_used_documents=status.assigned_used_documents,
+            exhibit_count=status.exhibit_count,
+            stale_document_ids=status.stale_document_ids,
+            assignment_conflicts=combined_conflicts,
+            indexed_sidecars=status.indexed_sidecars,
+            unsupported_documents=status.unsupported_documents,
+        )
+    return LayoutIndexRefreshSummary(
+        scanned_files=scan.scanned_files,
+        auxiliary_rows_removed=scan.removed_rows,
+        replacement_documents_rebound=replacements_rebound,
+        documents_assigned=assigned,
+        exhibit_summary=exhibit_summary,
+        status=status,
+    )
+
+
+def _desired_exhibit_assignments(loaded: LoadedCase) -> tuple[dict[str, str], list[str], int]:
+    validated_root = loaded.case_dir / _case_path_value(loaded.config, "validated_outputs")
+    files = {path.stem: path for path in validated_root.glob("*.json")}
+    try:
+        from .stages import build_llm_stage
+
+        ordered_stems = [unit.key for unit in build_llm_stage(loaded.case_id).units]
+    except Exception:  # noqa: BLE001 - index diagnostics must survive a damaged drafting timeline.
+        ordered_stems = []
+    ordered_stems.extend(stem for stem in sorted(files) if stem not in ordered_stems)
+    desired: dict[str, str] = {}
+    conflicts: list[str] = []
+    references = 0
+    for stem in ordered_stems:
+        path = files.get(stem)
+        if not path:
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError, TypeError) as exc:
+            conflicts.append(f"{path.name} cannot be read: {exc}")
+            continue
+        used_documents = data.get("used_documents", [])
+        if not isinstance(used_documents, list) or not used_documents:
+            continue
+        exhibit_number = _exhibit_number_for_output(loaded, data)
+        if not exhibit_number:
+            conflicts.append(f"{path.name} uses documents but has no deterministic Exhibit mapping.")
+            continue
+        for item in used_documents:
+            if not isinstance(item, dict):
+                continue
+            document_id = str(item.get("document_id", "")).strip()
+            if not document_id:
+                continue
+            references += 1
+            existing = desired.get(document_id)
+            if existing and existing != exhibit_number:
+                conflicts.append(
+                    f"{document_id} is used by both Exhibit {existing} and Exhibit {exhibit_number}."
+                )
+                continue
+            desired.setdefault(document_id, exhibit_number)
+    return desired, conflicts, references
+
+
+def _exhibit_number_for_output(loaded: LoadedCase, data: dict[str, object]) -> str:
+    step_id = str(data.get("step_id", ""))
+    episode_id = str(data.get("episode_id", ""))
+    if str(loaded.config.get("task_type", "")) == "eb1a_rfe_response" and episode_id:
+        from .rfe_strategy import get_strategy_unit
+
+        unit = get_strategy_unit(loaded.case_dir, episode_id, loaded.config)
+        return EXHIBIT_NUMBER_BY_ROLE.get(str(unit.get("criterion_role", "")), "")
+    try:
+        step = find_step(loaded.workflow, step_id)
+    except SystemExit:
+        return ""
+    citation = _citation_plan_for_step(loaded, step, PromptOptions(episode_id=episode_id))
+    return str(citation.get("exhibit_number", "")).strip()
+
+
+def _rebind_supported_replacements(
+    loaded: LoadedCase, document_rows: list[dict[str, str]], desired: dict[str, str]
+) -> int:
+    """Keep a used DOC id when an unsupported/missing source is replaced by a sibling PDF."""
+    rows_by_id = {row.get("document_id", ""): row for row in document_rows if row.get("document_id")}
+    rebound = 0
+    for document_id in desired:
+        row = rows_by_id.get(document_id)
+        if not row:
+            continue
+        source_path = loaded.case_dir / row.get("file_path", "")
+        status, _note = _source_document_status(source_path)
+        if status not in {"missing", "unsupported"}:
+            continue
+        source_relative = Path(row.get("file_path", ""))
+        candidates: list[dict[str, str]] = []
+        for candidate in document_rows:
+            if candidate is row:
+                continue
+            candidate_relative = Path(candidate.get("file_path", ""))
+            if (
+                candidate_relative.parent != source_relative.parent
+                or candidate_relative.stem.casefold() != source_relative.stem.casefold()
+            ):
+                continue
+            candidate_status, _candidate_note = _source_document_status(
+                loaded.case_dir / candidate.get("file_path", "")
+            )
+            if candidate_status == "ready_pdf":
+                candidates.append(candidate)
+        if len(candidates) != 1:
+            continue
+        replacement = candidates[0]
+        old_name = row.get("original_file_name", "") or source_relative.name
+        for field in (
+            "original_file_name",
+            "file_path",
+            "document_type",
+            "extraction_status",
+            "text_extraction_path",
+            "source_fingerprint",
+            "last_scanned_at",
+        ):
+            row[field] = replacement.get(field, "")
+        row["notes"] = _merge_note(
+            row.get("notes", ""),
+            f"Rebound from unsupported/missing source {old_name} to replacement PDF while preserving {document_id}.",
+        )
+        document_rows.remove(replacement)
+        rows_by_id.pop(replacement.get("document_id", ""), None)
+        rebound += 1
+    return rebound
 
 
 def build_exhibit_index(case_id: str) -> ExhibitIndexSummary:
@@ -187,6 +486,8 @@ def generate_separator_pages(case_id: str) -> SeparatorSummary:
 
     document_rows = _read_csv(document_index_path, INDEX_FIELDS)
     exhibit_rows = _read_csv(exhibit_index_path, EXHIBIT_FIELDS)
+    if not any(row.get("exhibit_number", "").strip() for row in exhibit_rows):
+        raise SystemExit("Exhibit index is empty. Run 'Refresh indexes' before generating separators.")
     documents_by_id = {
         row.get("document_id", ""): row
         for row in document_rows
@@ -475,6 +776,8 @@ def build_evidence_bundle(case_id: str) -> BundleBuildSummary:
     loaded = load_case(case_id)
     plan_summary = build_bundle_plan(case_id)
     items = _read_plan_csv(plan_summary.plan_csv_path)
+    if not items:
+        raise SystemExit("Bundle plan is empty. Run 'Refresh indexes' and generate separator PDFs first.")
     blocking = [item for item in items if item["status"] in {"missing", "unsupported"}]
     if blocking:
         raise SystemExit(

@@ -7,6 +7,7 @@ from .bundle_workflow import (
     build_bundle_plan,
     build_exhibit_index,
     generate_separator_pages,
+    refresh_layout_indexes,
     render_separator_pdfs,
 )
 from .cli_support import add_case_argument, configure_console
@@ -24,6 +25,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     build_index = commands.add_parser("build-index", help="Build exhibit_index.csv from document_index.csv")
     add_case_argument(build_index)
+
+    refresh_indexes = commands.add_parser(
+        "refresh-indexes",
+        help="Rescan sources and derive Exhibit assignments from validated LLM outputs",
+    )
+    add_case_argument(refresh_indexes)
 
     separators = commands.add_parser("separators", help="Generate markdown separator pages from indexes")
     add_case_argument(separators)
@@ -67,6 +74,20 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Document index: {summary.document_index_path}")
         print(f"Exhibit index: {summary.exhibit_index_path}")
         print("Bundle order rule: original first, then translation.")
+        return 0
+    if args.command == "refresh-indexes":
+        summary = refresh_layout_indexes(args.case_id)
+        print(f"Source files scanned: {summary.scanned_files}")
+        print(f"Auxiliary index rows removed: {summary.auxiliary_rows_removed}")
+        print(f"Replacement PDFs rebound: {summary.replacement_documents_rebound}")
+        print(
+            f"Used documents assigned: {summary.status.assigned_used_documents}/"
+            f"{summary.status.unique_used_documents}"
+        )
+        print(f"Exhibits: {summary.status.exhibit_count}")
+        print(f"Stale document IDs: {', '.join(summary.status.stale_document_ids) or '[none]'}")
+        print(f"Assignment conflicts: {len(summary.status.assignment_conflicts)}")
+        print(f"Unsupported documents: {len(summary.status.unsupported_documents)}")
         return 0
     if args.command == "separators":
         summary = generate_separator_pages(args.case_id)

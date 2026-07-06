@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 PROMPT_CONTEXT_SIDECAR_NAMES = {"info", "readme"}
-PROMPT_CONTEXT_SIDECAR_SUFFIXES = {".txt", ".md"}
+PROMPT_CONTEXT_SIDECAR_SUFFIXES = {".txt", ".md", ".docx"}
 
 
 def prompt_sidecar_kind(path: Path) -> str:

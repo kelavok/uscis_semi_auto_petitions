@@ -15,6 +15,8 @@ from .bundle_workflow import (
     build_evidence_bundle,
     build_exhibit_index,
     generate_separator_pages,
+    inspect_layout_index_status,
+    refresh_layout_indexes,
     render_separator_pdfs,
 )
 from .cli_support import CASE_ROOT, configure_console, create_case_from_template, validate_case_id
@@ -519,8 +521,27 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
         target = insert_section(case_id, step, episode_id=episode_id, force=data.get("force") == "on")
         next_report = run_next_report(case_id, build_prompt_file=True)
         return f"Inserted section {target.name} and refreshed working_memo.docx.\n\n{next_report}"
+    if action == "refresh_layout_indexes":
+        summary = refresh_layout_indexes(case_id)
+        status = summary.status
+        warning = ""
+        if status.stale_document_ids or status.assignment_conflicts:
+            warning = " Review the highlighted index blockers before generating separators."
+        elif status.unsupported_documents:
+            warning = " Indexes are ready, but unsupported source files must be converted before final bundling."
+        return (
+            f"Refreshed indexes: scanned {summary.scanned_files} file(s), removed "
+            f"{summary.auxiliary_rows_removed} auxiliary row(s), rebound "
+            f"{summary.replacement_documents_rebound} replacement PDF(s), assigned "
+            f"{status.assigned_used_documents}/{status.unique_used_documents} used document(s), "
+            f"and built {status.exhibit_count} exhibit(s).{warning}"
+        )
     if action == "build_index":
         summary = build_exhibit_index(case_id)
+        if summary.documents_seen and not summary.documents_with_exhibit_number:
+            raise ValueError(
+                "No documents have Exhibit numbers. Use 'Refresh indexes' to derive them from validated LLM outputs first."
+            )
         return f"Exhibits created {summary.exhibits_created}, updated {summary.exhibits_updated}."
     if action == "separators":
         summary = generate_separator_pages(case_id)
@@ -706,6 +727,39 @@ def render_layout_page(case_id: str, params: dict[str, list[str]]) -> str:
     stage = _safe_llm_stage(case_id)
     progress = _safe_progress(case_id)
     layout_percent = _stage_percent(progress, {"exhibits", "bundle"})
+    index_status = inspect_layout_index_status(case_id)
+    index_ready = index_status.ready_for_separators
+    if not index_status.unique_used_documents:
+        index_notice = (
+            '<div class="alert error"><strong>No validated evidence selection found.</strong> '
+            "Complete Stage 2 outputs before building the evidence index.</div>"
+        )
+    elif index_status.refresh_required:
+        details = []
+        if index_status.stale_document_ids:
+            details.append(f"{len(index_status.stale_document_ids)} stale document reference(s)")
+        if index_status.assignment_conflicts:
+            details.append(f"{len(index_status.assignment_conflicts)} assignment conflict(s)")
+        if index_status.indexed_sidecars:
+            details.append(f"{len(index_status.indexed_sidecars)} auxiliary file(s) still indexed")
+        detail_text = "; ".join(details) or "Exhibit numbers have not been assigned yet"
+        index_notice = (
+            '<div class="alert error"><strong>Index refresh required.</strong> '
+            f"{escape(detail_text)}. Click <strong>Refresh indexes</strong> before generating separators.</div>"
+        )
+    else:
+        index_notice = (
+            '<div class="alert ok"><strong>Evidence indexes ready.</strong> '
+            f"{index_status.assigned_used_documents} used document(s) assigned to "
+            f"{index_status.exhibit_count} exhibit(s).</div>"
+        )
+    unsupported_notice = (
+        '<div class="alert error"><strong>Bundle conversion required.</strong><ul>'
+        + "".join(f"<li>{escape(item)}</li>" for item in index_status.unsupported_documents)
+        + "</ul></div>"
+        if index_status.unsupported_documents
+        else ""
+    )
     return page(
         f"Layout - {case_id}",
         f"""
@@ -716,12 +770,16 @@ def render_layout_page(case_id: str, params: dict[str, list[str]]) -> str:
           <div class="progress-heading"><div><h1>Layout & evidence bundle</h1><p class="muted">LLM drafting: {stage.percent}% complete</p></div><strong>{layout_percent}%</strong></div>
           <div class="progress-bar"><span style="width:{layout_percent}%"></span></div>
           {'<p class="alert error">LLM drafting is not complete. A dry run is allowed, but final assembly should wait.</p>' if not stage.complete else ''}
+          {index_notice}
+          {unsupported_notice}
+          <p class="muted small">Validated evidence references: {index_status.used_document_references}; unique documents: {index_status.unique_used_documents}; assigned: {index_status.assigned_used_documents}; exhibits: {index_status.exhibit_count}.</p>
           <div class="button-row">
-            {post_button(case_id, "build_index", "Build exhibit index")}
-            {post_button(case_id, "separators", "Generate separators")}
-            {post_button(case_id, "separator_pdfs", "Render separator PDFs")}
+            {post_button(case_id, "refresh_layout_indexes", "Refresh indexes")}
+            {post_button(case_id, "build_index", "Rebuild exhibit index", disabled=not index_ready)}
+            {post_button(case_id, "separators", "Generate separators", disabled=not index_ready)}
+            {post_button(case_id, "separator_pdfs", "Render separator PDFs", disabled=not index_ready)}
             {post_button(case_id, "bundle_dry_run", "Bundle dry-run")}
-            {post_button(case_id, "bundle_build", "Build final bundle")}
+            {post_button(case_id, "bundle_build", "Build final bundle", disabled=not index_ready or bool(index_status.unsupported_documents))}
           </div>
         </section>
         <section class="panel"><h2>Bundle status</h2><pre>{escape(_safe_text(lambda: build_status_report(case_id)))}</pre></section>
@@ -1359,12 +1417,14 @@ def alert(message: str, kind: str) -> str:
     return f'<div class="alert {kind}">{escape(message)}</div>'
 
 
-def post_button(case_id: str, action: str, label: str, *, extra: str = "") -> str:
+def post_button(
+    case_id: str, action: str, label: str, *, extra: str = "", disabled: bool = False
+) -> str:
     return (
         '<form method="post">'
         f'<input type="hidden" name="case" value="{escape(case_id)}">'
         f'<input type="hidden" name="action" value="{escape(action)}">'
-        f"{extra}<button>{escape(label)}</button></form>"
+        f"{extra}<button{' disabled' if disabled else ''}>{escape(label)}</button></form>"
     )
 
 
@@ -1955,7 +2015,14 @@ def _action_route(action: str) -> str:
         return "/intake"
     if action in {"run_next", "build_prompt", "import_output", "insert_section", "refresh_unit_documents"}:
         return "/llm"
-    if action in {"build_index", "separators", "separator_pdfs", "bundle_dry_run", "bundle_build"}:
+    if action in {
+        "refresh_layout_indexes",
+        "build_index",
+        "separators",
+        "separator_pdfs",
+        "bundle_dry_run",
+        "bundle_build",
+    }:
         return "/layout"
     return "/case"
 
