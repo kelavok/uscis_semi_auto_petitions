@@ -289,13 +289,24 @@ class RfeStrategyTests(unittest.TestCase):
                 stage = build_llm_stage("rfe_test")
                 self.assertEqual([unit.criterion for unit in stage.units], ["awards"])
                 self.assertNotEqual(stage.units[0].episode_id, "award_nba")
+                draft_path = (
+                    case_dir
+                    / "draft_sections/rfe/sections"
+                    / f"{stage.units[0].episode_id}.md"
+                )
+                draft_path.parent.mkdir(parents=True, exist_ok=True)
+                draft_path.write_text("Awards response.\n", encoding="utf-8")
                 memo = build_working_memo("rfe_test")
                 with zipfile.ZipFile(memo.docx_path) as archive:
                     document_xml = archive.read("word/document.xml").decode("utf-8")
-                self.assertIn("episode", document_xml)
                 self.assertIn("Dear Ms. Jane Officer and Officer:", document_xml)
                 self.assertIn("Awards were not accepted because national recognition was not established", document_xml)
-                self.assertIn("The Award Has National Recognition in the Field", document_xml)
+                self.assertIn("Awards response.", document_xml)
+                self.assertIn("Attachments / Evidence Index", document_xml)
+                self.assertIn("organizer_letter", document_xml)
+                self.assertNotIn("Drafting direction (internal)", document_xml)
+                self.assertNotIn("DRAFTING PLACEHOLDER", document_xml)
+                self.assertNotIn("SCRIPT PLACEHOLDER", document_xml)
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import filecmp
+import csv
 import re
 import shutil
 import zipfile
@@ -24,6 +25,14 @@ DEFAULT_WORKING_STRUCTURE_BY_TASK_TYPE = {
     "eb1a_petition": "templates/EB1A/EB1A_working_document_structure.yaml",
     "o1b_petition": "templates/O1B/O1B_working_document_structure.yaml",
 }
+
+TECHNICAL_MEMO_PREFIXES = (
+    "Drafting direction (internal):",
+    "[DRAFTING PLACEHOLDER:",
+    "[SCRIPT PLACEHOLDER:",
+    "[LLM SECTION PLACEHOLDER:",
+    "[SCRIPT-CONTROLLED CONTENT:",
+)
 
 # Regulatory criteria only. Employment-plan components are assembled through
 # their dedicated workflow destination and _draft_step_xml() path below.
@@ -456,6 +465,7 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
     ensure_style("RFE Quote", italic=True, indent=0.25)
     ensure_style("Drafting Note", italic=True, gray=True)
     ensure_style("Script Placeholder", gray=True)
+    ensure_style("Evidence Index Item", indent=0.25)
 
     metadata = manifest.get("case_metadata", {})
     if not isinstance(metadata, dict):
@@ -609,44 +619,30 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
             answer.paragraph_format.line_spacing = 1.15
 
         for unit in group:
+            unit_id = str(unit.get("unit_id", ""))
+            draft_path = case_dir / "draft_sections/rfe/sections" / f"{unit_id}.md"
+            if not draft_path.exists():
+                continue
             title_text = str(unit.get("title", "")).strip()
             if len(group) > 1 or role or title_text != heading:
                 add_text(title_text or str(unit.get("unit_id", "")), style="Heading 2")
-            starter = str(unit.get("starter_text", "")).strip()
-            for paragraph_text in re.split(r"\n\s*\n", starter):
-                if paragraph_text.strip():
-                    add_text(paragraph_text.strip())
-            for subheading in unit.get("planned_subheadings", []):
-                if str(subheading).strip():
-                    add_text(str(subheading).strip(), style="Heading 3")
-            strategy = str(unit.get("strategy", "")).strip()
-            if strategy:
-                add_text(f"Drafting direction (internal): {strategy}", style="Drafting Note")
-            unit_id = str(unit.get("unit_id", ""))
-            draft_path = case_dir / "draft_sections/rfe/sections" / f"{unit_id}.md"
-            if draft_path.exists():
-                draft_text = draft_path.read_text(encoding="utf-8-sig", errors="replace").strip()
-                for paragraph_text in re.split(r"\n\s*\n", draft_text):
-                    if paragraph_text.strip():
-                        add_text(paragraph_text.strip())
-            else:
-                add_text(
-                    f"[LLM SECTION PLACEHOLDER: rfe_dynamic_section / episode_id={unit_id}]",
-                    style="Script Placeholder",
-                )
-        if role:
-            add_text("Conclusion", style="Heading 2")
-            add_text(
-                f"[DRAFTING PLACEHOLDER: conclude specifically how the submitted evidence rebuts the RFE objections to Criterion ({RFE_CRITERION_ROMAN_BY_ROLE.get(role, '')}).]",
-                style="Script Placeholder",
-            )
+            draft_text = draft_path.read_text(encoding="utf-8-sig", errors="replace")
+            draft_paragraphs = _clean_memo_paragraphs(draft_text)
+            if draft_paragraphs and _normalized_heading(draft_paragraphs[0]) in {
+                _normalized_heading(title_text),
+                _normalized_heading(heading),
+            }:
+                draft_paragraphs = draft_paragraphs[1:]
+            for paragraph_text in draft_paragraphs:
+                add_text(paragraph_text)
 
     document.add_page_break()
     add_text("Attachments / Evidence Index", style="Heading 1")
-    add_text(
-        "[SCRIPT PLACEHOLDER: generated from indexes/exhibit_index.csv after evidence pagination is finalized]",
-        style="Script Placeholder",
-    )
+    evidence_entries = _evidence_index_entries(case_dir, config)
+    for exhibit_heading, document_titles in evidence_entries:
+        add_text(exhibit_heading, style="Heading 2")
+        for document_title in document_titles:
+            add_text(document_title, style="Evidence Index Item")
 
     for section in document.sections:
         section.top_margin = Inches(1)
@@ -866,38 +862,41 @@ def _rfe_skeleton(
             ],
         },
     ]
-    from .rfe_strategy import load_strategy_manifest
+    from .rfe_strategy import effective_strategy_units
 
-    manifest = load_strategy_manifest(case_dir)
-    for unit in manifest.get("units", []):
+    units = effective_strategy_units(case_dir, config)
+    for unit in units:
+        if str(unit.get("section_type", "")) in {"cover_letter", "attachments"}:
+            continue
         unit_id = str(unit.get("unit_id", ""))
         draft_path = case_dir / "draft_sections" / "rfe" / "sections" / f"{unit_id}.md"
-        starter = str(unit.get("starter_text", "")).strip()
-        if draft_path.exists():
-            draft_text = draft_path.read_text(encoding="utf-8-sig", errors="replace").strip()
-            paragraphs = [part.strip() for part in re.split(r"\n\s*\n", draft_text) if part.strip()]
-        else:
-            paragraphs = [part.strip() for part in re.split(r"\n\s*\n", starter) if part.strip()]
-            paragraphs.append(
-                f"[LLM SECTION PLACEHOLDER: rfe_dynamic_section / episode_id={unit_id}]"
-            )
+        if not draft_path.exists():
+            continue
+        draft_text = draft_path.read_text(encoding="utf-8-sig", errors="replace")
+        paragraphs = _clean_memo_paragraphs(draft_text)
+        unit_title = str(unit.get("title", unit_id))
+        if paragraphs and _normalized_heading(paragraphs[0]) == _normalized_heading(unit_title):
+            paragraphs = paragraphs[1:]
         skeleton.append(
             {
                 "level": 1 if not unit.get("criterion_role") else 2,
-                "title": str(unit.get("title", unit_id)),
+                "title": unit_title,
                 "paragraphs": paragraphs,
                 "inferred": True,
                 "unit_id": unit_id,
                 "criterion_role": str(unit.get("criterion_role", "")),
             }
         )
-    skeleton.append(
-        {
-            "level": 1,
-            "title": "Attachments / Evidence Index",
-            "paragraphs": ["[SCRIPT PLACEHOLDER: generated from indexes/exhibit_index.csv]"],
-        }
-    )
+    skeleton.append({"level": 1, "title": "Attachments / Evidence Index", "paragraphs": []})
+    for exhibit_heading, document_titles in _evidence_index_entries(case_dir, config):
+        skeleton.append(
+            {
+                "level": 2,
+                "title": exhibit_heading,
+                "paragraphs": [],
+                "bullets": document_titles,
+            }
+        )
     if not any(item.get("inferred") for item in skeleton):
         skeleton.append(
             {
@@ -1376,6 +1375,89 @@ def _metadata_lines(config: dict[str, Any]) -> list[str]:
         f"- Specialization: `{config.get('specialization', '')}`",
         f"- SOC code: `{config.get('soc_code', '')}`",
     ]
+
+
+def _clean_memo_paragraphs(text: str) -> list[str]:
+    return [
+        paragraph
+        for paragraph in (
+            part.strip() for part in re.split(r"\n\s*\n", text.strip())
+        )
+        if paragraph
+        and not any(paragraph.startswith(prefix) for prefix in TECHNICAL_MEMO_PREFIXES)
+    ]
+
+
+def _normalized_heading(value: str) -> str:
+    return " ".join(
+        "".join(character if character.isalnum() else " " for character in value.casefold()).split()
+    )
+
+
+def _evidence_index_entries(
+    case_dir: Path, config: dict[str, Any]
+) -> list[tuple[str, list[str]]]:
+    paths = config.get("paths", {}) if isinstance(config.get("paths"), dict) else {}
+    document_path = case_dir / str(paths.get("document_index", "indexes/document_index.csv"))
+    exhibit_path = case_dir / str(paths.get("exhibit_index", "indexes/exhibit_index.csv"))
+    if not document_path.exists() or not exhibit_path.exists():
+        return []
+
+    with document_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        documents = [dict(row) for row in csv.DictReader(handle)]
+    with exhibit_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        exhibits = [dict(row) for row in csv.DictReader(handle)]
+    by_id = {row.get("document_id", ""): row for row in documents if row.get("document_id")}
+
+    entries: list[tuple[str, list[str]]] = []
+    for exhibit in sorted(exhibits, key=lambda row: _natural_key(row.get("exhibit_number", ""))):
+        number = exhibit.get("exhibit_number", "").strip()
+        if not number:
+            continue
+        title = exhibit.get("display_title", "").strip()
+        heading = f"Exhibit {number}"
+        if title and title.casefold() != heading.casefold():
+            heading += f": {title}"
+        document_ids = [
+            item.strip() for item in exhibit.get("document_ids", "").split(";") if item.strip()
+        ]
+        selected_ids = set(document_ids)
+        translations_by_parent: dict[str, list[dict[str, str]]] = {}
+        for document_id in document_ids:
+            document = by_id.get(document_id, {})
+            parent = document.get("parent_document_id", "").strip()
+            is_translation = (
+                document.get("translation_status", "").strip().lower() == "translation"
+                or document.get("relationship_type", "").strip().lower() == "translation"
+            )
+            if is_translation and parent in selected_ids:
+                translations_by_parent.setdefault(parent, []).append(document)
+        titles: list[str] = []
+        for document_id in document_ids:
+            document = by_id.get(document_id)
+            if not document:
+                continue
+            parent = document.get("parent_document_id", "").strip()
+            is_translation = (
+                document.get("translation_status", "").strip().lower() == "translation"
+                or document.get("relationship_type", "").strip().lower() == "translation"
+            )
+            if is_translation and parent in selected_ids:
+                continue
+            document_title = (
+                document.get("display_title", "").strip()
+                or document.get("original_file_name", "").strip()
+            )
+            if translations_by_parent.get(document_id):
+                document_title += "; English translation"
+            if document_title:
+                titles.append(document_title)
+        entries.append((heading, titles))
+    return entries
+
+
+def _natural_key(value: str) -> list[object]:
+    return [int(part) if part.isdigit() else part.casefold() for part in re.split(r"(\d+)", value)]
 
 
 def _o1b_document_xml(config: dict[str, Any], case_dir: Path) -> str:
