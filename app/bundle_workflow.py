@@ -323,7 +323,7 @@ def inspect_layout_index_status(case_id: str) -> LayoutIndexStatus:
     document_index_path = loaded.case_dir / _case_path_value(loaded.config, "document_index")
     exhibit_index_path = loaded.case_dir / _case_path_value(loaded.config, "exhibit_index")
     document_rows = _read_csv(document_index_path, INDEX_FIELDS)
-    desired, conflicts, references = _desired_exhibit_assignments(loaded)
+    desired, conflicts, references, _metadata = _desired_exhibit_assignments(loaded)
     rows_by_id = {row.get("document_id", ""): row for row in document_rows if row.get("document_id")}
     stale = sorted(document_id for document_id in desired if document_id not in rows_by_id)
     assigned = sum(
@@ -368,7 +368,7 @@ def refresh_layout_indexes(case_id: str) -> LayoutIndexRefreshSummary:
     document_index_path = loaded.case_dir / _case_path_value(loaded.config, "document_index")
     exhibit_index_path = loaded.case_dir / _case_path_value(loaded.config, "exhibit_index")
     document_rows = _read_csv(document_index_path, INDEX_FIELDS)
-    desired, conflicts, _references = _desired_exhibit_assignments(loaded)
+    desired, conflicts, _references, exhibit_metadata = _desired_exhibit_assignments(loaded)
     replacements_rebound = _rebind_supported_replacements(loaded, document_rows, desired)
     rows_by_id = {row.get("document_id", ""): row for row in document_rows if row.get("document_id")}
 
@@ -409,6 +409,13 @@ def refresh_layout_indexes(case_id: str) -> LayoutIndexRefreshSummary:
         if row.get("exhibit_number", "").strip() in desired_exhibits
         or _truthy(row.get("manual_edit_lock", ""))
     ]
+    for row in exhibit_rows:
+        exhibit_number = row.get("exhibit_number", "").strip()
+        title, memo_section = exhibit_metadata.get(exhibit_number, ("", ""))
+        if title and not _truthy(row.get("manual_edit_lock", "")):
+            row["display_title"] = title
+        if memo_section and not _truthy(row.get("manual_edit_lock", "")):
+            row["memo_section"] = memo_section
     _write_csv(exhibit_index_path, exhibit_rows, EXHIBIT_FIELDS)
     exhibit_summary = build_exhibit_index(case_id)
     _invalidate_bundle_preparation(loaded)
@@ -436,7 +443,9 @@ def refresh_layout_indexes(case_id: str) -> LayoutIndexRefreshSummary:
     )
 
 
-def _desired_exhibit_assignments(loaded: LoadedCase) -> tuple[dict[str, str], list[str], int]:
+def _desired_exhibit_assignments(
+    loaded: LoadedCase,
+) -> tuple[dict[str, str], list[str], int, dict[str, tuple[str, str]]]:
     validated_root = loaded.case_dir / _case_path_value(loaded.config, "validated_outputs")
     files = {path.stem: path for path in validated_root.glob("*.json")}
     try:
@@ -448,6 +457,7 @@ def _desired_exhibit_assignments(loaded: LoadedCase) -> tuple[dict[str, str], li
     ordered_stems.extend(stem for stem in sorted(files) if stem not in ordered_stems)
     desired: dict[str, str] = {}
     conflicts: list[str] = []
+    exhibit_metadata: dict[str, tuple[str, str]] = {}
     references = 0
     for stem in ordered_stems:
         path = files.get(stem)
@@ -465,6 +475,12 @@ def _desired_exhibit_assignments(loaded: LoadedCase) -> tuple[dict[str, str], li
         if not exhibit_number:
             conflicts.append(f"{path.name} uses documents but has no deterministic Exhibit mapping.")
             continue
+        title, memo_section = _exhibit_metadata_for_output(loaded, data)
+        existing_title, existing_section = exhibit_metadata.get(exhibit_number, ("", ""))
+        exhibit_metadata[exhibit_number] = (
+            existing_title or title,
+            existing_section or memo_section,
+        )
         for item in used_documents:
             if not isinstance(item, dict):
                 continue
@@ -479,7 +495,28 @@ def _desired_exhibit_assignments(loaded: LoadedCase) -> tuple[dict[str, str], li
                 )
                 continue
             desired.setdefault(document_id, exhibit_number)
-    return desired, conflicts, references
+    return desired, conflicts, references, exhibit_metadata
+
+
+def _exhibit_metadata_for_output(
+    loaded: LoadedCase, data: dict[str, object]
+) -> tuple[str, str]:
+    step_id = str(data.get("step_id", ""))
+    episode_id = str(data.get("episode_id", ""))
+    if str(loaded.config.get("task_type", "")) == "eb1a_rfe_response" and episode_id:
+        from .rfe_strategy import get_strategy_unit
+
+        unit = get_strategy_unit(loaded.case_dir, episode_id, loaded.config)
+        section_title = str(unit.get("section_title", "")).strip()
+        role = str(unit.get("criterion_role", "")).strip()
+        return section_title or str(unit.get("title", "")).strip(), role
+    try:
+        step = find_step(loaded.workflow, step_id)
+    except SystemExit:
+        return "", ""
+    title = str(step.get("exhibit_title", "") or step.get("title", "")).strip()
+    memo_section = str(step.get("memo_section", "") or step.get("criterion_role", "")).strip()
+    return title, memo_section
 
 
 def _exhibit_number_for_output(loaded: LoadedCase, data: dict[str, object]) -> str:
@@ -695,25 +732,23 @@ def generate_separator_pages(
         ]
         if not document_ids:
             continue
+        document_groups = _logical_document_groups(document_ids, documents_by_id)
         exhibit_file = separators_dir / f"{exhibit_position:03d}_exhibit_{_safe_filename(exhibit_number)}.md"
         exhibit_file.write_text(
-            _render_exhibit_separator(exhibit, document_ids, documents_by_id),
+            _render_exhibit_separator(exhibit, document_groups),
             encoding="utf-8",
         )
         exhibit_pages_written += 1
         manifest_lines.append(f"- {exhibit_file.relative_to(bundle_root).as_posix()}")
 
-        for document_position, document_id in enumerate(document_ids, start=1):
-            document = documents_by_id.get(document_id)
-            if document is None:
-                missing_document_ids += 1
-                continue
+        for document_position, (document, translations) in enumerate(document_groups, start=1):
+            document_id = document.get("document_id", "")
             document_file = (
                 separators_dir
                 / f"{exhibit_position:03d}_{document_position:03d}_{_safe_filename(document_id)}.md"
             )
             document_file.write_text(
-                _render_document_separator(exhibit, document),
+                _render_document_separator(exhibit, document, translations),
                 encoding="utf-8",
             )
             document_pages_written += 1
@@ -882,6 +917,7 @@ def build_bundle_plan(
         ]
         if not document_ids:
             continue
+        document_groups = _logical_document_groups(document_ids, documents_by_id)
         exhibit_separator = (
             bundle_root
             / "separators"
@@ -902,8 +938,8 @@ def build_bundle_plan(
         )
         sequence += 1
 
-        for document_position, document_id in enumerate(document_ids, start=1):
-            document = documents_by_id.get(document_id)
+        for document_position, (document, translations) in enumerate(document_groups, start=1):
+            document_id = document.get("document_id", "")
             document_separator = (
                 bundle_root
                 / "separators"
@@ -923,36 +959,23 @@ def build_bundle_plan(
                 )
             )
             sequence += 1
-            if not document:
+            for source_document in [document, *translations]:
+                source_id = source_document.get("document_id", "")
+                source_path = loaded.case_dir / source_document.get("file_path", "")
+                status, note = _source_document_status(source_path)
                 items.append(
                     _plan_item(
                         sequence,
                         "source_document",
                         exhibit_number,
-                        document_id,
-                        loaded.case_dir / "__missing_document_index_row__",
+                        source_id,
+                        source_path,
                         loaded.case_dir,
-                        "missing",
-                        "Document ID is listed in exhibit_index.csv but missing from document_index.csv.",
+                        status,
+                        note,
                     )
                 )
                 sequence += 1
-                continue
-            source_path = loaded.case_dir / document.get("file_path", "")
-            status, note = _source_document_status(source_path)
-            items.append(
-                _plan_item(
-                    sequence,
-                    "source_document",
-                    exhibit_number,
-                    document_id,
-                    source_path,
-                    loaded.case_dir,
-                    status,
-                    note,
-                )
-            )
-            sequence += 1
 
     plan_csv_path = plan_dir / "bundle_plan.csv"
     plan_md_path = plan_dir / "bundle_plan.md"
@@ -1038,8 +1061,13 @@ def build_evidence_bundle(case_id: str) -> BundleBuildSummary:
             writer.add_page(page)
         merged_items += 1
 
-    with final_pdf_path.open("wb") as handle:
-        writer.write(handle)
+    try:
+        with final_pdf_path.open("wb") as handle:
+            writer.write(handle)
+    except PermissionError:
+        final_pdf_path = final_pdf_path.with_name(final_pdf_path.stem + "_updated.pdf")
+        with final_pdf_path.open("wb") as handle:
+            writer.write(handle)
     return BundleBuildSummary(
         final_pdf_path=final_pdf_path,
         plan_csv_path=plan_summary.plan_csv_path,
@@ -1256,85 +1284,88 @@ def _merge_note(existing: str, note: str) -> str:
     return existing + " | " + note
 
 
+def _logical_document_groups(
+    document_ids: list[str], documents_by_id: dict[str, dict[str, str]]
+) -> list[tuple[dict[str, str], list[dict[str, str]]]]:
+    selected_rows = [
+        documents_by_id[document_id]
+        for document_id in document_ids
+        if document_id in documents_by_id
+    ]
+    selected_ids = {row.get("document_id", "") for row in selected_rows}
+    translations_by_parent: dict[str, list[dict[str, str]]] = {}
+    for row in selected_rows:
+        parent_id = row.get("parent_document_id", "").strip()
+        if _is_translation(row) and parent_id in selected_ids:
+            translations_by_parent.setdefault(parent_id, []).append(row)
+
+    groups: list[tuple[dict[str, str], list[dict[str, str]]]] = []
+    consumed: set[str] = set()
+    for row in selected_rows:
+        document_id = row.get("document_id", "")
+        if document_id in consumed:
+            continue
+        parent_id = row.get("parent_document_id", "").strip()
+        if _is_translation(row) and parent_id in selected_ids:
+            continue
+        translations = translations_by_parent.get(document_id, [])
+        groups.append((row, translations))
+        consumed.add(document_id)
+        consumed.update(item.get("document_id", "") for item in translations)
+    return groups
+
+
+def _is_translation(document: dict[str, str]) -> bool:
+    return (
+        document.get("relationship_type", "").strip().lower() == "translation"
+        or document.get("translation_status", "").strip().lower() == "translation"
+    )
+
+
+def _exhibit_heading(exhibit: dict[str, str]) -> str:
+    exhibit_number = exhibit.get("exhibit_number", "").strip()
+    title = exhibit.get("display_title", "").strip()
+    generic_titles = {"", f"Exhibit {exhibit_number}".casefold()}
+    if title.casefold() in generic_titles:
+        return f"Exhibit {exhibit_number}"
+    return f"Exhibit {exhibit_number}: {title}"
+
+
 def _render_exhibit_separator(
     exhibit: dict[str, str],
-    document_ids: list[str],
-    documents_by_id: dict[str, dict[str, str]],
+    document_groups: list[tuple[dict[str, str], list[dict[str, str]]]],
 ) -> str:
-    exhibit_number = exhibit.get("exhibit_number", "")
-    title = exhibit.get("display_title", "") or f"Exhibit {exhibit_number}"
     lines = [
-        "---",
-        "separator_type: exhibit",
-        f"exhibit_number: {exhibit_number}",
-        f"exhibit_id: {exhibit.get('exhibit_id', '')}",
-        "---",
-        "",
-        f"# {title}",
+        f"# {_exhibit_heading(exhibit)}",
         "",
     ]
     thesis = exhibit.get("evidentiary_thesis", "").strip()
     if thesis:
         lines.extend(["## Evidentiary thesis", "", thesis, ""])
     lines.extend(["## Documents included", ""])
-    if document_ids:
-        for index, document_id in enumerate(document_ids, start=1):
-            document = documents_by_id.get(document_id, {})
-            doc_title = _document_title(document) if document else "[missing document in document_index.csv]"
-            relationship = _relationship_label(document)
-            lines.append(f"{index}. {document_id} - {doc_title}{relationship}")
+    if document_groups:
+        for index, (document, translations) in enumerate(document_groups, start=1):
+            translation_label = "; English translation" if translations else ""
+            lines.append(f"{index}. {_document_title(document)}{translation_label}")
     else:
-        lines.append("[No document_ids listed for this exhibit.]")
+        lines.append("[No documents selected for this exhibit.]")
     lines.append("")
-    lines.append("Generated from exhibit_index.csv and document_index.csv.")
     return "\n".join(lines) + "\n"
 
 
-def _render_document_separator(exhibit: dict[str, str], document: dict[str, str]) -> str:
+def _render_document_separator(
+    exhibit: dict[str, str],
+    document: dict[str, str],
+    translations: list[dict[str, str]],
+) -> str:
     title = _document_title(document)
+    translation_label = "; English translation" if translations else ""
     lines = [
-        "---",
-        "separator_type: document",
-        f"exhibit_number: {document.get('exhibit_number', exhibit.get('exhibit_number', ''))}",
-        f"document_id: {document.get('document_id', '')}",
-        "---",
+        f"# {title}{translation_label}",
         "",
-        f"# {title}",
-        "",
-        f"**Exhibit:** {document.get('exhibit_number', exhibit.get('exhibit_number', ''))}",
-        "",
-        f"**Document ID:** {document.get('document_id', '')}",
-        "",
-        f"**Document type:** {document.get('document_type', '')}",
-        "",
-        f"**Source file:** `{document.get('file_path', '')}`",
-        "",
-        f"**Translation status:** {document.get('translation_status', '') or 'not set'}",
+        f"**{_exhibit_heading(exhibit)}**",
         "",
     ]
-    if document.get("relationship_type"):
-        lines.extend([f"**Relationship type:** {document.get('relationship_type', '')}", ""])
-    if document.get("parent_document_id"):
-        lines.extend(
-            [
-                f"**Relationship:** translation of {document.get('parent_document_id', '')}",
-                "",
-                f"**Original document ID:** {document.get('parent_document_id', '')}",
-                "",
-                "**Bundle order:** original first, then this translation.",
-                "",
-            ]
-        )
-    if document.get("short_description"):
-        lines.extend(["## Description", "", document.get("short_description", ""), ""])
-    if document.get("person_or_organization"):
-        lines.extend(["## Person / organization", "", document.get("person_or_organization", ""), ""])
-    if document.get("document_date"):
-        lines.extend(["## Date", "", document.get("document_date", ""), ""])
-    notes = document.get("notes", "").strip()
-    if notes:
-        lines.extend(["## Notes", "", notes, ""])
-    lines.append("Generated from document_index.csv.")
     return "\n".join(lines) + "\n"
 
 
@@ -1345,17 +1376,6 @@ def _document_title(document: dict[str, str]) -> str:
         or document.get("document_id", "").strip()
         or "[untitled document]"
     )
-
-
-def _relationship_label(document: dict[str, str]) -> str:
-    if not document:
-        return ""
-    if document.get("relationship_type") == "translation" or document.get("translation_status") == "translation":
-        parent = document.get("parent_document_id", "").strip()
-        return f" (translation of {parent})" if parent else " (translation)"
-    if document.get("translation_status") == "original":
-        return " (original)"
-    return ""
 
 
 def _exhibit_sort_key(row: dict[str, str]) -> tuple[int, list[object], str]:

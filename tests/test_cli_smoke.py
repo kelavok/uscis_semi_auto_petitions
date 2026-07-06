@@ -1605,13 +1605,18 @@ class CliSmokeTests(unittest.TestCase):
                 summary = generate_separator_pages("case_001")
 
             self.assertEqual(summary.exhibit_pages_written, 1)
-            self.assertEqual(summary.document_pages_written, 2)
+            self.assertEqual(summary.document_pages_written, 1)
             exhibit_page = case_dir / "bundle" / "separators" / "generated" / "001_exhibit_E-1.md"
-            translation_page = case_dir / "bundle" / "separators" / "generated" / "001_002_DOC0002.md"
+            document_page = case_dir / "bundle" / "separators" / "generated" / "001_001_DOC0001.md"
             self.assertTrue(exhibit_page.exists())
-            self.assertTrue(translation_page.exists())
-            self.assertIn("DOC0001 - Award Original", exhibit_page.read_text(encoding="utf-8"))
-            self.assertIn("translation of DOC0001", translation_page.read_text(encoding="utf-8"))
+            self.assertTrue(document_page.exists())
+            exhibit_text = exhibit_page.read_text(encoding="utf-8")
+            self.assertIn("Award Original; English translation", exhibit_text)
+            self.assertNotIn("DOC0001", exhibit_text)
+            separator_text = document_page.read_text(encoding="utf-8")
+            self.assertIn("Award Original; English translation", separator_text)
+            self.assertNotIn("Document ID", separator_text)
+            self.assertNotIn("Source file", separator_text)
 
             with (
                 patch.object(cli_support, "CASE_ROOT", case_root),
@@ -1626,8 +1631,8 @@ class CliSmokeTests(unittest.TestCase):
                 (case_dir / "bundle" / "separators" / "generated" / "001_001_DOC0001.md").exists()
             )
             selected_exhibit = exhibit_page.read_text(encoding="utf-8")
-            self.assertNotIn("DOC0001 - Award Original", selected_exhibit)
-            self.assertIn("DOC0002 - Award Translation", selected_exhibit)
+            self.assertNotIn("Award Original", selected_exhibit)
+            self.assertIn("Award Translation", selected_exhibit)
 
     def test_build_bundle_plan_reports_missing_separators_and_ready_source(self) -> None:
         with TemporaryDirectory() as temp:
