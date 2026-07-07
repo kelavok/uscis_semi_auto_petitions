@@ -26,6 +26,7 @@ from .bundle_workflow import (
 from .cli_support import CASE_ROOT, configure_console, create_case_from_template, validate_case_id
 from .document_layout import (
     add_mapping as add_document_layout_mapping,
+    build_original_directory_catalog,
     build_layout_bundle,
     build_layout_preview,
     list_installed_fonts,
@@ -33,8 +34,10 @@ from .document_layout import (
     load_layout_status,
     refresh_layout_sources,
     remove_mapping as remove_document_layout_mapping,
+    save_folder_scopes,
     save_layout_selection,
     save_layout_structure,
+    set_mapping_paths,
     update_layout_settings,
 )
 from .evidence import (
@@ -308,6 +311,17 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
     if action == "layout_save_structure":
         save_layout_structure(case_id, data)
         return "Saved exhibit titles, episode titles, and document titles."
+    if action == "layout_save_folder_scopes":
+        save_folder_scopes(case_id, data)
+        return "Saved exhibit and episode folder selections."
+    if action == "layout_save_document_originals":
+        selected_files = [
+            value
+            for key, value in data.items()
+            if key.startswith("original_choice_") and value.strip()
+        ]
+        set_mapping_paths(case_id, data.get("document_id", ""), "original", selected_files)
+        return f"Saved {len(selected_files)} original file(s) for the selected document."
     if action == "layout_add_mapping":
         kind = data.get("mapping_kind", "").strip()
         initial_dir = _safe_layout_setting(case_id, "translations_dir" if kind == "translation" else "originals_dir")
@@ -1021,6 +1035,10 @@ def render_document_layout_page(case_id: str, params: dict[str, list[str]]) -> s
         for name in available_fonts
     )
     inventory = status.inventory
+    directory_catalog = build_original_directory_catalog(case_id)
+    directories_by_path = {
+        str(item.get("directory", "")): item for item in directory_catalog
+    }
     inventory_html = (
         f"<p class='muted small'>Indexed files: {len(inventory.get('original_files', []))} original(s), {len(inventory.get('translation_files', []))} translation(s).</p>"
         "<details><summary>View indexed files</summary>"
@@ -1072,10 +1090,51 @@ def render_document_layout_page(case_id: str, params: dict[str, list[str]]) -> s
         )
 
     mapping_rows: list[str] = []
+    folder_scope_rows: list[str] = []
     for exhibit in status.structure.get("exhibits", []):
         episode_rows = []
+        exhibit_folder = str(exhibit.get("source_folder", ""))
+        exhibit_options = _render_directory_options(
+            directory_catalog,
+            exhibit_folder,
+        )
         for episode in exhibit.get("episodes", []):
             document_cards = []
+            episode_folder = (
+                exhibit_folder
+                if episode.get("kind") == "direct"
+                else str(episode.get("source_folder", ""))
+            )
+            if episode.get("kind") == "direct":
+                episode_scope = "<p class='muted small'>Documents below use the Exhibit folder directly.</p>"
+            else:
+                episode_options = _render_directory_options(
+                    [
+                        item
+                        for item in directory_catalog
+                        if exhibit_folder
+                        and _is_same_or_nested_directory(
+                            str(item.get("directory", "")),
+                            exhibit_folder,
+                        )
+                        and str(item.get("directory", "")) != exhibit_folder
+                    ],
+                    episode_folder,
+                    include_blank=not exhibit_folder,
+                    blank_label="Choose episode folder after Exhibit folder is selected",
+                )
+                episode_scope = (
+                    f"""
+                    <label><strong>Episode folder</strong>
+                      <select name="episode_folder_{escape(str(episode.get('id', '')))}">
+                        {episode_options}
+                      </select>
+                    </label>
+                    """
+                    if exhibit_folder
+                    else "<p class='muted small'>Select the Exhibit folder first, then pick the episode folder.</p>"
+                )
+            candidate_files = _files_for_directory(directory_catalog, episode_folder)
             for document in episode.get("documents", []):
                 document_id = str(document.get("id", ""))
                 mapping = status.mappings.get(document_id, {})
@@ -1083,6 +1142,13 @@ def render_document_layout_page(case_id: str, params: dict[str, list[str]]) -> s
                 translation_paths = list(mapping.get("translation_paths", []))
                 original_list = _render_mapping_list(case_id, document_id, "original", original_paths)
                 translation_list = _render_mapping_list(case_id, document_id, "translation", translation_paths)
+                choices_html = _render_document_choices(
+                    case_id,
+                    document_id,
+                    candidate_files,
+                    original_paths,
+                    bool(episode_folder),
+                )
                 document_cards.append(
                     f"""
                     <article class="layout-mapping-card">
@@ -1096,13 +1162,7 @@ def render_document_layout_page(case_id: str, params: dict[str, list[str]]) -> s
                         <section>
                           <h4>Original files</h4>
                           {original_list}
-                          <form method="post">
-                            <input type="hidden" name="case" value="{escape(case_id)}">
-                            <input type="hidden" name="action" value="layout_add_mapping">
-                            <input type="hidden" name="document_id" value="{escape(document_id)}">
-                            <input type="hidden" name="mapping_kind" value="original">
-                            <button class="secondary">Add original file</button>
-                          </form>
+                          {choices_html}
                         </section>
                         <section>
                           <h4>Translation files</h4>
@@ -1128,10 +1188,29 @@ def render_document_layout_page(case_id: str, params: dict[str, list[str]]) -> s
                 f"""
                 <details class="layout-mapping-episode" open>
                   <summary>{escape(str(episode_title))}</summary>
+                  <div class="layout-scope-box">{episode_scope}</div>
                   {''.join(document_cards)}
                 </details>
                 """
             )
+        folder_scope_rows.append(
+            f"""
+            <section class="layout-mapping-exhibit">
+              <h3>Exhibit {escape(str(exhibit.get('number', '')))} {escape(str(exhibit.get('title', '')))}</h3>
+              <label><strong>Exhibit folder</strong>
+                <select name="exhibit_folder_{escape(str(exhibit.get('id', '')))}">
+                  {exhibit_options}
+                </select>
+              </label>
+              <p class="muted small">Choose the folder in the originals directory that matches this Exhibit. If the Exhibit contains episodes, the episode folders are then narrowed to this folder.</p>
+              {''.join(
+                  f"<p class='muted small'><code>{escape(str(episode.get('number', '')))}</code> {escape(str(episode.get('title', '') or 'Direct exhibit documents'))}</p>"
+                  for episode in exhibit.get('episodes', [])
+                  if episode.get('kind') != 'direct'
+              )}
+            </section>
+            """
+        )
         mapping_rows.append(
             f"""
             <section class="layout-mapping-exhibit">
@@ -1263,6 +1342,13 @@ def render_document_layout_page(case_id: str, params: dict[str, list[str]]) -> s
           <h2>Stage 2 · Attach one or more files to each logical document</h2>
           {'' if status.stage2_available else '<p class="muted">This unlocks after Stage 1 parsing succeeds.</p>'}
           {unmapped_notice if status.stage2_available else ''}
+          {(
+            '<form method="post" class="stack"><input type="hidden" name="case" value="'
+            + escape(case_id)
+            + '"><input type="hidden" name="action" value="layout_save_folder_scopes">'
+            + ''.join(folder_scope_rows)
+            + '<div class="button-row"><button>Save exhibit and episode folders</button></div></form>'
+          ) if status.stage2_available else ''}
           {''.join(mapping_rows) if status.stage2_available else ''}
         </section>
         <section class="panel {'panel-disabled' if not status.stage3_available else ''}">
@@ -1600,6 +1686,80 @@ def _render_mapping_list(case_id: str, document_id: str, kind: str, paths: list[
     return "".join(rows)
 
 
+def _render_directory_options(
+    directories: list[dict[str, object]],
+    selected: str,
+    *,
+    include_blank: bool = True,
+    blank_label: str = "Choose folder",
+) -> str:
+    options: list[str] = []
+    if include_blank:
+        options.append(
+            f'<option value=""{" selected" if not selected else ""}>{escape(blank_label)}</option>'
+        )
+    for item in directories:
+        directory = str(item.get("directory", ""))
+        depth = int(item.get("depth", 0))
+        prefix = "&nbsp;" * max(depth - 1, 0) * 4
+        label = prefix + escape(str(item.get("label", directory or "[root]")))
+        options.append(
+            f'<option value="{escape(directory, quote=True)}"{" selected" if directory == selected else ""}>{label}</option>'
+        )
+    return "".join(options)
+
+
+def _is_same_or_nested_directory(directory: str, parent: str) -> bool:
+    if not parent:
+        return True
+    return directory == parent or directory.startswith(parent + "/")
+
+
+def _files_for_directory(
+    directories: list[dict[str, Any]], directory: str
+) -> list[dict[str, str]]:
+    for item in directories:
+        if str(item.get("directory", "")) == directory:
+            return [dict(file_entry) for file_entry in item.get("files", [])]
+    return []
+
+
+def _render_document_choices(
+    case_id: str,
+    document_id: str,
+    candidate_files: list[dict[str, str]],
+    selected_paths: list[str],
+    folder_ready: bool,
+) -> str:
+    if not folder_ready:
+        return "<p class='muted small'>Choose the Exhibit/Episode folder first.</p>"
+    if not candidate_files:
+        return "<p class='muted small'>No files were found directly inside the selected folder.</p>"
+    selected_set = {str(Path(path).expanduser().resolve()) for path in selected_paths}
+    choice_rows = []
+    for index, file_entry in enumerate(candidate_files, start=1):
+        absolute_path = str(Path(file_entry.get("path", "")).expanduser().resolve())
+        checked = " checked" if absolute_path in selected_set else ""
+        choice_rows.append(
+            f"""
+            <label class="layout-choice-row">
+              <input type="checkbox" name="original_choice_{index}" value="{escape(absolute_path, quote=True)}"{checked}>
+              <span>{escape(file_entry.get('name', ''))}</span>
+            </label>
+            """
+        )
+    return (
+        '<form method="post" class="stack">'
+        f'<input type="hidden" name="case" value="{escape(case_id)}">'
+        '<input type="hidden" name="action" value="layout_save_document_originals">'
+        f'<input type="hidden" name="document_id" value="{escape(document_id)}">'
+        '<div class="layout-scroll-list">'
+        + "".join(choice_rows)
+        + "</div>"
+        + '<div class="button-row"><button class="secondary">Save selected original files</button></div></form>'
+    )
+
+
 def render_translation_review_page(case_id: str, params: dict[str, list[str]]) -> str:
     validate_case_id(case_id)
     case_dir = _case_dir(case_id)
@@ -1916,9 +2076,14 @@ def page(title: str, body: str) -> str:
     .layout-document-row code, .layout-exhibit-head code, .layout-episode-head code {{ justify-self:start; }}
     .layout-mapping-exhibit {{ border:1px solid var(--line); border-radius:14px; padding:14px; background:#fbfcfd; margin-bottom:14px; }}
     .layout-mapping-episode {{ border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:#fff; margin-bottom:10px; }}
+    .layout-scope-box {{ margin:10px 0 14px; padding:10px 12px; border-radius:10px; background:#f8fafc; border:1px solid #e5e7eb; }}
     .layout-mapping-card {{ border:1px solid #e5e7eb; border-radius:12px; padding:14px; background:#f9fafb; margin:10px 0; }}
     .layout-mapping-columns {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }}
     .layout-mapping-pill {{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; border-radius:10px; background:#fff; border:1px solid #e5e7eb; margin-bottom:8px; }}
+    .layout-scroll-list {{ max-height:220px; overflow:auto; padding:8px; border:1px solid #d1d5db; border-radius:10px; background:#fff; }}
+    .layout-choice-row {{ display:flex; align-items:flex-start; gap:9px; padding:7px 6px; border-bottom:1px solid #f1f5f9; }}
+    .layout-choice-row:last-child {{ border-bottom:0; }}
+    .layout-choice-row input {{ width:auto; min-width:auto; }}
     .inventory-grid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:12px; }}
     .layout-inventory-list {{ max-height:260px; overflow:auto; padding-left:18px; }}
     @media (max-width: 850px) {{
@@ -2647,6 +2812,8 @@ def _action_route(action: str) -> str:
         "layout_pick_list_document",
         "layout_parse_sources",
         "layout_save_structure",
+        "layout_save_folder_scopes",
+        "layout_save_document_originals",
         "layout_add_mapping",
         "layout_remove_mapping",
         "layout_preview",

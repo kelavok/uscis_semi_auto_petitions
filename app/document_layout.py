@@ -208,9 +208,10 @@ def refresh_layout_sources(
         "original_files": _scan_inventory_group(originals_root, "original"),
         "translation_files": _scan_inventory_group(translations_root, "translation") if translations_root else [],
     }
-    structure = _parse_structure_from_document(list_path)
-    structure = _renumber_structure(structure)
     previous_structure = _load_structure(loaded.case_dir)
+    structure = _parse_structure_from_document(list_path)
+    structure = _preserve_structure_preferences(previous_structure, structure)
+    structure = _renumber_structure(structure)
     previous_mappings = _load_mappings(loaded.case_dir)
     preserved_mappings = _preserve_mappings(previous_structure, previous_mappings, structure)
 
@@ -289,6 +290,29 @@ def save_layout_structure(case_id: str, data: dict[str, str]) -> None:
     _write_json(_layout_root(loaded.case_dir) / STRUCTURE_FILE, _renumber_structure(structure))
 
 
+def save_folder_scopes(case_id: str, data: dict[str, str]) -> None:
+    loaded = load_case(case_id)
+    _ensure_layout_case(loaded.config)
+    structure = _load_structure(loaded.case_dir)
+    original_directories = {entry["directory"] for entry in build_original_directory_catalog(case_id)}
+    for exhibit in structure.get("exhibits", []):
+        exhibit_id = str(exhibit.get("id", ""))
+        selected_exhibit_folder = data.get(f"exhibit_folder_{exhibit_id}", "").strip()
+        exhibit["source_folder"] = (
+            selected_exhibit_folder if selected_exhibit_folder in original_directories else ""
+        )
+        for episode in exhibit.get("episodes", []):
+            episode_id = str(episode.get("id", ""))
+            if episode.get("kind") == "direct":
+                episode["source_folder"] = ""
+                continue
+            selected_episode_folder = data.get(f"episode_folder_{episode_id}", "").strip()
+            episode["source_folder"] = (
+                selected_episode_folder if selected_episode_folder in original_directories else ""
+            )
+    _write_json(_layout_root(loaded.case_dir) / STRUCTURE_FILE, structure)
+
+
 def add_mapping(case_id: str, document_id: str, kind: str, file_path: str) -> None:
     loaded = load_case(case_id)
     _ensure_layout_case(loaded.config)
@@ -304,6 +328,28 @@ def add_mapping(case_id: str, document_id: str, kind: str, file_path: str) -> No
     if str(target) not in normalized:
         normalized.append(str(target))
     entry[key] = normalized
+    _write_json(_layout_root(loaded.case_dir) / MAPPINGS_FILE, mappings)
+
+
+def set_mapping_paths(case_id: str, document_id: str, kind: str, file_paths: list[str]) -> None:
+    loaded = load_case(case_id)
+    _ensure_layout_case(loaded.config)
+    if kind not in {"original", "translation"}:
+        raise ValueError(f"Unsupported mapping kind: {kind}")
+    normalized: list[str] = []
+    for file_path in file_paths:
+        target = Path(file_path).expanduser().resolve()
+        if not target.exists() or not target.is_file():
+            raise ValueError(f"File not found: {target}")
+        normalized.append(str(target))
+    mappings = _load_mappings(loaded.case_dir)
+    entry = mappings.setdefault(document_id, {"original_paths": [], "translation_paths": []})
+    key = "original_paths" if kind == "original" else "translation_paths"
+    deduplicated: list[str] = []
+    for path in normalized:
+        if path not in deduplicated:
+            deduplicated.append(path)
+    entry[key] = deduplicated
     _write_json(_layout_root(loaded.case_dir) / MAPPINGS_FILE, mappings)
 
 
@@ -339,6 +385,45 @@ def load_layout_selection(case_id: str) -> dict[str, list[str]]:
     if not path.exists():
         return {"selected_exhibits": [], "selected_documents": []}
     return _read_json(path, {"selected_exhibits": [], "selected_documents": []})
+
+
+def build_original_directory_catalog(case_id: str) -> list[dict[str, Any]]:
+    loaded = load_case(case_id)
+    _ensure_layout_case(loaded.config)
+    inventory = _load_inventory(loaded.case_dir)
+    originals_root = Path(_load_settings(loaded.case_dir).get("originals_dir", ""))
+    directory_map: dict[str, dict[str, Any]] = {}
+    if not originals_root:
+        return []
+    for entry in inventory.get("original_files", []):
+        relative_path = str(entry.get("relative_path", ""))
+        directory = str(Path(relative_path).parent).replace("\\", "/")
+        if directory == ".":
+            directory = ""
+        for ancestor in _directory_ancestors(directory):
+            directory_map.setdefault(
+                ancestor,
+                {
+                    "directory": ancestor,
+                    "label": ancestor or "[root]",
+                    "depth": 0 if not ancestor else ancestor.count("/") + 1,
+                    "parent": "",
+                    "files": [],
+                },
+            )
+        item = directory_map[directory]
+        item["files"].append(dict(entry))
+    for directory, item in directory_map.items():
+        item["parent"] = directory.rsplit("/", 1)[0] if "/" in directory else ""
+        item["depth"] = 0 if not directory else directory.count("/") + 1
+    return sorted(directory_map.values(), key=lambda item: str(item.get("directory", "")).casefold())
+
+
+def _directory_ancestors(directory: str) -> list[str]:
+    if not directory:
+        return [""]
+    parts = directory.split("/")
+    return ["/".join(parts[:index]) for index in range(1, len(parts) + 1)]
 
 
 def build_layout_preview(case_id: str) -> LayoutBuildSummary:
@@ -741,6 +826,43 @@ def _preserve_mappings(
                     "translation_paths": _existing_paths(mapping.get("translation_paths", [])),
                 }
     return preserved
+
+
+def _preserve_structure_preferences(
+    previous_structure: dict[str, list[dict[str, Any]]],
+    next_structure: dict[str, list[dict[str, Any]]],
+) -> dict[str, list[dict[str, Any]]]:
+    exhibit_preferences: dict[str, str] = {}
+    episode_preferences: dict[str, str] = {}
+    for exhibit in previous_structure.get("exhibits", []):
+        exhibit_preferences[_normalize_key(str(exhibit.get("title", "")))] = str(
+            exhibit.get("source_folder", "")
+        )
+        for episode in exhibit.get("episodes", []):
+            episode_preferences[
+                " | ".join(
+                    [
+                        _normalize_key(str(exhibit.get("title", ""))),
+                        _normalize_key(str(episode.get("title", ""))),
+                    ]
+                )
+            ] = str(episode.get("source_folder", ""))
+    for exhibit in next_structure.get("exhibits", []):
+        exhibit["source_folder"] = exhibit_preferences.get(
+            _normalize_key(str(exhibit.get("title", ""))),
+            "",
+        )
+        for episode in exhibit.get("episodes", []):
+            episode["source_folder"] = episode_preferences.get(
+                " | ".join(
+                    [
+                        _normalize_key(str(exhibit.get("title", ""))),
+                        _normalize_key(str(episode.get("title", ""))),
+                    ]
+                ),
+                "",
+            )
+    return next_structure
 
 
 def _mapping_key(exhibit: dict[str, Any], episode: dict[str, Any], document: dict[str, Any]) -> str:

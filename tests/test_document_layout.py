@@ -11,12 +11,14 @@ from docx import Document
 
 from app import cli_support, web
 from app.document_layout import (
-    add_mapping,
+    build_original_directory_catalog,
     build_layout_bundle,
     build_layout_preview,
     list_installed_fonts,
     load_layout_status,
     refresh_layout_sources,
+    save_folder_scopes,
+    set_mapping_paths,
 )
 from app.progress import build_case_progress
 
@@ -35,16 +37,14 @@ class DocumentLayoutTests(unittest.TestCase):
 
             originals = root / "incoming" / "originals"
             translations = root / "incoming" / "translations"
-            originals.mkdir(parents=True)
+            (originals / "criterion_1" / "episode_award").mkdir(parents=True)
+            (originals / "support_letters").mkdir(parents=True)
             translations.mkdir(parents=True)
-            for filename in (
-                "award_certificate.pdf",
-                "award_appendix.pdf",
-                "jury_letter.pdf",
-                "support_letter_a.pdf",
-                "support_letter_b.pdf",
-            ):
-                _make_one_page_pdf(originals / filename, filename)
+            _make_one_page_pdf(originals / "criterion_1/episode_award/award_certificate.pdf", "award_certificate.pdf")
+            _make_one_page_pdf(originals / "criterion_1/episode_award/award_appendix.pdf", "award_appendix.pdf")
+            _make_one_page_pdf(originals / "criterion_1/episode_award/jury_letter.pdf", "jury_letter.pdf")
+            _make_one_page_pdf(originals / "support_letters/support_letter_a.pdf", "support_letter_a.pdf")
+            _make_one_page_pdf(originals / "support_letters/support_letter_b.pdf", "support_letter_b.pdf")
             _make_one_page_pdf(translations / "jury_letter_translation.pdf", "jury translation")
 
             list_path = root / "layout_list.docx"
@@ -70,6 +70,16 @@ class DocumentLayoutTests(unittest.TestCase):
                     font_family=preferred_font,
                 )
                 status = load_layout_status("layout_001")
+                save_folder_scopes(
+                    "layout_001",
+                    {
+                        "exhibit_folder_exhibit_001": "criterion_1",
+                        "episode_folder_episode_001_001": "criterion_1/episode_award",
+                        "exhibit_folder_exhibit_002": "support_letters",
+                    },
+                )
+                status = load_layout_status("layout_001")
+                directory_catalog = build_original_directory_catalog("layout_001")
 
                 first_episode = status.structure["exhibits"][0]["episodes"][0]
                 award_doc = first_episode["documents"][0]
@@ -77,17 +87,39 @@ class DocumentLayoutTests(unittest.TestCase):
                 support_doc_a = status.structure["exhibits"][1]["episodes"][0]["documents"][0]
                 support_doc_b = status.structure["exhibits"][1]["episodes"][0]["documents"][1]
 
-                add_mapping("layout_001", award_doc["id"], "original", str(originals / "award_certificate.pdf"))
-                add_mapping("layout_001", award_doc["id"], "original", str(originals / "award_appendix.pdf"))
-                add_mapping("layout_001", jury_doc["id"], "original", str(originals / "jury_letter.pdf"))
-                add_mapping(
+                set_mapping_paths(
+                    "layout_001",
+                    award_doc["id"],
+                    "original",
+                    [
+                        str(originals / "criterion_1/episode_award/award_certificate.pdf"),
+                        str(originals / "criterion_1/episode_award/award_appendix.pdf"),
+                    ],
+                )
+                set_mapping_paths(
+                    "layout_001",
+                    jury_doc["id"],
+                    "original",
+                    [str(originals / "criterion_1/episode_award/jury_letter.pdf")],
+                )
+                set_mapping_paths(
                     "layout_001",
                     jury_doc["id"],
                     "translation",
-                    str(translations / "jury_letter_translation.pdf"),
+                    [str(translations / "jury_letter_translation.pdf")],
                 )
-                add_mapping("layout_001", support_doc_a["id"], "original", str(originals / "support_letter_a.pdf"))
-                add_mapping("layout_001", support_doc_b["id"], "original", str(originals / "support_letter_b.pdf"))
+                set_mapping_paths(
+                    "layout_001",
+                    support_doc_a["id"],
+                    "original",
+                    [str(originals / "support_letters/support_letter_a.pdf")],
+                )
+                set_mapping_paths(
+                    "layout_001",
+                    support_doc_b["id"],
+                    "original",
+                    [str(originals / "support_letters/support_letter_b.pdf")],
+                )
 
                 preview = build_layout_preview("layout_001")
                 bundle = build_layout_bundle("layout_001", ["1"], [])
@@ -98,6 +130,13 @@ class DocumentLayoutTests(unittest.TestCase):
             self.assertEqual(summary.exhibits, 2)
             self.assertEqual(summary.documents, 4)
             self.assertEqual(status.settings["font_family"], preferred_font)
+            self.assertEqual(status.structure["exhibits"][0]["source_folder"], "criterion_1")
+            self.assertEqual(status.structure["exhibits"][0]["episodes"][0]["source_folder"], "criterion_1/episode_award")
+            self.assertEqual(status.structure["exhibits"][1]["source_folder"], "support_letters")
+            self.assertEqual(
+                {item["directory"] for item in directory_catalog},
+                {"criterion_1", "criterion_1/episode_award", "support_letters"},
+            )
             self.assertEqual(status.structure["exhibits"][0]["episodes"][0]["documents"][0]["number"], "1.1.1")
             self.assertEqual(status.structure["exhibits"][0]["episodes"][0]["documents"][1]["number"], "1.1.2")
             self.assertEqual(status.structure["exhibits"][1]["episodes"][0]["documents"][0]["number"], "2.1")
