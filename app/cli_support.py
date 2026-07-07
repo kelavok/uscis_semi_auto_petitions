@@ -58,6 +58,8 @@ def create_case_from_template(case_id: str, task_type: str) -> Path:
             text = _rfe_case_config_text(text)
         elif task_type == "o1b_petition":
             text = _o1b_case_config_text(text)
+        elif task_type == "document_layout":
+            text = _document_layout_case_config_text(text)
         config_path.write_text(text, encoding="utf-8")
 
     if task_type == "eb1a_petition":
@@ -82,6 +84,8 @@ def create_case_from_template(case_id: str, task_type: str) -> Path:
                     shutil.copytree(child, child_destination)
                 else:
                     shutil.copy2(child, child_destination)
+    elif task_type == "document_layout":
+        (target / "document_layout").mkdir(parents=True, exist_ok=True)
 
     return target
 
@@ -91,6 +95,7 @@ def workflow_for(task_type: str) -> str:
         "eb1a_petition": "workflow: workflows/eb1a_petition.yaml",
         "eb1a_rfe_response": "workflow: workflows/eb1a_rfe_response.yaml",
         "o1b_petition": "workflow: workflows/o1b_petition.yaml",
+        "document_layout": "workflow: workflows/document_layout.yaml",
     }
     if task_type not in mapping:
         supported = ", ".join(sorted(mapping))
@@ -226,6 +231,35 @@ def _rfe_case_config_text(text: str) -> str:
             "  strategy: .\n"
             "\n"
             "rfe_enabled_issues: []\n"
+        )
+    return text
+
+
+def _document_layout_case_config_text(text: str) -> str:
+    text = re.sub(
+        r"(?m)^procedural_context:\s*.*$",
+        "procedural_context: Standalone document layout assembly",
+        text,
+        count=1,
+    )
+    text = re.sub(
+        r"(?m)^drafting_objective:\s*.*$",
+        "drafting_objective: Parse an exhibit list, map files manually, and assemble a PDF bundle",
+        text,
+        count=1,
+    )
+    marker = "working_document_template: templates/EB1A/EB1A_working_document_structure.yaml\n"
+    if marker in text and "document_layout:" not in text:
+        text = text.replace(
+            marker,
+            marker
+            + "\n"
+            + "document_layout:\n"
+            + "  mode: standalone\n"
+            + "  originals_dir: \"\"\n"
+            + "  translations_dir: \"\"\n"
+            + "  list_document_path: \"\"\n",
+            1,
         )
     return text
 

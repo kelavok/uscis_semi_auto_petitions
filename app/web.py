@@ -24,6 +24,18 @@ from .bundle_workflow import (
     render_separator_pdfs,
 )
 from .cli_support import CASE_ROOT, configure_console, create_case_from_template, validate_case_id
+from .document_layout import (
+    add_mapping as add_document_layout_mapping,
+    build_layout_bundle,
+    build_layout_preview,
+    load_layout_selection,
+    load_layout_status,
+    refresh_layout_sources,
+    remove_mapping as remove_document_layout_mapping,
+    save_layout_selection,
+    save_layout_structure,
+    update_layout_settings,
+)
 from .evidence import (
     link_translations,
     manual_link_translation,
@@ -123,6 +135,11 @@ class PetitionsHandler(BaseHTTPRequestHandler):
                 case_id = _single(params, "case")
                 self._send_html(render_layout_page(case_id, params))
                 return
+            if parsed.path == "/document-layout":
+                params = parse_qs(parsed.query)
+                case_id = _single(params, "case")
+                self._send_html(render_document_layout_page(case_id, params))
+                return
             if parsed.path == "/translations":
                 params = parse_qs(parsed.query)
                 case_id = _single(params, "case")
@@ -141,6 +158,19 @@ class PetitionsHandler(BaseHTTPRequestHandler):
                 case_id = _single(params, "case")
                 rel_path = _single(params, "path")
                 self._send_text(read_case_file(case_id, rel_path))
+                return
+            if parsed.path == "/layout-artifact":
+                params = parse_qs(parsed.query)
+                case_id = _single(params, "case")
+                kind = _single(params, "kind")
+                status = load_layout_status(case_id)
+                if kind == "preview":
+                    self._send_bytes(status.preview_pdf, "application/pdf")
+                    return
+                if kind == "final":
+                    self._send_bytes(status.final_pdf, "application/pdf")
+                    return
+                self.send_error(404)
                 return
             self.send_error(404)
         except (Exception, SystemExit) as exc:  # noqa: BLE001
@@ -244,6 +274,74 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
         return f"Created case {new_case}."
 
     validate_case_id(case_id)
+    if action == "layout_pick_originals_dir":
+        selected = _pick_directory(_safe_layout_setting(case_id, "originals_dir"))
+        if not selected:
+            return "Originals folder selection was canceled."
+        update_layout_settings(case_id, originals_dir=selected)
+        return "Selected originals folder."
+    if action == "layout_pick_translations_dir":
+        selected = _pick_directory(_safe_layout_setting(case_id, "translations_dir"))
+        if not selected:
+            return "Translations folder selection was canceled."
+        update_layout_settings(case_id, translations_dir=selected)
+        return "Selected translations folder."
+    if action == "layout_pick_list_document":
+        selected = _pick_file(_safe_layout_setting(case_id, "list_document_path"))
+        if not selected:
+            return "Exhibit list file selection was canceled."
+        update_layout_settings(case_id, list_document_path=selected)
+        return "Selected exhibit list document."
+    if action == "layout_parse_sources":
+        summary = refresh_layout_sources(
+            case_id,
+            originals_dir=data.get("originals_dir", ""),
+            translations_dir=data.get("translations_dir", ""),
+            list_document_path=data.get("list_document_path", ""),
+        )
+        return (
+            f"Scanned {summary.original_files} original file(s) and {summary.translation_files} translation file(s); "
+            f"parsed {summary.exhibits} exhibit(s), {summary.episodes} episode(s), and {summary.documents} document(s)."
+        )
+    if action == "layout_save_structure":
+        save_layout_structure(case_id, data)
+        return "Saved exhibit titles, episode titles, and document titles."
+    if action == "layout_add_mapping":
+        kind = data.get("mapping_kind", "").strip()
+        initial_dir = _safe_layout_setting(case_id, "translations_dir" if kind == "translation" else "originals_dir")
+        selected = _pick_file(initial_dir)
+        if not selected:
+            return "File selection was canceled."
+        add_document_layout_mapping(case_id, data.get("document_id", ""), kind, selected)
+        return "Attached file to the selected document."
+    if action == "layout_remove_mapping":
+        remove_document_layout_mapping(
+            case_id,
+            data.get("document_id", ""),
+            data.get("mapping_kind", ""),
+            int(data.get("mapping_index", "0") or "0"),
+        )
+        return "Removed the selected file mapping."
+    if action == "layout_preview":
+        summary = build_layout_preview(case_id)
+        return f"Built separator preview PDF: {summary.pdf_path}."
+    if action == "layout_build":
+        selected_exhibits = [
+            key.removeprefix("select_layout_exhibit_")
+            for key, value in data.items()
+            if key.startswith("select_layout_exhibit_") and value == "on"
+        ]
+        selected_documents = [
+            key.removeprefix("select_layout_document_")
+            for key, value in data.items()
+            if key.startswith("select_layout_document_") and value == "on"
+        ]
+        save_layout_selection(case_id, selected_exhibits, selected_documents)
+        summary = build_layout_bundle(case_id, selected_exhibits, selected_documents)
+        return (
+            f"Built layout bundle PDF: {summary.pdf_path}. "
+            f"Included {summary.exhibits} exhibit(s), {summary.documents} document(s), and {summary.source_files} mapped file(s)."
+        )
     if action == "scan_documents":
         summary = scan_documents(case_id)
         return (
@@ -591,7 +689,7 @@ def render_home(query: str = "") -> str:
         cards.append(
             f'<a class="case-card" href="/case?case={quote(case_id)}">'
             f"<strong>{escape(progress.beneficiary_name)}</strong>"
-            f"<span>{escape(case_id)} · {escape(progress.task_type)}</span>"
+            f"<span>{escape(case_id)} · {escape(_task_type_label(progress.task_type))}</span>"
             f"<span>Stage: {escape(progress.stage_label)} · {progress.completion_percent}%</span></a>"
         )
     return page(
@@ -611,6 +709,7 @@ def render_home(query: str = "") -> str:
               <option value="eb1a_petition">EB1A petition</option>
               <option value="o1b_petition">O-1B petition</option>
               <option value="eb1a_rfe_response">EB1A RFE response</option>
+              <option value="document_layout">Document layout</option>
             </select>
             <button>Create case</button>
           </form>
@@ -633,6 +732,35 @@ def render_case_page(case_id: str, params: dict[str, list[str]]) -> str:
     message = _single(params, "message")
     error = _single(params, "error")
     task_type = _safe_case_task_type(case_id)
+    if task_type == "document_layout":
+        layout_status = load_layout_status(case_id)
+        stage_one = 100 if layout_status.stage1_complete else 0
+        stage_two = (
+            0
+            if not layout_status.stage2_available
+            else round(
+                (layout_status.fully_mapped_document_count / max(layout_status.document_count, 1)) * 100
+            )
+        )
+        stage_three = 100 if layout_status.has_final else 0
+        return page(
+            f"Case {case_id}",
+            f"""
+            <div class="case-nav"><a href="/">&larr; Case library</a>{render_case_switch(case_id)}</div>
+            {alert(message, "ok")}
+            {alert(error, "error")}
+            <section class="panel">
+              <h1>{escape(case_id)}</h1>
+              <p class="muted">Task type: {escape(_task_type_label(task_type))}</p>
+              <p>This case uses the isolated document-layout workflow: parse the exhibit list, attach one or more real files to each document, then assemble a PDF bundle.</p>
+            </section>
+            <div class="stage-grid">
+              {_stage_card("1", "Parse sources", stage_one, f"{layout_status.exhibit_count} exhibit(s), {layout_status.document_count} document(s)", f"/document-layout?case={quote(case_id)}", "Open layout workflow")}
+              {_stage_card("2", "Map files", stage_two, f"{layout_status.fully_mapped_document_count}/{layout_status.document_count} document(s) linked to originals", f"/document-layout?case={quote(case_id)}", "Continue mapping")}
+              {_stage_card("3", "Build PDF", stage_three, "Preview separators and assemble a selected final PDF.", f"/document-layout?case={quote(case_id)}", "Open final stage")}
+            </div>
+            """,
+        )
     progress = _safe_progress(case_id)
     llm_stage = _safe_llm_stage(case_id)
     intake_percent = _stage_percent(progress, {"intake", "working_memo", "scan", "translations"})
@@ -645,7 +773,7 @@ def render_case_page(case_id: str, params: dict[str, list[str]]) -> str:
         {alert(error, "error")}
         <section class="panel">
           <h1>{escape(case_id)}</h1>
-          <p class="muted">Task type: {escape(task_type)}</p>
+          <p class="muted">Task type: {escape(_task_type_label(task_type))}</p>
           <p>This page is the case overview. Open the stage you are working on; drafting and layout controls are kept separate.</p>
         </section>
         {render_case_progress(progress)}
@@ -847,6 +975,297 @@ def render_layout_page(case_id: str, params: dict[str, list[str]]) -> str:
         </section>
         <section class="panel"><h2>Exhibits and documents</h2><p class="muted">Review the contents, select entire exhibits or individual documents, then prepare the selection.</p>{selector}</section>
         <section class="panel"><h2>Bundle status</h2><pre>{escape(_safe_text(lambda: build_status_report(case_id)))}</pre></section>
+        """,
+    )
+
+
+def render_document_layout_page(case_id: str, params: dict[str, list[str]]) -> str:
+    validate_case_id(case_id)
+    status = load_layout_status(case_id)
+    if _safe_case_task_type(case_id) != "document_layout":
+        return page(
+            "Wrong case type",
+            f"<section class='panel'><h1>Wrong case type</h1><p>{escape(case_id)} is not a document-layout case.</p></section>",
+        )
+
+    selected = load_layout_selection(case_id)
+    selected_exhibits = set(selected.get("selected_exhibits", []))
+    selected_documents = set(selected.get("selected_documents", []))
+    if not selected_exhibits and not selected_documents:
+        selected_exhibits = {
+            str(exhibit.get("number", ""))
+            for exhibit in status.structure.get("exhibits", [])
+        }
+        selected_documents = {
+            str(document.get("id", ""))
+            for exhibit in status.structure.get("exhibits", [])
+            for episode in exhibit.get("episodes", [])
+            for document in episode.get("documents", [])
+        }
+
+    stage_one_class = "done" if status.stage1_complete else "current"
+    stage_two_class = "done" if status.stage2_complete else ("current" if status.stage2_available else "locked")
+    stage_three_class = "current" if status.stage3_available else "locked"
+    if status.has_final:
+        stage_three_class = "done"
+
+    settings = status.settings
+    inventory = status.inventory
+    inventory_html = (
+        f"<p class='muted small'>Indexed files: {len(inventory.get('original_files', []))} original(s), {len(inventory.get('translation_files', []))} translation(s).</p>"
+        "<details><summary>View indexed files</summary>"
+        f"<div class='inventory-grid'>{_render_inventory_group('Originals', inventory.get('original_files', []))}{_render_inventory_group('Translations', inventory.get('translation_files', []))}</div>"
+        "</details>"
+    )
+
+    structure_rows: list[str] = []
+    for exhibit in status.structure.get("exhibits", []):
+        episode_rows: list[str] = []
+        for episode in exhibit.get("episodes", []):
+            document_rows = "".join(
+                f"""
+                <div class="layout-document-row">
+                  <code>{escape(str(document.get('number', '')))}</code>
+                  <input name="document_title_{escape(str(document.get('id', '')))}" value="{escape(str(document.get('title', '')), quote=True)}">
+                </div>
+                """
+                for document in episode.get("documents", [])
+            )
+            episode_heading = (
+                ""
+                if episode.get("kind") == "direct"
+                else f"""
+                <div class="layout-episode-head">
+                  <code>{escape(str(episode.get('number', '')))}</code>
+                  <input name="episode_title_{escape(str(episode.get('id', '')))}" value="{escape(str(episode.get('title', '')), quote=True)}">
+                </div>
+                """
+            )
+            episode_rows.append(
+                f"""
+                <section class="layout-episode-card {'direct' if episode.get('kind') == 'direct' else ''}">
+                  {episode_heading or '<p class="muted small">Documents directly under this Exhibit</p>'}
+                  {document_rows}
+                </section>
+                """
+            )
+        structure_rows.append(
+            f"""
+            <section class="layout-exhibit-card">
+              <div class="layout-exhibit-head">
+                <input class="layout-exhibit-number" name="exhibit_number_{escape(str(exhibit.get('id', '')))}" value="{escape(str(exhibit.get('number', '')), quote=True)}">
+                <input name="exhibit_title_{escape(str(exhibit.get('id', '')))}" value="{escape(str(exhibit.get('title', '')), quote=True)}">
+              </div>
+              {''.join(episode_rows)}
+            </section>
+            """
+        )
+
+    mapping_rows: list[str] = []
+    for exhibit in status.structure.get("exhibits", []):
+        episode_rows = []
+        for episode in exhibit.get("episodes", []):
+            document_cards = []
+            for document in episode.get("documents", []):
+                document_id = str(document.get("id", ""))
+                mapping = status.mappings.get(document_id, {})
+                original_paths = list(mapping.get("original_paths", []))
+                translation_paths = list(mapping.get("translation_paths", []))
+                original_list = _render_mapping_list(case_id, document_id, "original", original_paths)
+                translation_list = _render_mapping_list(case_id, document_id, "translation", translation_paths)
+                document_cards.append(
+                    f"""
+                    <article class="layout-mapping-card">
+                      <div class="layout-mapping-head">
+                        <div>
+                          <strong>{escape(str(document.get('number', '')))} {escape(str(document.get('title', '')))}</strong>
+                          <p class="muted small">{len(original_paths)} original file(s), {len(translation_paths)} translation file(s)</p>
+                        </div>
+                      </div>
+                      <div class="layout-mapping-columns">
+                        <section>
+                          <h4>Original files</h4>
+                          {original_list}
+                          <form method="post">
+                            <input type="hidden" name="case" value="{escape(case_id)}">
+                            <input type="hidden" name="action" value="layout_add_mapping">
+                            <input type="hidden" name="document_id" value="{escape(document_id)}">
+                            <input type="hidden" name="mapping_kind" value="original">
+                            <button class="secondary">Add original file</button>
+                          </form>
+                        </section>
+                        <section>
+                          <h4>Translation files</h4>
+                          {translation_list}
+                          <form method="post">
+                            <input type="hidden" name="case" value="{escape(case_id)}">
+                            <input type="hidden" name="action" value="layout_add_mapping">
+                            <input type="hidden" name="document_id" value="{escape(document_id)}">
+                            <input type="hidden" name="mapping_kind" value="translation">
+                            <button class="secondary">Add translation file</button>
+                          </form>
+                        </section>
+                      </div>
+                    </article>
+                    """
+                )
+            episode_title = (
+                f"{episode.get('number', '')} {episode.get('title', '')}".strip()
+                if episode.get("kind") != "direct"
+                else "Documents directly under this Exhibit"
+            )
+            episode_rows.append(
+                f"""
+                <details class="layout-mapping-episode" open>
+                  <summary>{escape(str(episode_title))}</summary>
+                  {''.join(document_cards)}
+                </details>
+                """
+            )
+        mapping_rows.append(
+            f"""
+            <section class="layout-mapping-exhibit">
+              <h3>Exhibit {escape(str(exhibit.get('number', '')))} {escape(str(exhibit.get('title', '')))}</h3>
+              {''.join(episode_rows)}
+            </section>
+            """
+        )
+
+    build_exhibits: list[str] = []
+    for exhibit in status.structure.get("exhibits", []):
+        exhibit_number = str(exhibit.get("number", ""))
+        document_rows = []
+        for episode in exhibit.get("episodes", []):
+            for document in episode.get("documents", []):
+                document_id = str(document.get("id", ""))
+                mapping = status.mappings.get(document_id, {})
+                has_original = bool(mapping.get("original_paths"))
+                document_rows.append(
+                    f"""
+                    <label class="bundle-document {'missing' if not has_original else ''}">
+                      <input type="checkbox" name="select_layout_document_{escape(document_id)}" data-exhibit="{escape(exhibit_number)}"{' checked' if document_id in selected_documents else ''}>
+                      <span><code>{escape(str(document.get('number', '')))}</code> {escape(str(document.get('title', '')))}</span>
+                      <small>{'mapped' if has_original else 'needs original file'}</small>
+                    </label>
+                    """
+                )
+        build_exhibits.append(
+            f"""
+            <details class="bundle-exhibit" open>
+              <summary>
+                <label>
+                  <input type="checkbox" name="select_layout_exhibit_{escape(exhibit_number)}" data-exhibit-toggle="{escape(exhibit_number)}"{' checked' if exhibit_number in selected_exhibits else ''}>
+                  <strong>Exhibit {escape(exhibit_number)} {escape(str(exhibit.get('title', '')))}</strong>
+                </label>
+              </summary>
+              <div class="bundle-documents">{''.join(document_rows)}</div>
+            </details>
+            """
+        )
+
+    preview_link = (
+        f'<a class="action-link" href="/layout-artifact?case={quote(case_id)}&kind=preview" target="_blank">Open separator preview PDF</a>'
+        if status.has_preview
+        else ""
+    )
+    final_link = (
+        f'<a class="action-link" href="/layout-artifact?case={quote(case_id)}&kind=final" target="_blank">Open final PDF</a>'
+        if status.has_final
+        else ""
+    )
+    unmapped_notice = (
+        '<div class="alert error"><strong>Some documents still need originals.</strong><ul>'
+        + "".join(
+            f"<li><code>{escape(item['document_number'])}</code> {escape(item['document_title'])}</li>"
+            for item in status.unmapped_documents[:40]
+        )
+        + ("<li>…</li>" if len(status.unmapped_documents) > 40 else "")
+        + "</ul></div>"
+        if status.unmapped_documents
+        else '<div class="alert ok"><strong>All logical documents already have at least one original file attached.</strong></div>'
+    )
+
+    return page(
+        f"Document layout - {case_id}",
+        f"""
+        {_stage_nav(case_id, "document-layout")}
+        {alert(_single(params, 'message'), 'ok')}
+        {alert(_single(params, 'error'), 'error')}
+        <section class="panel">
+          <div class="progress-heading"><div><h1>Standalone document layout</h1><p class="muted">3-stage isolated workflow for parsing an exhibit list, attaching real files, and assembling a PDF.</p></div><strong>{_safe_progress(case_id).completion_percent}%</strong></div>
+          <div class="progress-bar"><span style="width:{_safe_progress(case_id).completion_percent}%"></span></div>
+          <div class="layout-summary-grid">
+            <div><strong>{status.exhibit_count}</strong><span>Exhibits</span></div>
+            <div><strong>{status.episode_count}</strong><span>Episodes</span></div>
+            <div><strong>{status.document_count}</strong><span>Logical documents</span></div>
+            <div><strong>{status.fully_mapped_document_count}/{status.document_count}</strong><span>Mapped to originals</span></div>
+          </div>
+          {preview_link}
+          {final_link}
+        </section>
+        <section class="bundle-pipeline">
+          <div class="pipeline-phase {stage_one_class}"><span class="phase-number">1</span><h2>Folders and parsing</h2><p>Choose source folders and the exhibit-list document, then scan files and parse the structure.</p></div>
+          <div class="pipeline-arrow" aria-hidden="true">→</div>
+          <div class="pipeline-phase {stage_two_class}"><span class="phase-number">2</span><h2>Attach files</h2><p>For every logical document, attach one or more original files and optional translations.</p></div>
+          <div class="pipeline-arrow" aria-hidden="true">→</div>
+          <div class="pipeline-phase {stage_three_class}"><span class="phase-number">3</span><h2>Preview and build</h2><p>Open the separator-only preview or assemble a selected final PDF bundle.</p></div>
+        </section>
+        <section class="panel">
+          <h2>Stage 1 · Choose folders and parse</h2>
+          <div class="layout-picker-grid">
+            <div class="layout-picker-row"><div><strong>Originals folder</strong><div class="path-box">{escape(settings.get('originals_dir', '') or 'Not selected yet')}</div></div>{post_button(case_id, "layout_pick_originals_dir", "Choose folder")}</div>
+            <div class="layout-picker-row"><div><strong>Translations folder</strong><div class="path-box">{escape(settings.get('translations_dir', '') or 'Optional')}</div></div>{post_button(case_id, "layout_pick_translations_dir", "Choose folder")}</div>
+            <div class="layout-picker-row"><div><strong>Exhibit list document</strong><div class="path-box">{escape(settings.get('list_document_path', '') or 'Not selected yet')}</div></div>{post_button(case_id, "layout_pick_list_document", "Choose file")}</div>
+          </div>
+          <form method="post" class="stack">
+            <input type="hidden" name="case" value="{escape(case_id)}">
+            <input type="hidden" name="action" value="layout_parse_sources">
+            <input name="originals_dir" value="{escape(settings.get('originals_dir', ''), quote=True)}" placeholder="Folder with original documents">
+            <input name="translations_dir" value="{escape(settings.get('translations_dir', ''), quote=True)}" placeholder="Optional folder with translations">
+            <input name="list_document_path" value="{escape(settings.get('list_document_path', ''), quote=True)}" placeholder="DOCX / PDF / TXT with the exhibit list">
+            <button>Scan folders and parse list</button>
+          </form>
+          {inventory_html}
+        </section>
+        <section class="panel {'panel-disabled' if not status.stage1_complete else ''}">
+          <h2>Stage 1 output · Refine numbering and titles</h2>
+          {'' if status.stage1_complete else '<p class="muted">This unlocks after Stage 1 parsing succeeds.</p>'}
+          {'' if status.stage1_complete else ''}
+          {(
+            '<form method="post" class="stack"><input type="hidden" name="case" value="'
+            + escape(case_id)
+            + '"><input type="hidden" name="action" value="layout_save_structure">'
+            + ''.join(structure_rows)
+            + '<div class="button-row">'
+            + '<button>Save titles and numbering</button>'
+            + '</div></form>'
+          ) if status.stage1_complete else ''}
+          {(
+            '<div class="button-row">'
+            + post_button(case_id, "layout_preview", "Build separator preview PDF")
+            + (preview_link or '')
+            + '</div>'
+          ) if status.stage1_complete else ''}
+        </section>
+        <section class="panel {'panel-disabled' if not status.stage2_available else ''}">
+          <h2>Stage 2 · Attach one or more files to each logical document</h2>
+          {'' if status.stage2_available else '<p class="muted">This unlocks after Stage 1 parsing succeeds.</p>'}
+          {unmapped_notice if status.stage2_available else ''}
+          {''.join(mapping_rows) if status.stage2_available else ''}
+        </section>
+        <section class="panel {'panel-disabled' if not status.stage3_available else ''}">
+          <h2>Stage 3 · Select exhibits/documents and build PDF</h2>
+          {'' if status.stage3_available else '<p class="muted">Attach at least one original file before this stage becomes active.</p>'}
+          {(
+            '<form method="post" class="bundle-selection" data-bundle-selection>'
+            + f'<input type="hidden" name="case" value="{escape(case_id)}">'
+            + '<input type="hidden" name="action" value="layout_build">'
+            + '<div class="button-row"><button type="button" class="secondary" data-select-all>Select all</button><button type="button" class="secondary" data-clear-all>Clear all</button></div>'
+            + ''.join(build_exhibits)
+            + '<div class="button-row"><button>Build selected final PDF</button></div></form>'
+          ) if status.stage3_available else ''}
+          {preview_link if status.stage3_available else ''}
+        </section>
         """,
     )
 
@@ -1097,7 +1516,25 @@ def _find_llm_unit(stage: LLMStage, step_id: str, episode_id: str = "") -> LLMUn
     )
 
 
+def _task_type_label(task_type: str) -> str:
+    return {
+        "eb1a_petition": "EB1A petition",
+        "o1b_petition": "O-1B petition",
+        "eb1a_rfe_response": "EB1A RFE response",
+        "document_layout": "Document layout",
+    }.get(task_type, task_type)
+
+
 def _stage_nav(case_id: str, active: str) -> str:
+    if _safe_case_task_type(case_id) == "document_layout":
+        links = (
+            ("overview", "Overview", f"/case?case={quote(case_id)}"),
+            ("document-layout", "Document layout workflow", f"/document-layout?case={quote(case_id)}"),
+        )
+        return '<nav class="stage-nav">' + "".join(
+            f'<a class="{"active" if key == active else ""}" href="{href}">{escape(label)}</a>'
+            for key, label, href in links
+        ) + "</nav>"
     links = (
         ("overview", "Overview", f"/case?case={quote(case_id)}"),
         ("intake", "1. Intake & evidence", f"/intake?case={quote(case_id)}"),
@@ -1118,6 +1555,37 @@ def _stage_card(number: str, title: str, percent: int, detail: str, href: str, a
       <a class="action-link" href="{href}">{escape(action)}</a>
     </section>
     """
+
+
+def _render_inventory_group(label: str, items: list[dict[str, str]]) -> str:
+    rows = "".join(
+        f"<li><code>{escape(item.get('relative_path', ''))}</code></li>" for item in items[:120]
+    )
+    more = "<li>…</li>" if len(items) > 120 else ""
+    return f"<section><h3>{escape(label)}</h3><ul class='layout-inventory-list'>{rows}{more}</ul></section>"
+
+
+def _render_mapping_list(case_id: str, document_id: str, kind: str, paths: list[str]) -> str:
+    if not paths:
+        return "<p class='muted small'>No files attached yet.</p>"
+    rows = []
+    for index, path in enumerate(paths):
+        rows.append(
+            f"""
+            <div class="layout-mapping-pill">
+              <code>{escape(Path(path).name)}</code>
+              <form method="post">
+                <input type="hidden" name="case" value="{escape(case_id)}">
+                <input type="hidden" name="action" value="layout_remove_mapping">
+                <input type="hidden" name="document_id" value="{escape(document_id)}">
+                <input type="hidden" name="mapping_kind" value="{escape(kind)}">
+                <input type="hidden" name="mapping_index" value="{index}">
+                <button class="secondary small-button">Remove</button>
+              </form>
+            </div>
+            """
+        )
+    return "".join(rows)
 
 
 def render_translation_review_page(case_id: str, params: dict[str, list[str]]) -> str:
@@ -1419,6 +1887,28 @@ def page(title: str, body: str) -> str:
     .bundle-exhibit input {{ width:auto; flex:0 0 auto; }}
     .bundle-documents {{ display:flex; flex-direction:column; gap:7px; margin:10px 0 2px 26px; }}
     .bundle-document span {{ overflow-wrap:anywhere; }}
+    .bundle-document.missing {{ border:1px dashed #fca5a5; border-radius:10px; padding:8px; background:#fff7f7; }}
+    .bundle-document small {{ color:var(--muted); }}
+    .panel-disabled {{ opacity:.68; }}
+    .layout-summary-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-top:12px; }}
+    .layout-summary-grid div {{ border:1px solid var(--line); border-radius:12px; padding:12px; background:#f9fafb; }}
+    .layout-summary-grid strong {{ display:block; font-size:1.35rem; color:var(--brand); }}
+    .layout-summary-grid span {{ color:var(--muted); font-size:.88rem; }}
+    .layout-picker-grid {{ display:flex; flex-direction:column; gap:12px; margin-bottom:14px; }}
+    .layout-picker-row {{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:end; padding:12px; border:1px solid var(--line); border-radius:12px; background:#f9fafb; }}
+    .layout-picker-row form {{ margin:0; }}
+    .layout-exhibit-card {{ border:1px solid var(--line); border-radius:14px; padding:14px; background:#fbfcfd; }}
+    .layout-exhibit-head, .layout-episode-head, .layout-document-row {{ display:grid; grid-template-columns:120px minmax(0,1fr); gap:10px; align-items:center; }}
+    .layout-exhibit-number {{ max-width:120px; }}
+    .layout-episode-card {{ display:flex; flex-direction:column; gap:10px; padding:12px; border:1px solid #e5e7eb; border-radius:12px; background:#fff; }}
+    .layout-document-row code, .layout-exhibit-head code, .layout-episode-head code {{ justify-self:start; }}
+    .layout-mapping-exhibit {{ border:1px solid var(--line); border-radius:14px; padding:14px; background:#fbfcfd; margin-bottom:14px; }}
+    .layout-mapping-episode {{ border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:#fff; margin-bottom:10px; }}
+    .layout-mapping-card {{ border:1px solid #e5e7eb; border-radius:12px; padding:14px; background:#f9fafb; margin:10px 0; }}
+    .layout-mapping-columns {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }}
+    .layout-mapping-pill {{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; border-radius:10px; background:#fff; border:1px solid #e5e7eb; margin-bottom:8px; }}
+    .inventory-grid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:12px; }}
+    .layout-inventory-list {{ max-height:260px; overflow:auto; padding-left:18px; }}
     @media (max-width: 850px) {{
       .hero, .columns {{ display:block; }}
       .check-grid {{ grid-template-columns:1fr; }}
@@ -1432,6 +1922,9 @@ def page(title: str, body: str) -> str:
       .source-actions {{ justify-content:flex-start; }}
       .bundle-pipeline {{ grid-template-columns:1fr; }}
       .pipeline-arrow {{ transform:rotate(90deg); justify-self:center; }}
+      .layout-picker-row {{ grid-template-columns:1fr; }}
+      .layout-mapping-columns {{ grid-template-columns:1fr; }}
+      .inventory-grid {{ grid-template-columns:1fr; }}
     }}
   </style>
 </head>
@@ -2136,6 +2629,18 @@ def _action_route(action: str) -> str:
         "bundle_build",
     }:
         return "/layout"
+    if action in {
+        "layout_pick_originals_dir",
+        "layout_pick_translations_dir",
+        "layout_pick_list_document",
+        "layout_parse_sources",
+        "layout_save_structure",
+        "layout_add_mapping",
+        "layout_remove_mapping",
+        "layout_preview",
+        "layout_build",
+    }:
+        return "/document-layout"
     return "/case"
 
 
@@ -2144,6 +2649,44 @@ def _safe_case_task_type(case_id: str) -> str:
         return str(load_case(case_id).config.get("task_type", ""))
     except Exception as exc:  # noqa: BLE001
         return f"[unknown: {exc}]"
+
+
+def _safe_layout_setting(case_id: str, key: str) -> str:
+    try:
+        return str(load_layout_status(case_id).settings.get(key, ""))
+    except Exception:
+        return ""
+
+
+def _pick_directory(initial: str = "") -> str:
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError("Directory picker is not available in this environment.") from exc
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    selected = filedialog.askdirectory(initialdir=initial or None)
+    root.destroy()
+    return str(selected or "")
+
+
+def _pick_file(initial: str = "") -> str:
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError("File picker is not available in this environment.") from exc
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    initial_dir = initial if Path(initial).is_dir() else str(Path(initial).parent) if initial else None
+    selected = filedialog.askopenfilename(initialdir=initial_dir)
+    root.destroy()
+    return str(selected or "")
 
 
 def _case_dir(case_id: str) -> Path:

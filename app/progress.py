@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .document_layout import load_layout_status
 from .workflow import load_case
 
 
@@ -36,6 +37,8 @@ def build_case_progress(case_id: str) -> CaseProgress:
     beneficiary = config.get("beneficiary", {}) if isinstance(config.get("beneficiary"), dict) else {}
     beneficiary_name = _clean_value(beneficiary.get("full_name")) or case_id
     task_type = str(config.get("task_type", ""))
+    if task_type == "document_layout":
+        return _build_document_layout_progress(case_id, beneficiary_name, task_type)
 
     intake_values = [
         beneficiary.get("full_name"),
@@ -127,6 +130,61 @@ def build_case_progress(case_id: str) -> CaseProgress:
         indexed_documents=indexed_documents,
         linked_translations=linked_translations,
         total_translations=total_translations,
+    )
+
+
+def _build_document_layout_progress(
+    case_id: str, beneficiary_name: str, task_type: str
+) -> CaseProgress:
+    status = load_layout_status(case_id)
+    steps = [
+        ProgressStep(
+            key="layout_sources",
+            label="Source scan and parsing",
+            detail=f"{status.exhibit_count} exhibit(s), {status.document_count} document(s)",
+            complete=status.stage1_complete,
+        ),
+        ProgressStep(
+            key="layout_mapping",
+            label="File mapping",
+            detail=f"{status.fully_mapped_document_count}/{status.document_count} document(s) linked",
+            complete=status.stage2_complete,
+        ),
+        ProgressStep(
+            key="layout_bundle",
+            label="Final PDF bundle",
+            detail="PDF assembled" if status.has_final else "Waiting for bundle build",
+            complete=status.has_final,
+        ),
+    ]
+    current_assigned = False
+    normalized_steps: list[ProgressStep] = []
+    for step in steps:
+        current = not step.complete and not current_assigned
+        normalized_steps.append(
+            ProgressStep(
+                key=step.key,
+                label=step.label,
+                detail=step.detail,
+                complete=step.complete,
+                current=current,
+            )
+        )
+        if current:
+            current_assigned = True
+    completed_count = sum(step.complete for step in normalized_steps)
+    completion_percent = round((completed_count / len(normalized_steps)) * 100)
+    current_step = next((step for step in normalized_steps if step.current), None)
+    return CaseProgress(
+        case_id=case_id,
+        beneficiary_name=beneficiary_name,
+        task_type=task_type,
+        stage_label=current_step.label if current_step else "Complete",
+        completion_percent=completion_percent,
+        steps=normalized_steps,
+        indexed_documents=status.document_count,
+        linked_translations=0,
+        total_translations=0,
     )
 
 
