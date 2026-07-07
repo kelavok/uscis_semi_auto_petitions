@@ -14,6 +14,7 @@ from app.document_layout import (
     add_mapping,
     build_layout_bundle,
     build_layout_preview,
+    list_installed_fonts,
     load_layout_status,
     refresh_layout_sources,
 )
@@ -48,6 +49,12 @@ class DocumentLayoutTests(unittest.TestCase):
 
             list_path = root / "layout_list.docx"
             _make_layout_docx(list_path)
+            available_fonts = list_installed_fonts()
+            preferred_font = (
+                "Times New Roman"
+                if "Times New Roman" in available_fonts
+                else (available_fonts[0] if available_fonts else "Times New Roman")
+            )
 
             with (
                 patch.object(cli_support, "CASE_ROOT", case_root),
@@ -60,6 +67,7 @@ class DocumentLayoutTests(unittest.TestCase):
                     originals_dir=str(originals),
                     translations_dir=str(translations),
                     list_document_path=str(list_path),
+                    font_family=preferred_font,
                 )
                 status = load_layout_status("layout_001")
 
@@ -89,6 +97,7 @@ class DocumentLayoutTests(unittest.TestCase):
 
             self.assertEqual(summary.exhibits, 2)
             self.assertEqual(summary.documents, 4)
+            self.assertEqual(status.settings["font_family"], preferred_font)
             self.assertEqual(status.structure["exhibits"][0]["episodes"][0]["documents"][0]["number"], "1.1.1")
             self.assertEqual(status.structure["exhibits"][0]["episodes"][0]["documents"][1]["number"], "1.1.2")
             self.assertEqual(status.structure["exhibits"][1]["episodes"][0]["documents"][0]["number"], "2.1")

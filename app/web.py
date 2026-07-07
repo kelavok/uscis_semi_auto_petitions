@@ -28,6 +28,7 @@ from .document_layout import (
     add_mapping as add_document_layout_mapping,
     build_layout_bundle,
     build_layout_preview,
+    list_installed_fonts,
     load_layout_selection,
     load_layout_status,
     refresh_layout_sources,
@@ -298,6 +299,7 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
             originals_dir=data.get("originals_dir", ""),
             translations_dir=data.get("translations_dir", ""),
             list_document_path=data.get("list_document_path", ""),
+            font_family=data.get("font_family", ""),
         )
         return (
             f"Scanned {summary.original_files} original file(s) and {summary.translation_files} translation file(s); "
@@ -1010,6 +1012,14 @@ def render_document_layout_page(case_id: str, params: dict[str, list[str]]) -> s
         stage_three_class = "done"
 
     settings = status.settings
+    available_fonts = list_installed_fonts()
+    font_family = settings.get("font_family", "Times New Roman") or "Times New Roman"
+    if font_family not in available_fonts:
+        available_fonts = [font_family, *available_fonts]
+    font_options = "".join(
+        f'<option value="{escape(name, quote=True)}"{" selected" if name == font_family else ""}>{escape(name)}</option>'
+        for name in available_fonts
+    )
     inventory = status.inventory
     inventory_html = (
         f"<p class='muted small'>Indexed files: {len(inventory.get('original_files', []))} original(s), {len(inventory.get('translation_files', []))} translation(s).</p>"
@@ -1216,6 +1226,7 @@ def render_document_layout_page(case_id: str, params: dict[str, list[str]]) -> s
             <div class="layout-picker-row"><div><strong>Originals folder</strong><div class="path-box">{escape(settings.get('originals_dir', '') or 'Not selected yet')}</div></div>{post_button(case_id, "layout_pick_originals_dir", "Choose folder")}</div>
             <div class="layout-picker-row"><div><strong>Translations folder</strong><div class="path-box">{escape(settings.get('translations_dir', '') or 'Optional')}</div></div>{post_button(case_id, "layout_pick_translations_dir", "Choose folder")}</div>
             <div class="layout-picker-row"><div><strong>Exhibit list document</strong><div class="path-box">{escape(settings.get('list_document_path', '') or 'Not selected yet')}</div></div>{post_button(case_id, "layout_pick_list_document", "Choose file")}</div>
+            <div class="layout-picker-row"><div><strong>Layout font</strong><div class="path-box">{escape(font_family)}</div></div><div class="muted small">Used for generated separator pages and text-based conversions.</div></div>
           </div>
           <form method="post" class="stack">
             <input type="hidden" name="case" value="{escape(case_id)}">
@@ -1223,6 +1234,7 @@ def render_document_layout_page(case_id: str, params: dict[str, list[str]]) -> s
             <input name="originals_dir" value="{escape(settings.get('originals_dir', ''), quote=True)}" placeholder="Folder with original documents">
             <input name="translations_dir" value="{escape(settings.get('translations_dir', ''), quote=True)}" placeholder="Optional folder with translations">
             <input name="list_document_path" value="{escape(settings.get('list_document_path', ''), quote=True)}" placeholder="DOCX / PDF / TXT with the exhibit list">
+            <label><strong>Font for generated pages</strong><select name="font_family">{font_options}</select></label>
             <button>Scan folders and parse list</button>
           </form>
           {inventory_html}

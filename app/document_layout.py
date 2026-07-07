@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import os
 import json
 import re
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -165,6 +168,7 @@ def refresh_layout_sources(
     originals_dir: str = "",
     translations_dir: str = "",
     list_document_path: str = "",
+    font_family: str = "",
 ) -> LayoutParseSummary:
     loaded = load_case(case_id)
     _ensure_layout_case(loaded.config)
@@ -175,6 +179,8 @@ def refresh_layout_sources(
         settings["translations_dir"] = translations_dir.strip()
     if list_document_path.strip():
         settings["list_document_path"] = list_document_path.strip()
+    if font_family.strip():
+        settings["font_family"] = font_family.strip()
     if not settings.get("originals_dir"):
         raise ValueError("Choose the originals folder first.")
     if not settings.get("list_document_path"):
@@ -242,6 +248,13 @@ def update_layout_settings(case_id: str, **changes: str) -> dict[str, str]:
             settings[key] = value.strip()
     _write_json(_layout_root(loaded.case_dir) / SETTINGS_FILE, settings)
     return settings
+
+
+def list_installed_fonts() -> list[str]:
+    names = sorted(_system_font_catalog().keys(), key=str.casefold)
+    if "Times New Roman" not in names:
+        names.insert(0, "Times New Roman")
+    return names
 
 
 def save_layout_structure(case_id: str, data: dict[str, str]) -> None:
@@ -434,6 +447,7 @@ def _load_settings(case_dir: Path) -> dict[str, str]:
             "originals_dir": "",
             "translations_dir": "",
             "list_document_path": "",
+            "font_family": "Times New Roman",
         },
     )
 
@@ -861,7 +875,12 @@ def _render_component_pdf(component: dict[str, Any], target: Path) -> None:
     except ModuleNotFoundError as exc:
         raise SystemExit("Missing reportlab for document layout rendering.") from exc
 
-    font_name = _register_pdf_font(pdfmetrics, TTFont)
+    settings = _load_settings(target.parents[3])
+    font_name = _register_layout_font(
+        pdfmetrics,
+        TTFont,
+        settings.get("font_family", "Times New Roman"),
+    )
     styles = getSampleStyleSheet()
     styles.add(
         ParagraphStyle(
@@ -1070,7 +1089,12 @@ def _text_to_pdf(text: str, title: str, target_pdf: Path) -> None:
     except ModuleNotFoundError as exc:
         raise SystemExit("Missing reportlab for text conversion.") from exc
 
-    font_name = _register_pdf_font(pdfmetrics, TTFont)
+    settings = _load_settings(target_pdf.parents[3])
+    font_name = _register_layout_font(
+        pdfmetrics,
+        TTFont,
+        settings.get("font_family", "Times New Roman"),
+    )
     styles = getSampleStyleSheet()
     styles.add(
         ParagraphStyle(
@@ -1145,3 +1169,88 @@ def _find_soffice() -> str | None:
 
 def _existing_paths(paths: Iterable[str]) -> list[str]:
     return [str(Path(path).expanduser().resolve()) for path in paths if Path(path).expanduser().exists()]
+
+
+def _register_layout_font(pdfmetrics: object, TTFont: object, preferred_family: str) -> str:
+    catalog = _system_font_catalog()
+    preferred_path = catalog.get(preferred_family) or next(
+        (path for family, path in catalog.items() if family.casefold() == preferred_family.casefold()),
+        None,
+    )
+    if preferred_path and preferred_path.exists():
+        font_name = f"LayoutFont_{_font_token(preferred_family)}"
+        try:
+            pdfmetrics.registerFont(TTFont(font_name, str(preferred_path)))  # type: ignore[attr-defined]
+            return font_name
+        except Exception:
+            pass
+    return _register_pdf_font(pdfmetrics, TTFont)
+
+
+def _font_token(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9]+", "", value) or "Default"
+
+
+@lru_cache(maxsize=1)
+def _system_font_catalog() -> dict[str, Path]:
+    if sys.platform.startswith("win"):
+        return _windows_font_catalog()
+    return {}
+
+
+def _windows_font_catalog() -> dict[str, Path]:
+    try:
+        import winreg
+    except ModuleNotFoundError:
+        return {}
+
+    fonts_dir = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts"
+    catalog: dict[str, tuple[int, Path]] = {}
+    registry_locations = (
+        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts"),
+        (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts"),
+    )
+    for hive, location in registry_locations:
+        try:
+            with winreg.OpenKey(hive, location) as key:
+                count = winreg.QueryInfoKey(key)[1]
+                for index in range(count):
+                    display_name, raw_value, _value_type = winreg.EnumValue(key, index)
+                    if not isinstance(raw_value, str):
+                        continue
+                    font_path = Path(raw_value)
+                    if not font_path.is_absolute():
+                        font_path = fonts_dir / raw_value
+                    if not font_path.exists() or font_path.suffix.lower() not in {".ttf", ".otf"}:
+                        continue
+                    family = _normalize_font_family(display_name)
+                    if not family:
+                        continue
+                    score = _font_preference_score(display_name, font_path.name)
+                    current = catalog.get(family)
+                    if current is None or score < current[0]:
+                        catalog[family] = (score, font_path)
+        except OSError:
+            continue
+    return {family: path for family, (_score, path) in catalog.items()}
+
+
+def _normalize_font_family(name: str) -> str:
+    normalized = re.sub(r"\s*\((?:TrueType|OpenType)\)\s*$", "", name, flags=re.IGNORECASE).strip()
+    normalized = re.sub(
+        r"\s+(?:Bold|Italic|Regular|Oblique|Semibold|Light|Black|Medium)(?:\s+Italic)?$",
+        "",
+        normalized,
+        flags=re.IGNORECASE,
+    ).strip()
+    return normalized
+
+
+def _font_preference_score(display_name: str, file_name: str) -> int:
+    lowered = f"{display_name} {file_name}".casefold()
+    score = 0
+    if "regular" in lowered or " roman" in lowered:
+        score -= 2
+    if any(token in lowered for token in ("bold", "italic", "oblique", "black", "light", "semibold", "medium")):
+        score += 10
+    return score
