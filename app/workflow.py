@@ -298,6 +298,7 @@ def render_final_output_guardrails(
         "Do not use the word `episode` in petition text. Use `criterion`, `section`, `submitted evidence`, or `record` as appropriate.",
         "In `used_documents`, provide a concise, descriptive English `document_title` for every cited document. Do not copy a raw filename or leave a Russian-only title.",
         "Every `used_documents[].document_id` must be copied exactly from the Technical document selection in this prompt (format `DOC####`). Never invent semantic IDs for an RFE quote, strategy, exhibit group, or explanatory material. If no indexed documents are listed, return `used_documents: []`.",
+        "`used_documents` is the authoritative source for exhibit ordering after validation: list documents in the same logical order in which they are used in `draft_text` and in the exhibit document list. Do not sort by DOC identifier, filename, source folder, upload order, or technical index order.",
     ]
     if technical_step:
         lines.append("This is a technical intake/review step, so concise internal notes are allowed in `draft_text`.")
@@ -309,7 +310,7 @@ def render_final_output_guardrails(
             [
                 f"The primary exhibit for this section is Exhibit {exhibit_number}.",
                 f"Number this unit's exhibit-list items with the prefix `{item_prefix}` (for example `{item_prefix}1.`), never with another criterion's prefix.",
-                "Include the exhibit-list introduction and `Within the Exhibit, the following documents are attached:` followed by a complete numbered document list. If later units add documents to the same Exhibit, return the complete updated list for the material covered so far.",
+                "Include the exhibit-list introduction and `Within the Exhibit, the following documents are attached:` followed by a complete numbered document list in the same logical order as `used_documents`. If later units add documents to the same Exhibit, return the complete updated list for the material covered so far.",
                 f"Use citations in this form: `(Please refer to Exhibit {exhibit_number}, page PAGE: {item_prefix}1 - Concise English document title, original and English translation.)` Adapt singular/plural and omit the translation phrase when no translation exists.",
                 "Keep `PAGE` as the pagination placeholder until final PDF assembly. Do not use `XX`, raw filenames, document IDs, or technical paths in the petition body.",
             ]

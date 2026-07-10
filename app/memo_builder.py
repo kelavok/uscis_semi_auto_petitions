@@ -1410,7 +1410,7 @@ def _evidence_index_entries(
     by_id = {row.get("document_id", ""): row for row in documents if row.get("document_id")}
 
     entries: list[tuple[str, list[str]]] = []
-    for exhibit in sorted(exhibits, key=lambda row: _natural_key(row.get("exhibit_number", ""))):
+    for exhibit in sorted(exhibits, key=_exhibit_index_sort_key):
         number = exhibit.get("exhibit_number", "").strip()
         if not number:
             continue
@@ -1454,6 +1454,13 @@ def _evidence_index_entries(
                 titles.append(document_title)
         entries.append((heading, titles))
     return entries
+
+
+def _exhibit_index_sort_key(row: dict[str, str]) -> tuple[int, list[object], str]:
+    order = row.get("final_bundle_order", "").strip()
+    if order.isdigit():
+        return (0, [int(order)], row.get("exhibit_number", ""))
+    return (1, _natural_key(row.get("exhibit_number", "")), row.get("exhibit_id", ""))
 
 
 def _natural_key(value: str) -> list[object]:

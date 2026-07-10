@@ -16,6 +16,7 @@ from app.bundle_workflow import (
     build_bundle_plan,
     build_exhibit_index,
     generate_separator_pages,
+    refresh_layout_indexes,
     render_separator_pdfs,
 )
 from app.evidence import link_translations, manual_link_translation, scan_documents, unlink_translation
@@ -1555,6 +1556,99 @@ class CliSmokeTests(unittest.TestCase):
             document_text = (indexes_dir / "document_index.csv").read_text(encoding="utf-8")
             self.assertIn("DOC0001", document_text)
             self.assertIn("DOC0002", document_text)
+
+    def test_refresh_layout_indexes_uses_llm_narrative_document_order(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            case_root = root / "case_workspace"
+            case_dir = case_root / "case_001"
+            workflow_dir = root / "workflows"
+            indexes_dir = case_dir / "indexes"
+            source_dir = case_dir / "source_documents" / "originals" / "1. Awards"
+            validated_dir = case_dir / "validated_outputs"
+            indexes_dir.mkdir(parents=True)
+            workflow_dir.mkdir(parents=True)
+            source_dir.mkdir(parents=True)
+            validated_dir.mkdir(parents=True)
+            for name in ["technical-first.txt", "technical-second.txt", "technical-third.txt"]:
+                (source_dir / name).write_text(name, encoding="utf-8")
+            (case_dir / "case_config.yaml").write_text(
+                "case_id: case_001\n"
+                "task_type: eb1a_petition\n"
+                "workflow: workflows/eb1a_petition.yaml\n"
+                "paths:\n"
+                "  source_originals: source_documents/originals\n"
+                "  extracted_text: extracted_text\n"
+                "  document_index: indexes/document_index.csv\n"
+                "  exhibit_index: indexes/exhibit_index.csv\n"
+                "  generated_prompts: generated_prompts\n"
+                "  llm_outputs: llm_outputs\n"
+                "  validated_outputs: validated_outputs\n"
+                "  bundle_root: bundle\n",
+                encoding="utf-8",
+            )
+            (workflow_dir / "eb1a_petition.yaml").write_text(
+                "task_type: eb1a_petition\n"
+                "steps:\n"
+                "  - step_id: criterion_awards_episode\n"
+                "    title: Awards\n"
+                "    evidence_folder_roles:\n"
+                "      - awards\n",
+                encoding="utf-8",
+            )
+            (indexes_dir / "document_index.csv").write_text(
+                "document_id,original_file_name,display_title,file_path,document_type,category,"
+                "task_type_relevance,memo_section_relevance,exhibit_number,parent_document_id,"
+                "translation_status,relationship_type,document_date,person_or_organization,"
+                "short_description,extraction_status,text_extraction_path,user_approval_status,"
+                "separator_title_type,final_bundle_order,source_fingerprint,last_scanned_at,"
+                "manual_edit_lock,notes\n"
+                "DOC0001,technical-first.txt,Technical First,source_documents/originals/1. Awards/technical-first.txt,text,awards,,awards,,,,,,,,text_extracted,,pending,document,,,,false,\n"
+                "DOC0002,technical-second.txt,Technical Second,source_documents/originals/1. Awards/technical-second.txt,text,awards,,awards,,,,,,,,text_extracted,,pending,document,,,,false,\n"
+                "DOC0003,technical-third.txt,Technical Third,source_documents/originals/1. Awards/technical-third.txt,text,awards,,awards,,,,,,,,text_extracted,,pending,document,,,,false,\n",
+                encoding="utf-8",
+            )
+            (indexes_dir / "exhibit_index.csv").write_text(
+                "exhibit_id,exhibit_number,parent_exhibit_id,display_title,evidentiary_thesis,"
+                "task_type,memo_section,separator_title_type,document_ids,original_translation_order,"
+                "final_bundle_order,user_approval_status,manual_edit_lock,notes\n",
+                encoding="utf-8",
+            )
+            (validated_dir / "criterion_awards_episode.json").write_text(
+                "{\n"
+                '  "case_id": "case_001",\n'
+                '  "task_type": "eb1a_petition",\n'
+                '  "step_id": "criterion_awards_episode",\n'
+                '  "draft_text": "Within the Exhibit, the following documents are attached:\\n\\n1. Third narrative document.\\n2. First narrative document.\\n3. Second narrative document.",\n'
+                '  "used_documents": [\n'
+                '    {"document_id": "DOC0001", "document_title": "First narrative document", "used_for": "award proof"},\n'
+                '    {"document_id": "DOC0002", "document_title": "Second narrative document", "used_for": "award proof"},\n'
+                '    {"document_id": "DOC0003", "document_title": "Third narrative document", "used_for": "award proof"}\n'
+                "  ],\n"
+                '  "unsupported_claims": [],\n'
+                '  "questions_for_user": [],\n'
+                '  "quality_flags": [],\n'
+                '  "revision_notes": []\n'
+                "}\n",
+                encoding="utf-8",
+            )
+
+            with (
+                patch.object(cli_support, "CASE_ROOT", case_root),
+                patch.object(workflow_module, "PROJECT_ROOT", root),
+            ):
+                summary = refresh_layout_indexes("case_001")
+
+            self.assertEqual(summary.documents_assigned, 3)
+            with (indexes_dir / "exhibit_index.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+                exhibit = next(csv.DictReader(handle))
+            self.assertEqual(exhibit["document_ids"], "DOC0003;DOC0001;DOC0002")
+            with (indexes_dir / "document_index.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+                rows = {row["document_id"]: row for row in csv.DictReader(handle)}
+            self.assertEqual(rows["DOC0003"]["final_bundle_order"], "1")
+            self.assertEqual(rows["DOC0001"]["final_bundle_order"], "2")
+            self.assertEqual(rows["DOC0002"]["final_bundle_order"], "3")
+            self.assertEqual(rows["DOC0003"]["display_title"], "Third narrative document")
 
     def test_generate_separator_pages_from_indexes(self) -> None:
         with TemporaryDirectory() as temp:

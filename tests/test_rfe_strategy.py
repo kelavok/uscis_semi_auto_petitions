@@ -303,7 +303,7 @@ class RfeStrategyTests(unittest.TestCase):
                 self.assertIn("Awards were not accepted because national recognition was not established", document_xml)
                 self.assertIn("Awards response.", document_xml)
                 self.assertIn("Attachments / Evidence Index", document_xml)
-                self.assertIn("organizer_letter", document_xml)
+                self.assertIn("Organizer letter", document_xml)
                 self.assertNotIn("Drafting direction (internal)", document_xml)
                 self.assertNotIn("DRAFTING PLACEHOLDER", document_xml)
                 self.assertNotIn("SCRIPT PLACEHOLDER", document_xml)

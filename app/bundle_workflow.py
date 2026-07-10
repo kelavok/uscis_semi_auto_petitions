@@ -181,6 +181,17 @@ class BundlePreparationStatus:
     reason: str
 
 
+@dataclass(frozen=True)
+class EvidenceLayoutPlan:
+    document_to_exhibit: dict[str, str]
+    document_order: dict[str, int]
+    exhibit_order: dict[str, int]
+    document_titles: dict[str, str]
+    conflicts: list[str]
+    references: int
+    exhibit_metadata: dict[str, tuple[str, str]]
+
+
 def bundle_catalog(case_id: str) -> list[dict[str, object]]:
     loaded = load_case(case_id)
     document_rows = _read_csv(
@@ -323,7 +334,8 @@ def inspect_layout_index_status(case_id: str) -> LayoutIndexStatus:
     document_index_path = loaded.case_dir / _case_path_value(loaded.config, "document_index")
     exhibit_index_path = loaded.case_dir / _case_path_value(loaded.config, "exhibit_index")
     document_rows = _read_csv(document_index_path, INDEX_FIELDS)
-    desired, conflicts, references, _metadata = _desired_exhibit_assignments(loaded)
+    plan = _desired_exhibit_assignments(loaded)
+    desired = plan.document_to_exhibit
     rows_by_id = {row.get("document_id", ""): row for row in document_rows if row.get("document_id")}
     stale = sorted(document_id for document_id in desired if document_id not in rows_by_id)
     assigned = sum(
@@ -351,12 +363,12 @@ def inspect_layout_index_status(case_id: str) -> LayoutIndexStatus:
     exhibit_rows = _read_csv(exhibit_index_path, EXHIBIT_FIELDS)
     return LayoutIndexStatus(
         indexed_documents=len(document_rows),
-        used_document_references=references,
+        used_document_references=plan.references,
         unique_used_documents=len(desired),
         assigned_used_documents=assigned,
         exhibit_count=sum(bool(row.get("exhibit_number", "").strip()) for row in exhibit_rows),
         stale_document_ids=tuple(stale),
-        assignment_conflicts=tuple(conflicts),
+        assignment_conflicts=tuple(plan.conflicts),
         indexed_sidecars=tuple(indexed_sidecars),
         unsupported_documents=tuple(sorted(unsupported)),
     )
@@ -368,7 +380,10 @@ def refresh_layout_indexes(case_id: str) -> LayoutIndexRefreshSummary:
     document_index_path = loaded.case_dir / _case_path_value(loaded.config, "document_index")
     exhibit_index_path = loaded.case_dir / _case_path_value(loaded.config, "exhibit_index")
     document_rows = _read_csv(document_index_path, INDEX_FIELDS)
-    desired, conflicts, _references, exhibit_metadata = _desired_exhibit_assignments(loaded)
+    plan = _desired_exhibit_assignments(loaded)
+    desired = plan.document_to_exhibit
+    conflicts = list(plan.conflicts)
+    exhibit_metadata = plan.exhibit_metadata
     replacements_rebound = _rebind_supported_replacements(loaded, document_rows, desired)
     rows_by_id = {row.get("document_id", ""): row for row in document_rows if row.get("document_id")}
 
@@ -377,10 +392,19 @@ def refresh_layout_indexes(case_id: str) -> LayoutIndexRefreshSummary:
             row["exhibit_number"] = ""
             row["final_bundle_order"] = ""
 
-    desired_order = {document_id: index for index, document_id in enumerate(desired)}
+    for document_id, title in plan.document_titles.items():
+        row = rows_by_id.get(document_id)
+        if row and title and not _truthy(row.get("manual_edit_lock", "")):
+            row["display_title"] = title
+
     assignments = sorted(
         desired.items(),
-        key=lambda item: (_natural_sort_key(item[1]), desired_order[item[0]]),
+        key=lambda item: (
+            plan.exhibit_order.get(item[1], 10**9),
+            plan.document_order.get(item[0], 10**9),
+            _natural_sort_key(item[1]),
+            _natural_sort_key(item[0]),
+        ),
     )
     assigned = 0
     for bundle_order, (document_id, exhibit_number) in enumerate(assignments, start=1):
@@ -443,9 +467,7 @@ def refresh_layout_indexes(case_id: str) -> LayoutIndexRefreshSummary:
     )
 
 
-def _desired_exhibit_assignments(
-    loaded: LoadedCase,
-) -> tuple[dict[str, str], list[str], int, dict[str, tuple[str, str]]]:
+def _desired_exhibit_assignments(loaded: LoadedCase) -> EvidenceLayoutPlan:
     validated_root = loaded.case_dir / _case_path_value(loaded.config, "validated_outputs")
     files = {path.stem: path for path in validated_root.glob("*.json")}
     try:
@@ -456,9 +478,14 @@ def _desired_exhibit_assignments(
         ordered_stems = []
     ordered_stems.extend(stem for stem in sorted(files) if stem not in ordered_stems)
     desired: dict[str, str] = {}
+    document_order: dict[str, int] = {}
+    exhibit_order: dict[str, int] = {}
+    document_titles: dict[str, str] = {}
     conflicts: list[str] = []
     exhibit_metadata: dict[str, tuple[str, str]] = {}
     references = 0
+    next_document_order = 1
+    next_exhibit_order = 1
     for stem in ordered_stems:
         path = files.get(stem)
         if not path:
@@ -475,27 +502,124 @@ def _desired_exhibit_assignments(
         if not exhibit_number:
             conflicts.append(f"{path.name} uses documents but has no deterministic Exhibit mapping.")
             continue
+        if exhibit_number not in exhibit_order:
+            exhibit_order[exhibit_number] = next_exhibit_order
+            next_exhibit_order += 1
         title, memo_section = _exhibit_metadata_for_output(loaded, data)
         existing_title, existing_section = exhibit_metadata.get(exhibit_number, ("", ""))
         exhibit_metadata[exhibit_number] = (
             existing_title or title,
             existing_section or memo_section,
         )
-        for item in used_documents:
+        for item in _ordered_used_documents(data):
             if not isinstance(item, dict):
                 continue
             document_id = str(item.get("document_id", "")).strip()
             if not document_id:
                 continue
             references += 1
+            document_title = str(item.get("document_title", "")).strip()
+            if document_title and document_id not in document_titles:
+                document_titles[document_id] = document_title
             existing = desired.get(document_id)
             if existing and existing != exhibit_number:
                 conflicts.append(
                     f"{document_id} is used by both Exhibit {existing} and Exhibit {exhibit_number}."
                 )
                 continue
-            desired.setdefault(document_id, exhibit_number)
-    return desired, conflicts, references, exhibit_metadata
+            if document_id not in desired:
+                desired[document_id] = exhibit_number
+                document_order[document_id] = next_document_order
+                next_document_order += 1
+    return EvidenceLayoutPlan(
+        document_to_exhibit=desired,
+        document_order=document_order,
+        exhibit_order=exhibit_order,
+        document_titles=document_titles,
+        conflicts=conflicts,
+        references=references,
+        exhibit_metadata=exhibit_metadata,
+    )
+
+
+def _ordered_used_documents(data: dict[str, object]) -> list[dict[str, object]]:
+    used_documents = [
+        item for item in data.get("used_documents", []) if isinstance(item, dict)
+    ]
+    if len(used_documents) < 2:
+        return used_documents
+
+    narrative_order = _document_title_order_from_draft(
+        str(data.get("draft_text", "")), used_documents
+    )
+    if not narrative_order:
+        return used_documents
+    ordered_items = sorted(
+        enumerate(used_documents),
+        key=lambda pair: (
+            narrative_order.get(str(pair[1].get("document_id", "")).strip(), 10**9),
+            pair[0],
+        ),
+    )
+    return [item for _offset, item in ordered_items]
+
+
+def _document_title_order_from_draft(
+    draft_text: str, used_documents: list[dict[str, object]]
+) -> dict[str, int]:
+    titles_by_id = {
+        str(item.get("document_id", "")).strip(): _normalize_title_match_text(
+            str(item.get("document_title", "")).strip()
+        )
+        for item in used_documents
+        if str(item.get("document_id", "")).strip()
+        and str(item.get("document_title", "")).strip()
+    }
+    if not titles_by_id:
+        return {}
+
+    ordered: dict[str, int] = {}
+    for line in draft_text.splitlines():
+        normalized_line = _normalize_title_match_text(line)
+        if not normalized_line:
+            continue
+        for document_id, title in titles_by_id.items():
+            if document_id in ordered or not title:
+                continue
+            if title in normalized_line:
+                ordered[document_id] = len(ordered) + 1
+    if len(ordered) >= 2:
+        return ordered
+
+    lowered = draft_text.casefold()
+    positions: list[tuple[int, str]] = []
+    for item in used_documents:
+        document_id = str(item.get("document_id", "")).strip()
+        title = str(item.get("document_title", "")).strip()
+        if not document_id or not title:
+            continue
+        position = lowered.find(title.casefold())
+        if position >= 0:
+            positions.append((position, document_id))
+    if len(positions) < 2:
+        return {}
+    return {
+        document_id: index
+        for index, (_position, document_id) in enumerate(sorted(positions), start=1)
+    }
+
+
+def _normalize_title_match_text(value: str) -> str:
+    value = value.casefold()
+    value = value.replace("“", '"').replace("”", '"').replace("’", "'")
+    value = re.sub(
+        r"\b(?:original|english translation|original and english translation)\b",
+        " ",
+        value,
+    )
+    value = re.sub(r"^\s*(?:\d+(?:\.\d+)*\.?|\d+[.)]|[-*•])\s*", " ", value)
+    value = re.sub(r"[^a-z0-9а-яёіїєґ\"']+", " ", value, flags=re.IGNORECASE)
+    return " ".join(value.split())
 
 
 def _exhibit_metadata_for_output(
@@ -613,7 +737,13 @@ def build_exhibit_index(case_id: str) -> ExhibitIndexSummary:
     locked_exhibits_skipped = 0
     document_orders_written = 0
 
-    ordered_exhibit_numbers = sorted(grouped, key=_natural_sort_key)
+    ordered_exhibit_numbers = sorted(
+        grouped,
+        key=lambda number: (
+            _first_document_order(grouped[number]),
+            _natural_sort_key(number),
+        ),
+    )
     next_exhibit_id = _next_exhibit_number(exhibit_rows)
     global_document_order = 1
 
@@ -651,7 +781,7 @@ def build_exhibit_index(case_id: str) -> ExhibitIndexSummary:
         row["original_translation_order"] = str(
             loaded.config.get("translation_order", "original_then_translation")
         )
-        row["final_bundle_order"] = row.get("final_bundle_order") or str(exhibit_order)
+        row["final_bundle_order"] = str(exhibit_order)
         row["notes"] = _merge_note(row.get("notes", ""), "Generated/updated from document_index.csv.")
 
         for document in ordered_documents:
@@ -1107,6 +1237,15 @@ def order_documents_original_then_translation(rows: list[dict[str, str]]) -> lis
 
     ordered.extend(sorted(unpaired_translations, key=_document_sort_key))
     return ordered
+
+
+def _first_document_order(rows: list[dict[str, str]]) -> int:
+    orders: list[int] = []
+    for row in rows:
+        order = row.get("final_bundle_order", "").strip()
+        if order.isdigit():
+            orders.append(int(order))
+    return min(orders, default=10**9)
 
 
 def _bundle_selection_path(loaded: LoadedCase) -> Path:
