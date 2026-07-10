@@ -1584,7 +1584,9 @@ class CliSmokeTests(unittest.TestCase):
                 "  generated_prompts: generated_prompts\n"
                 "  llm_outputs: llm_outputs\n"
                 "  validated_outputs: validated_outputs\n"
-                "  bundle_root: bundle\n",
+                "  bundle_root: bundle\n"
+                "eb1a_folder_roles:\n"
+                "  awards: 1. Awards\n",
                 encoding="utf-8",
             )
             (workflow_dir / "eb1a_petition.yaml").write_text(
@@ -1637,6 +1639,35 @@ class CliSmokeTests(unittest.TestCase):
                 patch.object(cli_support, "CASE_ROOT", case_root),
                 patch.object(workflow_module, "PROJECT_ROOT", root),
             ):
+                loaded = workflow_module.load_case("case_001")
+                step = workflow_module.find_step(loaded.workflow, "criterion_awards_episode")
+                with self.assertRaisesRegex(SystemExit, "used_documents omits 1 document"):
+                    workflow_module.validate_llm_output(
+                        {
+                            "case_id": "case_001",
+                            "task_type": "eb1a_petition",
+                            "step_id": "criterion_awards_episode",
+                            "draft_text": "Complete awards response with enough substance for validation.",
+                            "used_documents": [
+                                {
+                                    "document_id": "DOC0001",
+                                    "document_title": "First narrative document",
+                                    "used_for": "award proof",
+                                },
+                                {
+                                    "document_id": "DOC0003",
+                                    "document_title": "Third narrative document",
+                                    "used_for": "award proof",
+                                },
+                            ],
+                            "unsupported_claims": [],
+                            "questions_for_user": [],
+                            "quality_flags": [],
+                            "revision_notes": [],
+                        },
+                        loaded,
+                        "criterion_awards_episode",
+                    )
                 summary = refresh_layout_indexes("case_001")
 
             self.assertEqual(summary.documents_assigned, 3)

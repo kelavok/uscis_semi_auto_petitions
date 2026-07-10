@@ -234,15 +234,17 @@ class RfeStrategyTests(unittest.TestCase):
                             "draft_text": "Awards response.",
                             "used_documents": [
                                 {
-                                    "document_id": selected_document_id,
-                                    "document_title": "Organizer letter",
+                                    "document_id": document_id,
+                                    "document_title": (
+                                        "Organizer letter"
+                                        if document_id == selected_document_id
+                                        else "Citation table"
+                                        if document_id == spreadsheet_document_id
+                                        else title
+                                    ),
                                     "used_for": "award evidence",
-                                },
-                                {
-                                    "document_id": spreadsheet_document_id,
-                                    "document_title": "Citation table",
-                                    "used_for": "award evidence",
-                                },
+                                }
+                                for document_id, title in award_unit.selected_documents
                             ],
                             "unsupported_claims": [],
                             "questions_for_user": [],
@@ -263,7 +265,7 @@ class RfeStrategyTests(unittest.TestCase):
                 )
                 refreshed = refresh_layout_indexes("rfe_test")
                 self.assertEqual(refreshed.replacement_documents_rebound, 1)
-                self.assertEqual(refreshed.status.assigned_used_documents, 2)
+                self.assertEqual(refreshed.status.assigned_used_documents, 3)
                 self.assertEqual(refreshed.status.exhibit_count, 1)
                 self.assertTrue(refreshed.status.ready_for_separators)
                 self.assertFalse(refreshed.status.unsupported_documents)

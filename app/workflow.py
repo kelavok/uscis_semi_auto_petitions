@@ -7,7 +7,7 @@ import zipfile
 from dataclasses import dataclass
 from datetime import datetime
 from html import unescape
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 from xml.etree import ElementTree
 
@@ -298,6 +298,7 @@ def render_final_output_guardrails(
         "Do not use the word `episode` in petition text. Use `criterion`, `section`, `submitted evidence`, or `record` as appropriate.",
         "In `used_documents`, provide a concise, descriptive English `document_title` for every cited document. Do not copy a raw filename or leave a Russian-only title.",
         "Every `used_documents[].document_id` must be copied exactly from the Technical document selection in this prompt (format `DOC####`). Never invent semantic IDs for an RFE quote, strategy, exhibit group, or explanatory material. If no indexed documents are listed, return `used_documents: []`.",
+        "Every document listed in the Technical document selection must appear exactly once in `used_documents`, even if it is background, corroborating, duplicative, or less important. The filing bundle is built from `used_documents`; omitting a selected document will omit it from the final exhibit package.",
         "`used_documents` is the authoritative source for exhibit ordering after validation: list documents in the same logical order in which they are used in `draft_text` and in the exhibit document list. Do not sort by DOC identifier, filename, source folder, upload order, or technical index order.",
     ]
     if technical_step:
@@ -310,7 +311,7 @@ def render_final_output_guardrails(
             [
                 f"The primary exhibit for this section is Exhibit {exhibit_number}.",
                 f"Number this unit's exhibit-list items with the prefix `{item_prefix}` (for example `{item_prefix}1.`), never with another criterion's prefix.",
-                "Include the exhibit-list introduction and `Within the Exhibit, the following documents are attached:` followed by a complete numbered document list in the same logical order as `used_documents`. If later units add documents to the same Exhibit, return the complete updated list for the material covered so far.",
+                "Include the exhibit-list introduction and `Within the Exhibit, the following documents are attached:` followed by a complete numbered document list containing every Technical document selection item in the same logical order as `used_documents`. If later units add documents to the same Exhibit, return the complete updated list for the material covered so far.",
                 f"Use citations in this form: `(Please refer to Exhibit {exhibit_number}, page PAGE: {item_prefix}1 - Concise English document title, original and English translation.)` Adapt singular/plural and omit the translation phrase when no translation exists.",
                 "Keep `PAGE` as the pagination placeholder until final PDF assembly. Do not use `XX`, raw filenames, document IDs, or technical paths in the petition body.",
             ]
@@ -667,6 +668,75 @@ def selected_documents_for_step(
         )
         seen.add(document_id)
     return selected
+
+
+def missing_selected_documents_from_output(
+    data: dict[str, Any],
+    loaded: LoadedCase,
+    step: dict[str, Any],
+    options: PromptOptions | None = None,
+) -> list[dict[str, str]]:
+    """Return prompt-selected evidence documents that the LLM omitted from used_documents."""
+    options = options or PromptOptions()
+    selection_enforced = bool(step.get("evidence_folder_roles")) or bool(
+        step.get("evidence_sources")
+    ) or _truthy_config(step.get("rfe_strategy_units", False))
+    if not selection_enforced:
+        return []
+    used_ids = {
+        str(item.get("document_id", "")).strip()
+        for item in data.get("used_documents", [])
+        if isinstance(item, dict)
+    }
+    selected_documents = selected_documents_for_step(loaded, step, options)
+    selected_by_id = {
+        str(document.get("document_id", "")).strip(): document
+        for document in selected_documents
+        if str(document.get("document_id", "")).strip()
+    }
+    missing: list[dict[str, str]] = []
+    for document in selected_documents:
+        document_id = str(document.get("document_id", "")).strip()
+        if document_id and document_id not in used_ids:
+            if _is_replacement_pdf_for_used_document(document, used_ids, selected_by_id):
+                continue
+            missing.append(document)
+    return missing
+
+
+def _is_replacement_pdf_for_used_document(
+    candidate: dict[str, str],
+    used_ids: set[str],
+    selected_by_id: dict[str, dict[str, str]],
+) -> bool:
+    candidate_path = PurePosixPath(_normalize_slashes(candidate.get("file_path", "")))
+    if candidate_path.suffix.casefold() != ".pdf":
+        return False
+    for used_id in used_ids:
+        used = selected_by_id.get(used_id)
+        if not used:
+            continue
+        used_path = PurePosixPath(_normalize_slashes(used.get("file_path", "")))
+        if (
+            used_path.parent == candidate_path.parent
+            and used_path.stem.casefold() == candidate_path.stem.casefold()
+            and used_path.suffix.casefold() != ".pdf"
+        ):
+            return True
+    return False
+
+
+def format_missing_selected_documents_message(missing: list[dict[str, str]]) -> str:
+    preview = "; ".join(
+        f"{item.get('document_id', '')} — {item.get('title') or item.get('file_path', '')}"
+        for item in missing[:20]
+    )
+    suffix = f"; and {len(missing) - 20} more" if len(missing) > 20 else ""
+    return (
+        f"used_documents omits {len(missing)} document(s) from this prompt's Technical document selection: "
+        f"{preview}{suffix}. Include every selected document in used_documents and in the exhibit document list, "
+        "or split/group the source materials before regenerating the prompt."
+    )
 
 
 def import_llm_output(
@@ -1506,6 +1576,9 @@ def validate_llm_output(
                 + ", ".join(unselected_ids)
                 + ". Auxiliary info/readme/extract files may guide drafting but can never be cited."
             )
+        missing_selected = missing_selected_documents_from_output(data, loaded, step, options)
+        if missing_selected:
+            raise SystemExit(format_missing_selected_documents_message(missing_selected))
     if not technical_step and evidence_based and not data["used_documents"]:
         raise SystemExit(
             f"{step_id} is an evidence-based drafting step, but used_documents is empty. "

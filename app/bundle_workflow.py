@@ -16,8 +16,10 @@ from .workflow import (
     _normalize_slashes,
     extract_docx_text,
     find_step,
+    format_missing_selected_documents_message,
     load_case,
     LoadedCase,
+    missing_selected_documents_from_output,
     PromptOptions,
 )
 
@@ -498,6 +500,21 @@ def _desired_exhibit_assignments(loaded: LoadedCase) -> EvidenceLayoutPlan:
         used_documents = data.get("used_documents", [])
         if not isinstance(used_documents, list) or not used_documents:
             continue
+        step_id = str(data.get("step_id", ""))
+        episode_id = str(data.get("episode_id", ""))
+        try:
+            step = find_step(loaded.workflow, step_id)
+            missing_selected = missing_selected_documents_from_output(
+                data, loaded, step, PromptOptions(episode_id=episode_id)
+            )
+        except SystemExit as exc:
+            missing_selected = []
+            conflicts.append(f"{path.name} completeness check failed: {exc}")
+        except Exception as exc:  # noqa: BLE001 - layout diagnostics should keep scanning other outputs.
+            missing_selected = []
+            conflicts.append(f"{path.name} completeness check failed: {exc}")
+        if missing_selected:
+            conflicts.append(f"{path.name}: {format_missing_selected_documents_message(missing_selected)}")
         exhibit_number = _exhibit_number_for_output(loaded, data)
         if not exhibit_number:
             conflicts.append(f"{path.name} uses documents but has no deterministic Exhibit mapping.")
