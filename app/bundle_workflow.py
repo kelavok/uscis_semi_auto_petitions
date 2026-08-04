@@ -6,7 +6,7 @@ import json
 import re
 from dataclasses import dataclass
 from html import escape
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from .evidence import INDEX_FIELDS, scan_documents
 from .file_rules import prompt_sidecar_kind
@@ -80,6 +80,7 @@ class SeparatorSummary:
     separators_dir: Path
     exhibits_seen: int
     exhibit_pages_written: int
+    episode_pages_written: int
     document_pages_written: int
     missing_document_ids: int
     manifest_path: Path
@@ -132,10 +133,7 @@ class LayoutIndexStatus:
         return bool(
             self.unique_used_documents
             and (
-                self.assigned_used_documents != self.unique_used_documents
-                or not self.exhibit_count
-                or self.stale_document_ids
-                or self.assignment_conflicts
+                not self.exhibit_count
                 or self.indexed_sidecars
             )
         )
@@ -268,7 +266,11 @@ def prepare_selected_bundle(
         "index_digest": _bundle_index_digest(loaded),
         "selected_exhibits": list(selection.exhibit_numbers),
         "selected_document_ids": list(selection.document_ids),
-        "expected_separator_pdfs": separators.exhibit_pages_written + separators.document_pages_written,
+        "expected_separator_pdfs": (
+            separators.exhibit_pages_written
+            + separators.episode_pages_written
+            + separators.document_pages_written
+        ),
         "rendered_separator_pdfs": rendered.pdf_pages_written,
         "missing_items": plan.missing_items,
         "unsupported_items": plan.unsupported_items,
@@ -311,10 +313,6 @@ def inspect_bundle_preparation(case_id: str) -> BundlePreparationStatus:
         reason = "The evidence indexes changed; prepare again."
     elif int(state.get("rendered_separator_pdfs", 0)) != int(state.get("expected_separator_pdfs", 0)):
         reason = "Not all separator PDFs were rendered; prepare again."
-    elif int(state.get("missing_items", 0)):
-        reason = f"The prepared plan has {int(state.get('missing_items', 0))} missing item(s)."
-    elif int(state.get("unsupported_items", 0)):
-        reason = f"The prepared plan has {int(state.get('unsupported_items', 0))} unsupported item(s)."
     else:
         reason = "Ready to build."
     ready = reason == "Ready to build."
@@ -435,6 +433,35 @@ def refresh_layout_indexes(case_id: str) -> LayoutIndexRefreshSummary:
         if row.get("exhibit_number", "").strip() in desired_exhibits
         or _truthy(row.get("manual_edit_lock", ""))
     ]
+    existing_exhibit_numbers = {
+        row.get("exhibit_number", "").strip()
+        for row in exhibit_rows
+        if row.get("exhibit_number", "").strip()
+    }
+    next_exhibit_id = _next_exhibit_number(exhibit_rows)
+    for exhibit_number in sorted(desired_exhibits, key=_natural_sort_key):
+        if exhibit_number in existing_exhibit_numbers:
+            continue
+        title, memo_section = exhibit_metadata.get(exhibit_number, ("", ""))
+        row = _blank_exhibit_row()
+        row["exhibit_id"] = f"EXH{next_exhibit_id:03d}"
+        next_exhibit_id += 1
+        row["exhibit_number"] = exhibit_number
+        row["display_title"] = title or f"Exhibit {exhibit_number}"
+        row["memo_section"] = memo_section
+        row["task_type"] = str(loaded.config.get("task_type", ""))
+        row["separator_title_type"] = "exhibit"
+        row["original_translation_order"] = str(
+            loaded.config.get("translation_order", "original_then_translation")
+        )
+        row["user_approval_status"] = "pending"
+        row["manual_edit_lock"] = "false"
+        row["notes"] = _merge_note(
+            row.get("notes", ""),
+            "Generated from validated LLM output even though no indexed source documents were assigned.",
+        )
+        exhibit_rows.append(row)
+        existing_exhibit_numbers.add(exhibit_number)
     for row in exhibit_rows:
         exhibit_number = row.get("exhibit_number", "").strip()
         title, memo_section = exhibit_metadata.get(exhibit_number, ("", ""))
@@ -854,6 +881,7 @@ def generate_separator_pages(
     }
 
     exhibit_pages_written = 0
+    episode_pages_written = 0
     document_pages_written = 0
     missing_document_ids = 0
     manifest_lines = [
@@ -877,8 +905,7 @@ def generate_separator_pages(
             for part in exhibit.get("document_ids", "").split(";")
             if part.strip() and part.strip() in selected_documents
         ]
-        if not document_ids:
-            continue
+        missing_document_ids += sum(1 for document_id in document_ids if document_id not in documents_by_id)
         document_groups = _logical_document_groups(document_ids, documents_by_id)
         exhibit_file = separators_dir / f"{exhibit_position:03d}_exhibit_{_safe_filename(exhibit_number)}.md"
         exhibit_file.write_text(
@@ -888,18 +915,47 @@ def generate_separator_pages(
         exhibit_pages_written += 1
         manifest_lines.append(f"- {exhibit_file.relative_to(bundle_root).as_posix()}")
 
-        for document_position, (document, translations) in enumerate(document_groups, start=1):
-            document_id = document.get("document_id", "")
-            document_file = (
-                separators_dir
-                / f"{exhibit_position:03d}_{document_position:03d}_{_safe_filename(document_id)}.md"
-            )
-            document_file.write_text(
-                _render_document_separator(exhibit, document, translations),
-                encoding="utf-8",
-            )
-            document_pages_written += 1
-            manifest_lines.append(f"- {document_file.relative_to(bundle_root).as_posix()}")
+        for episode_position, section in enumerate(
+            _numbered_episode_document_sections(exhibit, document_groups),
+            start=1,
+        ):
+            episode_title = str(section["episode_title"])
+            episode_number = str(section["episode_number"])
+            numbered_groups = section["documents"]
+            if episode_title:
+                episode_file = (
+                    separators_dir
+                    / f"{exhibit_position:03d}_{episode_position:03d}_000_episode_{_safe_filename(episode_number)}.md"
+                )
+                episode_file.write_text(
+                    _render_episode_separator(exhibit, episode_number, episode_title, numbered_groups),
+                    encoding="utf-8",
+                )
+                episode_pages_written += 1
+                manifest_lines.append(f"- {episode_file.relative_to(bundle_root).as_posix()}")
+
+            for document_position, (document_number, document, translations) in enumerate(
+                numbered_groups,
+                start=1,
+            ):
+                document_id = document.get("document_id", "")
+                document_file = (
+                    separators_dir
+                    / f"{exhibit_position:03d}_{episode_position:03d}_{document_position:03d}_{_safe_filename(document_id)}.md"
+                )
+                document_file.write_text(
+                    _render_document_separator(
+                        exhibit,
+                        episode_number,
+                        episode_title,
+                        document_number,
+                        document,
+                        translations,
+                    ),
+                    encoding="utf-8",
+                )
+                document_pages_written += 1
+                manifest_lines.append(f"- {document_file.relative_to(bundle_root).as_posix()}")
 
     manifest_path = separators_dir / "manifest.md"
     manifest_path.write_text("\n".join(manifest_lines) + "\n", encoding="utf-8")
@@ -907,6 +963,7 @@ def generate_separator_pages(
         separators_dir=separators_dir,
         exhibits_seen=len(ordered_exhibits),
         exhibit_pages_written=exhibit_pages_written,
+        episode_pages_written=episode_pages_written,
         document_pages_written=document_pages_written,
         missing_document_ids=missing_document_ids,
         manifest_path=manifest_path,
@@ -975,6 +1032,18 @@ def render_separator_pdfs(case_id: str) -> SeparatorPdfSummary:
     )
     styles.add(
         ParagraphStyle(
+            name="SeparatorEpisode",
+            parent=styles["Heading3"],
+            fontName=font_name,
+            fontSize=12,
+            leading=15,
+            textColor=colors.HexColor("#222222"),
+            spaceBefore=0.1 * inch,
+            spaceAfter=0.06 * inch,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
             name="SeparatorBody",
             parent=styles["BodyText"],
             fontName=font_name,
@@ -992,6 +1061,18 @@ def render_separator_pdfs(case_id: str) -> SeparatorPdfSummary:
             leading=12,
             textColor=colors.HexColor("#555555"),
             spaceAfter=0.05 * inch,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            name="SeparatorPlease",
+            parent=styles["BodyText"],
+            fontName="Times-Italic",
+            fontSize=12,
+            leading=15,
+            spaceBefore=0.85 * inch,
+            spaceAfter=0.05 * inch,
+            leftIndent=0.35 * inch,
         )
     )
 
@@ -1062,8 +1143,6 @@ def build_bundle_plan(
             for part in exhibit.get("document_ids", "").split(";")
             if part.strip() and part.strip() in selected_documents
         ]
-        if not document_ids:
-            continue
         document_groups = _logical_document_groups(document_ids, documents_by_id)
         exhibit_separator = (
             bundle_root
@@ -1085,44 +1164,75 @@ def build_bundle_plan(
         )
         sequence += 1
 
-        for document_position, (document, translations) in enumerate(document_groups, start=1):
-            document_id = document.get("document_id", "")
-            document_separator = (
-                bundle_root
-                / "separators"
-                / "pdf"
-                / f"{exhibit_position:03d}_{document_position:03d}_{_safe_filename(document_id)}.pdf"
-            )
-            items.append(
-                _plan_item(
-                    sequence,
-                    "document_separator",
-                    exhibit_number,
-                    document_id,
-                    document_separator,
-                    loaded.case_dir,
-                    _pdf_status(document_separator),
-                    "Generated document separator PDF.",
+        for episode_position, section in enumerate(
+            _numbered_episode_document_sections(exhibit, document_groups),
+            start=1,
+        ):
+            episode_title = str(section["episode_title"])
+            episode_number = str(section["episode_number"])
+            numbered_groups = section["documents"]
+            if episode_title:
+                episode_separator = (
+                    bundle_root
+                    / "separators"
+                    / "pdf"
+                    / f"{exhibit_position:03d}_{episode_position:03d}_000_episode_{_safe_filename(episode_number)}.pdf"
                 )
-            )
-            sequence += 1
-            for source_document in [document, *translations]:
-                source_id = source_document.get("document_id", "")
-                source_path = loaded.case_dir / source_document.get("file_path", "")
-                status, note = _source_document_status(source_path)
                 items.append(
                     _plan_item(
                         sequence,
-                        "source_document",
+                        "episode_separator",
                         exhibit_number,
-                        source_id,
-                        source_path,
+                        "",
+                        episode_separator,
                         loaded.case_dir,
-                        status,
-                        note,
+                        _pdf_status(episode_separator),
+                        "Generated episode separator PDF.",
                     )
                 )
                 sequence += 1
+
+            for document_position, (_document_number, document, translations) in enumerate(
+                numbered_groups,
+                start=1,
+            ):
+                document_id = document.get("document_id", "")
+                document_separator = (
+                    bundle_root
+                    / "separators"
+                    / "pdf"
+                    / f"{exhibit_position:03d}_{episode_position:03d}_{document_position:03d}_{_safe_filename(document_id)}.pdf"
+                )
+                items.append(
+                    _plan_item(
+                        sequence,
+                        "document_separator",
+                        exhibit_number,
+                        document_id,
+                        document_separator,
+                        loaded.case_dir,
+                        _pdf_status(document_separator),
+                        "Generated document separator PDF.",
+                    )
+                )
+                sequence += 1
+                for source_document in [document, *translations]:
+                    source_id = source_document.get("document_id", "")
+                    source_path = loaded.case_dir / source_document.get("file_path", "")
+                    status, note = _source_document_status(source_path)
+                    items.append(
+                        _plan_item(
+                            sequence,
+                            "source_document",
+                            exhibit_number,
+                            source_id,
+                            source_path,
+                            loaded.case_dir,
+                            status,
+                            note,
+                        )
+                    )
+                    sequence += 1
 
     plan_csv_path = plan_dir / "bundle_plan.csv"
     plan_md_path = plan_dir / "bundle_plan.md"
@@ -1150,13 +1260,6 @@ def build_evidence_bundle(case_id: str) -> BundleBuildSummary:
     items = _read_plan_csv(plan_summary.plan_csv_path)
     if not items:
         raise SystemExit("Bundle plan is empty. Run 'Refresh indexes' and generate separator PDFs first.")
-    blocking = [item for item in items if item["status"] in {"missing", "unsupported"}]
-    if blocking:
-        raise SystemExit(
-            f"Bundle has {len(blocking)} missing/unsupported item(s). "
-            f"Review plan: {plan_summary.plan_md_path}"
-        )
-
     try:
         from pypdf import PdfReader, PdfWriter  # type: ignore
         from reportlab.lib.pagesizes import LETTER  # type: ignore
@@ -1500,29 +1603,146 @@ def _render_exhibit_separator(
         lines.extend(["## Evidentiary thesis", "", thesis, ""])
     lines.extend(["## Documents included", ""])
     if document_groups:
-        for index, (document, translations) in enumerate(document_groups, start=1):
-            translation_label = "; English translation" if translations else ""
-            lines.append(f"{index}. {_document_title(document)}{translation_label}")
+        for section in _numbered_episode_document_sections(exhibit, document_groups):
+            episode_title = str(section["episode_title"])
+            episode_number = str(section["episode_number"])
+            numbered_groups = section["documents"]
+            if episode_title:
+                lines.extend([f"### {episode_number}. {episode_title}", ""])
+            for document_number, document, translations in numbered_groups:
+                translation_label = "; English translation" if translations else ""
+                lines.append(f"{document_number}. {_document_title(document)}{translation_label}")
+            lines.append("")
     else:
         lines.append("[No documents selected for this exhibit.]")
-    lines.append("")
+        lines.append("")
+    lines.extend(_please_see_next_page_lines())
     return "\n".join(lines) + "\n"
+
+
+def _render_episode_separator(
+    exhibit: dict[str, str],
+    episode_number: str,
+    episode_title: str,
+    numbered_groups: list[tuple[str, dict[str, str], list[dict[str, str]]]],
+) -> str:
+    lines = [
+        f"**{_exhibit_heading(exhibit)}**",
+        "",
+        f"# {episode_number}. {episode_title}",
+        "",
+        "## Documents included",
+        "",
+    ]
+    if numbered_groups:
+        for document_number, document, translations in numbered_groups:
+            translation_label = "; English translation" if translations else ""
+            lines.append(f"{document_number}. {_document_title(document)}{translation_label}")
+    else:
+        lines.append("[No documents selected for this episode.]")
+    lines.extend(_please_see_next_page_lines())
+    return "\n".join(lines) + "\n"
+
+
+def _episode_document_sections(
+    document_groups: list[tuple[dict[str, str], list[dict[str, str]]]]
+) -> list[tuple[str, list[tuple[dict[str, str], list[dict[str, str]]]]]]:
+    sections: list[tuple[str, list[tuple[dict[str, str], list[dict[str, str]]]]]] = []
+    section_index: dict[str, int] = {}
+    for document, translations in document_groups:
+        episode_title = _document_episode_title(document)
+        if episode_title not in section_index:
+            section_index[episode_title] = len(sections)
+            sections.append((episode_title, []))
+        sections[section_index[episode_title]][1].append((document, translations))
+    return sections
+
+
+def _numbered_episode_document_sections(
+    exhibit: dict[str, str],
+    document_groups: list[tuple[dict[str, str], list[dict[str, str]]]],
+) -> list[dict[str, object]]:
+    exhibit_number = exhibit.get("exhibit_number", "").strip() or "1"
+    sections: list[dict[str, object]] = []
+    episode_counter = 1
+    direct_counter = 1
+    for raw_episode_title, groups in _episode_document_sections(document_groups):
+        episode_title = _display_episode_title(raw_episode_title)
+        numbered_groups: list[tuple[str, dict[str, str], list[dict[str, str]]]] = []
+        if episode_title:
+            episode_number = f"{exhibit_number}.{episode_counter}"
+            for document_counter, (document, translations) in enumerate(groups, start=1):
+                numbered_groups.append((f"{episode_number}.{document_counter}", document, translations))
+            episode_counter += 1
+        else:
+            episode_number = ""
+            for document, translations in groups:
+                numbered_groups.append((f"{exhibit_number}.{direct_counter}", document, translations))
+                direct_counter += 1
+        sections.append(
+            {
+                "episode_title": episode_title,
+                "episode_number": episode_number,
+                "documents": numbered_groups,
+            }
+        )
+    return sections
+
+
+def _document_episode_title(document: dict[str, str]) -> str:
+    raw_path = _normalize_slashes(document.get("file_path", "").strip())
+    if not raw_path:
+        return ""
+    parts = PurePosixPath(raw_path).parts
+    evidence_root_index = -1
+    for marker in ("originals", "translations"):
+        if marker in parts:
+            evidence_root_index = parts.index(marker)
+            break
+    if evidence_root_index < 0:
+        return ""
+    relative_parts = parts[evidence_root_index + 1 :]
+    if len(relative_parts) < 3:
+        return ""
+    return relative_parts[1].strip()
+
+
+def _display_episode_title(value: str) -> str:
+    return re.sub(r"^\s*\d+(?:\.\d+)*[\).\s-]+", "", value).strip() or value.strip()
 
 
 def _render_document_separator(
     exhibit: dict[str, str],
+    episode_number: str,
+    episode_title: str,
+    document_number: str,
     document: dict[str, str],
     translations: list[dict[str, str]],
 ) -> str:
     title = _document_title(document)
     translation_label = "; English translation" if translations else ""
     lines = [
-        f"# {title}{translation_label}",
-        "",
         f"**{_exhibit_heading(exhibit)}**",
         "",
     ]
+    if episode_title:
+        lines.extend([f"**{episode_number}. {episode_title}**", ""])
+    lines.extend(
+        [
+            f"# {document_number}. {title}{translation_label}",
+            "",
+            *_please_see_next_page_lines(),
+        ]
+    )
     return "\n".join(lines) + "\n"
+
+
+def _please_see_next_page_lines() -> list[str]:
+    return [
+        "",
+        "*Please see the next page*",
+        "",
+    ]
 
 
 def _document_title(document: dict[str, str]) -> str:
@@ -1749,7 +1969,11 @@ def _markdown_line_to_flowables(line: str, styles: object, Spacer: object) -> li
         return [Paragraph(_inline_markdown_to_html(line[2:]), styles["SeparatorTitle"])]  # type: ignore[index]
     if line.startswith("## "):
         return [Paragraph(_inline_markdown_to_html(line[3:]), styles["SeparatorHeading"])]  # type: ignore[index]
-    if re.match(r"^\d+\.\s+", line):
+    if line.startswith("### "):
+        return [Paragraph(_inline_markdown_to_html(line[4:]), styles["SeparatorEpisode"])]  # type: ignore[index]
+    if line.strip("*").casefold() == "please see the next page":
+        return [Paragraph("<i>Please see the next page</i>", styles["SeparatorPlease"])]  # type: ignore[index]
+    if re.match(r"^\d+(?:\.\d+)*\.\s+", line):
         return [Paragraph(_inline_markdown_to_html(line), styles["SeparatorBody"])]  # type: ignore[index]
     if line.startswith("- "):
         return [Paragraph("• " + _inline_markdown_to_html(line[2:]), styles["SeparatorBody"])]  # type: ignore[index]
@@ -1762,4 +1986,5 @@ def _inline_markdown_to_html(value: str) -> str:
     escaped = escape(value)
     escaped = re.sub(r"`([^`]+)`", r"<font name='Courier'>\1</font>", escaped)
     escaped = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", escaped)
+    escaped = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<i>\1</i>", escaped)
     return escaped

@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from app import bundle, draft, web
 from app import cli_support
+from app import bundle_workflow as bundle_workflow_module
 from app import evidence as evidence_module
 from app import progress as progress_module
 from app import workflow as workflow_module
@@ -43,6 +44,41 @@ class CliSmokeTests(unittest.TestCase):
             path.write_text("eb1a_folder_roles:\n  identity_cv_education: !CV, Passport\n", encoding="utf-8")
             parsed = load_yaml_file(path)
         self.assertEqual(parsed["eb1a_folder_roles"]["identity_cv_education"], "!CV, Passport")
+
+    def test_exhibit_separator_groups_documents_by_episode_folder(self) -> None:
+        exhibit = {"exhibit_number": "1", "display_title": "Awards"}
+        document_groups = [
+            (
+                {
+                    "document_id": "DOC0001",
+                    "display_title": "Award certificate",
+                    "file_path": "source_documents/originals/1. Награды/1. NBA/award.pdf",
+                },
+                [],
+            ),
+            (
+                {
+                    "document_id": "DOC0002",
+                    "display_title": "Jury confirmation",
+                    "file_path": "source_documents/originals/1. Награды/1. NBA/jury.pdf",
+                },
+                [],
+            ),
+        ]
+
+        text = bundle_workflow_module._render_exhibit_separator(exhibit, document_groups)
+
+        self.assertIn("### 1.1. NBA", text)
+        self.assertIn("1.1.1. Award certificate", text)
+        self.assertIn("1.1.2. Jury confirmation", text)
+
+    def test_exhibit_separator_can_be_rendered_without_documents(self) -> None:
+        exhibit = {"exhibit_number": "3", "display_title": "Published material"}
+
+        text = bundle_workflow_module._render_exhibit_separator(exhibit, [])
+
+        self.assertIn("# Exhibit 3: Published material", text)
+        self.assertIn("[No documents selected for this exhibit.]", text)
 
     def test_translation_match_handles_moved_folders_and_eng_suffix(self) -> None:
         original = {
@@ -881,6 +917,52 @@ class CliSmokeTests(unittest.TestCase):
             saved_config = (case_dir / "case_config.yaml").read_text(encoding="utf-8")
             self.assertIn("source_imports:", saved_config)
             self.assertIn(str(external_originals), saved_config)
+
+    def test_eb1a_migrator_template_variant_controls_stage2_and_memo(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            case_root = root / "case_workspace"
+
+            with (
+                patch.object(cli_support, "CASE_ROOT", case_root),
+                patch.object(web, "CASE_ROOT", case_root),
+            ):
+                case_dir = cli_support.create_case_from_template("migrator_test", "eb1a_petition")
+                apply_case_intake(
+                    "migrator_test",
+                    {
+                        "beneficiary_full_name": "Ivan Migrator",
+                        "preferred_reference": "Mr. Migrator",
+                        "gender": "male",
+                        "citizenship": "Serbia",
+                        "field": "Technology",
+                        "specialization": "AI product engineering",
+                        "eb1a_template_variant": "migrator",
+                    },
+                    claimed_criteria=["awards"],
+                )
+                stage = build_llm_stage("migrator_test")
+                summary = build_working_memo("migrator_test")
+                html = web.render_intake_panel("migrator_test", "eb1a_petition")
+                prompt_path = workflow_module.build_prompt("migrator_test", "template_review", [])
+
+            config_text = (case_dir / "case_config.yaml").read_text(encoding="utf-8")
+            self.assertIn("eb1a_template_variant: migrator", config_text)
+            self.assertIn(
+                "working_document_template: templates/EB1A/EB1A_migrator_working_document_structure.yaml",
+                config_text,
+            )
+            step_ids = {unit.step_id for unit in stage.units}
+            self.assertIn("industry_overview", step_ids)
+            self.assertIn("beneficiary_statement", step_ids)
+            self.assertNotIn("specialization_essay", step_ids)
+            self.assertIn(">Мигратор</option>", html)
+            self.assertIn("EB-1A MIGRATOR MEMORANDUM TEMPLATE", prompt_path.read_text(encoding="utf-8"))
+            with zipfile.ZipFile(summary.docx_path) as archive:
+                document_xml = archive.read("word/document.xml").decode("utf-8")
+            self.assertIn("OVERVIEW OF THE INDUSTRY", document_xml)
+            self.assertIn("BENEFICIARY WILL CONTINUE TO WORK IN CLAIMED AREA OF EXPERTISE", document_xml)
+            self.assertIn("Beneficiary Statement", document_xml)
 
     def test_eb1a_rfe_issue_prompt_includes_rfe_initial_and_new_docs(self) -> None:
         with TemporaryDirectory() as temp:
@@ -1730,15 +1812,23 @@ class CliSmokeTests(unittest.TestCase):
                 summary = generate_separator_pages("case_001")
 
             self.assertEqual(summary.exhibit_pages_written, 1)
+            self.assertEqual(summary.episode_pages_written, 1)
             self.assertEqual(summary.document_pages_written, 1)
             exhibit_page = case_dir / "bundle" / "separators" / "generated" / "001_exhibit_E-1.md"
-            document_page = case_dir / "bundle" / "separators" / "generated" / "001_001_DOC0001.md"
+            episode_page = case_dir / "bundle" / "separators" / "generated" / "001_001_000_episode_E-1.1.md"
+            document_page = case_dir / "bundle" / "separators" / "generated" / "001_001_001_DOC0001.md"
             self.assertTrue(exhibit_page.exists())
+            self.assertTrue(episode_page.exists())
             self.assertTrue(document_page.exists())
             exhibit_text = exhibit_page.read_text(encoding="utf-8")
+            self.assertIn("### E-1.1. episode", exhibit_text)
             self.assertIn("Award Original; English translation", exhibit_text)
             self.assertNotIn("DOC0001", exhibit_text)
+            episode_text = episode_page.read_text(encoding="utf-8")
+            self.assertIn("# E-1.1. episode", episode_text)
+            self.assertIn("E-1.1.1. Award Original; English translation", episode_text)
             separator_text = document_page.read_text(encoding="utf-8")
+            self.assertIn("E-1.1.1. Award Original; English translation", separator_text)
             self.assertIn("Award Original; English translation", separator_text)
             self.assertNotIn("Document ID", separator_text)
             self.assertNotIn("Source file", separator_text)
@@ -1753,7 +1843,7 @@ class CliSmokeTests(unittest.TestCase):
 
             self.assertEqual(selected.document_pages_written, 1)
             self.assertFalse(
-                (case_dir / "bundle" / "separators" / "generated" / "001_001_DOC0001.md").exists()
+                (case_dir / "bundle" / "separators" / "generated" / "001_001_001_DOC0001.md").exists()
             )
             selected_exhibit = exhibit_page.read_text(encoding="utf-8")
             self.assertNotIn("Award Original", selected_exhibit)

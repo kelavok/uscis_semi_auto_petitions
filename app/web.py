@@ -61,6 +61,7 @@ from .rfe_strategy import (
     load_strategy_manifest,
 )
 from .stages import LLMStage, LLMUnit, build_llm_stage
+from .template_variants import EB1A_TEMPLATE_VARIANTS, eb1a_machine_template_file, eb1a_template_variant
 from .workflow import (
     _case_path_value,
     build_prompt,
@@ -466,6 +467,7 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
                 "compensation": data.get("compensation", ""),
                 "work_location": data.get("work_location", ""),
                 "duties_summary": data.get("duties_summary", ""),
+                "eb1a_template_variant": data.get("eb1a_template_variant", ""),
             },
             case_info_file=data.get("case_info_file", ""),
             source_folder_path=data.get("source_folder_path", ""),
@@ -644,9 +646,9 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
         status = summary.status
         warning = ""
         if status.stale_document_ids or status.assignment_conflicts:
-            warning = " Review the highlighted index blockers before generating separators."
+            warning = " Some references could not be fully matched; available documents can still be bundled."
         elif status.unsupported_documents:
-            warning = " Indexes are ready, but unsupported source files must be converted before final bundling."
+            warning = " Indexes are ready; unsupported source files will be skipped unless converted."
         return (
             f"Refreshed indexes: scanned {summary.scanned_files} file(s), removed "
             f"{summary.auxiliary_rows_removed} auxiliary row(s), rebound "
@@ -923,7 +925,8 @@ def render_layout_page(case_id: str, params: dict[str, list[str]]) -> str:
             f"{index_status.exhibit_count} exhibit(s).</div>"
         )
     unsupported_notice = (
-        '<div class="alert error"><strong>Bundle conversion required.</strong><ul>'
+        '<div class="alert ok"><strong>Bundle warning.</strong> '
+        "Unsupported or missing source files will be skipped unless replaced/converted.<ul>"
         + "".join(f"<li>{escape(item)}</li>" for item in index_status.unsupported_documents)
         + "</ul></div>"
         if index_status.unsupported_documents
@@ -2276,10 +2279,23 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
         )
         + "</div></fieldset>"
     )
+    eb1a_template_selector = ""
+    if task_type == "eb1a_petition":
+        current_variant = eb1a_template_variant(config)
+        options = "".join(
+            f'<option value="{escape(value)}"{" selected" if current_variant == value else ""}>{escape(meta["label"])}</option>'
+            for value, meta in EB1A_TEMPLATE_VARIANTS.items()
+        )
+        eb1a_template_selector = f"""
+        <label><strong>EB1A memorandum template</strong>
+          <select name="eb1a_template_variant">{options}</select>
+        </label>
+        <p class="muted small">Controls Stage 2 drafting units and the working memo structure for this case.</p>
+        """
     template_default = {
         "eb1a_rfe_response": "templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.yaml",
         "o1b_petition": "templates/O1B/MEMO O-1В_ver.1.0.docx",
-    }.get(task_type, "templates/EB1A/EB1A_unified_template_LLM.docx")
+    }.get(task_type, eb1a_machine_template_file(config))
     if task_type == "eb1a_rfe_response":
         source_target_options = [
             ("source_rfe_notice", "RFE notice"),
@@ -2404,6 +2420,7 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
       <form method="post" class="stack" data-dirty-watch="true" data-existing="{'true' if existing_intake else 'false'}" data-force-dirty="{force_dirty}" data-confirm-message="This updates case_config.yaml and copies files from any non-empty source folders. Existing case documents and manual translation links are not deleted. Rebuild the working memorandum afterward if case data or criteria changed. Continue?">
         <input type="hidden" name="action" value="apply_intake">
         <input type="hidden" name="case" value="{escape(case_id)}">
+        {eb1a_template_selector}
         <div class="columns">
           <div class="stack">
             <input name="beneficiary_full_name" value="{field_value(beneficiary.get('full_name'))}" placeholder="Beneficiary full name">

@@ -1,0 +1,147 @@
+EB-1A MIGRATOR MEMORANDUM TEMPLATE - LLM DISTILLATION
+
+Source template:
+templates/EB1A/Шаблон МЕМО EB-1A, ver. 1.2.docx
+
+Purpose:
+This template is the EB-1A memorandum style used for the customer labelled
+"Мигратор". It is an attorney-style filing package for a Form I-140 EB-1A
+self-petition. The drafting flow must preserve the ordinary EB-1A evidence
+logic and the system's exhibit hierarchy, but the memorandum order and several
+drafting units differ from the base EB1A template.
+
+Global formatting and drafting style:
+- Use formal attorney-style English.
+- Use clear section headings.
+- Keep petition-facing text free of internal drafting instructions, technical
+  document IDs, raw filenames, parser notes, placeholders, and script/debug
+  comments.
+- Use evidence lists and citations in the human-facing exhibit style required
+  by the prompt. Technical DOC#### identifiers are only for JSON
+  `used_documents` and must not appear in `draft_text`.
+- If a document has an English translation, treat the original and translation
+  as one human-facing document and add `; English translation` where the final
+  exhibit/document list calls for a title.
+
+High-level document order:
+1. INDEX:
+   - Appears at the beginning of the memorandum.
+   - Lists all exhibit groups and documents in the final logical order used in
+     the memorandum and bundle.
+   - Includes general documents, Industry Overview, each claimed criterion,
+     recommendation letters, and documentation establishing prospective
+     substantial benefit / continued U.S. work.
+2. Attorney cover letter:
+   - Date.
+   - TO USCIS / USCIS Service Center.
+   - RE: I-140 Petition for Alien of Extraordinary Ability.
+   - Petitioner, Beneficiary, Citizenship.
+   - Attorney-style introduction explaining representation or filing support.
+   - Explain that the beneficiary self-petitions under EB-1A.
+   - List the claimed EB-1A criteria and direct the officer to the memorandum
+     sections and exhibits.
+3. OVERVIEW OF THE BENEFICIARY'S QUALIFICATIONS AND ACHIEVEMENTS:
+   - Briefly identify the beneficiary, field, specialization, and career
+     trajectory.
+   - Include work history, education if relevant, achievements, and the role of
+     recommendation letters.
+   - This section should orient USCIS before the criteria analysis.
+4. OVERVIEW OF THE INDUSTRY:
+   - Explain the beneficiary's field and specialization.
+   - Explain why the specialization is important for the United States.
+   - Prefer U.S. government sources, credible institutional reports, major
+     media, and industry data.
+   - Connect the industry overview to the beneficiary's evidence and future
+     U.S. plans without duplicating the later final merits statement.
+5. EVIDENTIAL CRITERIA OF ELIGIBILITY:
+   - Use only the EB-1A criteria selected for the case.
+   - Each criterion should be drafted as a complete USCIS-facing argument.
+   - Each criterion should identify the relevant exhibit/list of documents in
+     a logical order matching the use of evidence in the text and JSON
+     `used_documents`.
+6. BENEFICIARY WILL CONTINUE TO WORK IN CLAIMED AREA OF EXPERTISE. FINAL MERIT
+   DETERMINATION.
+   - Explain the beneficiary's intention and ability to continue working in the
+     claimed area of expertise in the United States.
+   - Tie the future work to the beneficiary's proven extraordinary ability and
+     the industry need / prospective benefit.
+   - Use employment plan, business plan, offer, project, collaboration,
+     recommendation, and similar documents if present.
+7. Conclusions:
+   - Concise final conclusion that the beneficiary meets the regulatory
+     criteria and merits approval after final merits review.
+8. Beneficiary Statement:
+   - Separate first-person statement by the beneficiary.
+   - Should read like a signable declaration or letter, not like attorney
+     argument.
+   - Explain the beneficiary's plans, U.S. benefit, and continued work in the
+     claimed area.
+
+Criterion-specific template structure:
+
+Criterion 1. Awards
+- State the award, year, recipient, organizer, and field.
+- Address receipt, recognized status, competitive selection, judging/jury,
+  regulations or award rules, prior winners if useful, media/independent
+  recognition, and why the award supports excellence in the field.
+- Use one episode per award unless the prompt indicates otherwise.
+
+Criterion 2. Memberships
+- Identify each association, membership class, admission requirements, and why
+  the association requires outstanding achievements judged by recognized
+  experts.
+
+Criterion 3. Published material
+- Identify the publication/outlet, article title, date, author if available,
+  audience/major-media status, and how the material is about the beneficiary
+  and relates to the field.
+
+Criterion 4. Judging
+- Identify judging activity, event/publication/competition, date, selection
+  basis, who or what was judged, and why the judging involved work of others in
+  the same or allied field.
+
+Criterion 5. Original contributions
+- Separate contribution fact/existence from major significance where the
+  workflow uses two phases.
+- Identify the contribution, adoption/use, independent corroboration, expert
+  support, measurable impact, industry recognition, and why the contribution is
+  of major significance.
+
+Criterion 6. Scholarly articles
+- Identify publications, venues, dates, field relevance, authorship, and why
+  the works qualify as scholarly/professional publications.
+
+Criterion 7. Exhibitions or showcases
+- Identify venue, date, work displayed, selection criteria, audience, and the
+  significance of the exhibition/showcase.
+
+Criterion 8. Leading or critical role
+- Address two elements separately: role importance and distinguished reputation
+  of the organization/establishment.
+- Use detailed employer/client letters, internal documents, project records,
+  product impact, customer/market data, awards, media, and other reputation
+  evidence.
+
+Criterion 9. High salary or remuneration
+- Identify compensation documents and comparison sources.
+- Compare the beneficiary to appropriate position/field comparators.
+- Use annual/hourly basis, currency, location, contractor/employee context,
+  percentiles/quartiles/ranges, and explain why the compensation is high in
+  relation to others in the field.
+- The source template includes a salary comparison table with columns:
+  Source | Beneficiary Salary | Source Salary | Exceeding (Times).
+
+Criterion 10. Commercial successes in the performing arts
+- Use only when the case claims performing-arts commercial success.
+- Identify sales, receipts, metrics, market results, distribution, box office,
+  record/video sales, or analogous evidence.
+
+Workflow-specific notes:
+- The base EB1A `specialization_essay` is not the Migrator template's separate
+  section. For Migrator cases, use the `industry_overview` stage instead.
+- The separate first-person `beneficiary_statement` stage is required only for
+  Migrator cases.
+- The exhibit and bundle pipeline remains universal: exhibits are still built
+  from validated `used_documents`, exhibit_index.csv, document_index.csv,
+  separators, and final bundle assembly.

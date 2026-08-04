@@ -136,6 +136,31 @@ steps:
       - recommendation_letters
     destination: draft_sections/recommendation_letters_quotes.md
 
+  - step_id: industry_overview
+    execution: llm_manual
+    template_variants:
+      - migrator
+    title: Migrator template industry overview and U.S. benefit
+    objective: >
+      Draft the Migrator-template "Overview of the Industry" section. Explain
+      the beneficiary's field and specialization, why the specialization is
+      important to the United States, and how the record and credible sources
+      support prospective benefit. This section appears near the top of the
+      memorandum before the evidentiary criteria.
+    section_instructions: instructions/task_types/eb1a_petition/sections/industry_overview.md
+    evidence_folder_roles:
+      - identity_cv_education
+      - recommendation_letters
+      - employment_plan
+    external_research:
+      allowed: true
+      source_hierarchy:
+        - U.S. government sources
+        - major U.S. media
+        - research papers and institutional reports
+        - other credible sources
+    destination: draft_sections/industry_overview.md
+
   - step_id: criterion_awards_episode
     execution: llm_manual_repeatable
     repeat_unit: one_episode
@@ -286,6 +311,8 @@ steps:
 
   - step_id: specialization_essay
     execution: llm_manual
+    template_variants:
+      - base
     title: Specialization essay with external source research
     objective: >
       Draft the specialization essay according to the template. The prompt must
@@ -327,8 +354,32 @@ steps:
       - recommendation_letters_roster
       - criteria_sections_selected_by_case
       - specialization_essay
+      - industry_overview
       - employment_plan
     destination: draft_sections/final_overview.md
+
+  - step_id: beneficiary_statement
+    execution: llm_manual
+    template_variants:
+      - migrator
+    output_kind: standalone_support_document
+    title: Migrator template beneficiary statement
+    objective: >
+      Draft the separate first-person beneficiary statement required by the
+      Migrator EB1A template. The statement should explain the beneficiary's
+      plans to continue working in the claimed area of expertise in the United
+      States and why those plans will benefit the United States.
+    section_instructions: instructions/task_types/eb1a_petition/sections/beneficiary_statement.md
+    evidence_folder_roles:
+      - identity_cv_education
+      - employment_plan
+      - recommendation_letters
+    include_working_memo: true
+    depends_on:
+      - industry_overview
+      - employment_plan
+      - final_overview
+    destination: draft_sections/beneficiary_statement.md
 
   - step_id: exhibit_list
     execution: deterministic

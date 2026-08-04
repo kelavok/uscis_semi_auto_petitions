@@ -221,7 +221,7 @@ sections:
       regulatory_label: Criterion (i)
       exhibit_line: Exhibits from XX to XX, Pages from XX to XX.
       rfe_quote_block: 'In the RFE, the officer states: “{INSERT EXACT RFE QUOTE}”'
-      answer_heading: 'Answer:'
+      answer_heading: 'Response:'
       company_specific_instruction: Do not repeat receipt of the award if USCIS already accepts that the beneficiary received
         it. Proceed directly to the disputed element, such as national/international recognition, excellence, organizer confirmation,
         direct URL, or award significance.

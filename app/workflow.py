@@ -15,6 +15,7 @@ from .cli_support import CASE_ROOT, PROJECT_ROOT, case_path
 from .simple_yaml import load_yaml_subset
 from .json_input import parse_llm_json_object
 from .file_rules import is_office_temporary_file, prompt_sidecar_kind
+from .template_variants import eb1a_template_variant, eb1a_variant_source_path
 
 
 TEXT_EXTENSIONS = {".txt", ".md", ".csv", ".json", ".yaml", ".yml"}
@@ -326,6 +327,7 @@ def render_case_context(case: dict[str, Any]) -> str:
     lines = [
         f"- beneficiary.full_name: {beneficiary.get('full_name', '')}",
         f"- beneficiary.preferred_reference: {beneficiary.get('preferred_reference', '')}",
+        f"- eb1a_template_variant: {case.get('eb1a_template_variant', '')}",
         f"- field: {case.get('field', '')}",
         f"- specialization: {case.get('specialization', '')}",
         f"- procedural_context: {case.get('procedural_context', '')}",
@@ -395,6 +397,7 @@ def render_instruction_hierarchy(
         ("case_specific", [sources.get("case_specific", "")]),
         ("task_type", sources.get("task_type", [])),
         ("section_specific", [step.get("section_instructions", "")]),
+        ("step_templates", step.get("templates", [])),
         ("visa_or_rfe_specific", sources.get("visa_or_rfe_specific", [])),
         ("universal", sources.get("universal", [])),
     ]
@@ -404,10 +407,22 @@ def render_instruction_hierarchy(
             continue
         sections.append(f"### {label}")
         sections.append("")
-        for path_value in normalized:
+        for path_value in _variant_instruction_sources(loaded, normalized):
             sections.append(render_source_file(loaded, path_value))
             sections.append("")
     return sections
+
+
+def _variant_instruction_sources(loaded: LoadedCase, paths: list[str]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for path_value in paths:
+        selected = eb1a_variant_source_path(loaded.config, path_value)
+        if selected in seen:
+            continue
+        result.append(selected)
+        seen.add(selected)
+    return result
 
 
 def render_source_file(loaded: LoadedCase, path_value: str) -> str:
@@ -1020,6 +1035,9 @@ def determine_next_action(loaded: LoadedCase) -> NextAction:
 
 
 def _step_enabled_for_case(config: dict[str, Any], step: dict[str, Any]) -> bool:
+    variants = _normalize_path_list(step.get("template_variants", step.get("template_variant", [])))
+    if variants and eb1a_template_variant(config) not in variants:
+        return False
     roles = _normalize_path_list(step.get("evidence_folder_roles", []))
     role = roles[0] if len(roles) == 1 else ""
     criterion_roles = {

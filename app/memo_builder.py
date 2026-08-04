@@ -8,11 +8,16 @@ import shutil
 import zipfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .cli_support import PROJECT_ROOT, case_path
 from .workflow import extract_docx_text, folder_role_map, load_case, load_yaml_file, safe_path_component
+from .template_variants import (
+    apply_eb1a_template_variant,
+    eb1a_machine_template_file,
+    eb1a_template_variant,
+)
 
 
 DEFAULT_TEMPLATE_BY_TASK_TYPE = {
@@ -182,6 +187,8 @@ def apply_case_intake(
     updates = _normalize_intake_fields(merged)
     fields_updated = _apply_updates(config, updates)
     fields_updated += _apply_gender_defaults(config)
+    if "eb1a_template_variant" in merged:
+        fields_updated += apply_eb1a_template_variant(config, merged.get("eb1a_template_variant", "base"))
     if case_info_file.strip():
         intake_sources = config.get("intake_sources")
         if not isinstance(intake_sources, dict):
@@ -639,10 +646,13 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
     document.add_page_break()
     add_text("Attachments / Evidence Index", style="Heading 1")
     evidence_entries = _evidence_index_entries(case_dir, config)
-    for exhibit_heading, document_titles in evidence_entries:
+    for exhibit_heading, evidence_items in evidence_entries:
         add_text(exhibit_heading, style="Heading 2")
-        for document_title in document_titles:
-            add_text(document_title, style="Evidence Index Item")
+        for item_kind, item_title in evidence_items:
+            if item_kind == "episode":
+                add_text(item_title, style="Heading 3")
+            else:
+                add_text(item_title, style="Evidence Index Item")
 
     for section in document.sections:
         section.top_margin = Inches(1)
@@ -724,6 +734,8 @@ def _section_level(line: str, previous_was_rule: bool) -> int:
 def _eb1a_skeleton(
     config: dict[str, Any], case_dir: Path, report: TemplateParseReport
 ) -> list[dict[str, Any]]:
+    if eb1a_template_variant(config) == "migrator":
+        return _eb1a_migrator_skeleton(config, case_dir, report)
     structure = _load_working_structure(config)
     skeleton: list[dict[str, Any]] = [
         {
@@ -777,6 +789,65 @@ def _eb1a_skeleton(
                 "level": 1,
                 "title": "Exhibit List",
                 "paragraphs": ["[SCRIPT PLACEHOLDER: generated from indexes/exhibit_index.csv]"],
+            },
+        ]
+    )
+    if not any(item.get("inferred") for item in skeleton):
+        skeleton.extend(_template_fallback_sections(report, prefix="[TEMPLATE STRUCTURE PLACEHOLDER]"))
+    return skeleton
+
+
+def _eb1a_migrator_skeleton(
+    config: dict[str, Any], case_dir: Path, report: TemplateParseReport
+) -> list[dict[str, Any]]:
+    structure = _load_working_structure(config)
+    skeleton: list[dict[str, Any]] = [
+        {
+            "level": 1,
+            "title": "INDEX",
+            "paragraphs": ["[SCRIPT-CONTROLLED CONTENT: generated from the document and exhibit indexes.]"],
+        },
+        {
+            "level": 1,
+            "title": "Attorney Cover Letter",
+            "paragraphs": [
+                "[SCRIPT-CONTROLLED CONTENT: attorney-style filing text with beneficiary, citizenship, specialization, and claimed criteria substituted.]",
+            ],
+        },
+        {
+            "level": 1,
+            "title": "OVERVIEW OF THE BENEFICIARY'S QUALIFICATIONS AND ACHIEVEMENTS",
+            "paragraphs": [
+                "[LLM SECTION PLACEHOLDER: final_overview]",
+                "[LLM SECTION PLACEHOLDER: professional_biography]",
+                "[LLM SECTION PLACEHOLDER: recommendation_letters_roster]",
+                "[LLM SECTION PLACEHOLDER: recommendation_letters_quotes]",
+            ],
+        },
+        {
+            "level": 1,
+            "title": "OVERVIEW OF THE INDUSTRY",
+            "paragraphs": ["[LLM SECTION PLACEHOLDER: industry_overview]"],
+        },
+        {"level": 1, "title": "EVIDENTIAL CRITERIA OF ELIGIBILITY", "paragraphs": []},
+    ]
+    skeleton.extend(_eb1a_criteria_from_config_and_folders(config, case_dir, structure))
+    skeleton.extend(
+        [
+            {
+                "level": 1,
+                "title": "BENEFICIARY WILL CONTINUE TO WORK IN CLAIMED AREA OF EXPERTISE. FINAL MERIT DETERMINATION.",
+                "paragraphs": ["[LLM SECTION PLACEHOLDER: employment_plan]"],
+            },
+            {
+                "level": 1,
+                "title": "Conclusions",
+                "paragraphs": ["[LLM SECTION PLACEHOLDER: final_overview]"],
+            },
+            {
+                "level": 1,
+                "title": "Beneficiary Statement",
+                "paragraphs": ["[LLM SECTION PLACEHOLDER: beneficiary_statement]"],
             },
         ]
     )
@@ -888,13 +959,16 @@ def _rfe_skeleton(
             }
         )
     skeleton.append({"level": 1, "title": "Attachments / Evidence Index", "paragraphs": []})
-    for exhibit_heading, document_titles in _evidence_index_entries(case_dir, config):
+    for exhibit_heading, evidence_items in _evidence_index_entries(case_dir, config):
         skeleton.append(
             {
                 "level": 2,
                 "title": exhibit_heading,
                 "paragraphs": [],
-                "bullets": document_titles,
+                "bullets": [
+                    title if kind != "episode" else f"Episode: {title}"
+                    for kind, title in evidence_items
+                ],
             }
         )
     if not any(item.get("inferred") for item in skeleton):
@@ -1077,7 +1151,10 @@ def _resolve_template_path(config: dict[str, Any], template_path: str) -> Path:
         # Existing browser forms/case configs may still submit the retired TXT path.
         return PROJECT_ROOT / DEFAULT_TEMPLATE_BY_TASK_TYPE["eb1a_rfe_response"]
     configured = config.get("rfe_response", {}).get("template_file", "") if isinstance(config.get("rfe_response"), dict) else ""
-    value = configured or DEFAULT_TEMPLATE_BY_TASK_TYPE.get(task_type, DEFAULT_TEMPLATE_BY_TASK_TYPE["eb1a_petition"])
+    if task_type == "eb1a_petition":
+        value = eb1a_machine_template_file(config)
+    else:
+        value = configured or DEFAULT_TEMPLATE_BY_TASK_TYPE.get(task_type, DEFAULT_TEMPLATE_BY_TASK_TYPE["eb1a_petition"])
     path = Path(str(value))
     resolved = path if path.is_absolute() else PROJECT_ROOT / path
     if task_type == "eb1a_rfe_response" and not resolved.exists():
@@ -1149,6 +1226,7 @@ def _normalize_intake_fields(fields: dict[str, str]) -> dict[str, str]:
         "compensation": "us_work.compensation",
         "work_location": "us_work.work_location",
         "duties_summary": "us_work.duties_summary",
+        "eb1a_template_variant": "eb1a_template_variant",
     }
     result: dict[str, str] = {}
     for key, value in fields.items():
@@ -1396,7 +1474,7 @@ def _normalized_heading(value: str) -> str:
 
 def _evidence_index_entries(
     case_dir: Path, config: dict[str, Any]
-) -> list[tuple[str, list[str]]]:
+) -> list[tuple[str, list[tuple[str, str]]]]:
     paths = config.get("paths", {}) if isinstance(config.get("paths"), dict) else {}
     document_path = case_dir / str(paths.get("document_index", "indexes/document_index.csv"))
     exhibit_path = case_dir / str(paths.get("exhibit_index", "indexes/exhibit_index.csv"))
@@ -1409,7 +1487,7 @@ def _evidence_index_entries(
         exhibits = [dict(row) for row in csv.DictReader(handle)]
     by_id = {row.get("document_id", ""): row for row in documents if row.get("document_id")}
 
-    entries: list[tuple[str, list[str]]] = []
+    entries: list[tuple[str, list[tuple[str, str]]]] = []
     for exhibit in sorted(exhibits, key=_exhibit_index_sort_key):
         number = exhibit.get("exhibit_number", "").strip()
         if not number:
@@ -1432,7 +1510,8 @@ def _evidence_index_entries(
             )
             if is_translation and parent in selected_ids:
                 translations_by_parent.setdefault(parent, []).append(document)
-        titles: list[str] = []
+        episode_groups: list[tuple[str, list[str]]] = []
+        episode_index: dict[str, int] = {}
         for document_id in document_ids:
             document = by_id.get(document_id)
             if not document:
@@ -1444,6 +1523,7 @@ def _evidence_index_entries(
             )
             if is_translation and parent in selected_ids:
                 continue
+            episode_title = _evidence_document_episode_title(document)
             document_title = (
                 document.get("display_title", "").strip()
                 or document.get("original_file_name", "").strip()
@@ -1451,9 +1531,35 @@ def _evidence_index_entries(
             if translations_by_parent.get(document_id):
                 document_title += "; English translation"
             if document_title:
-                titles.append(document_title)
-        entries.append((heading, titles))
+                if episode_title not in episode_index:
+                    episode_index[episode_title] = len(episode_groups)
+                    episode_groups.append((episode_title, []))
+                episode_groups[episode_index[episode_title]][1].append(document_title)
+        evidence_items: list[tuple[str, str]] = []
+        for episode_title, titles in episode_groups:
+            if episode_title:
+                evidence_items.append(("episode", episode_title))
+            evidence_items.extend(("document", title) for title in titles)
+        entries.append((heading, evidence_items))
     return entries
+
+
+def _evidence_document_episode_title(document: dict[str, str]) -> str:
+    raw_path = str(document.get("file_path", "")).replace("\\", "/").strip()
+    if not raw_path:
+        return ""
+    parts = PurePosixPath(raw_path).parts
+    evidence_root_index = -1
+    for marker in ("originals", "translations"):
+        if marker in parts:
+            evidence_root_index = parts.index(marker)
+            break
+    if evidence_root_index < 0:
+        return ""
+    relative_parts = parts[evidence_root_index + 1 :]
+    if len(relative_parts) < 3:
+        return ""
+    return relative_parts[1].strip()
 
 
 def _exhibit_index_sort_key(row: dict[str, str]) -> tuple[int, list[object], str]:
@@ -1626,7 +1732,153 @@ def _o1b_document_xml(config: dict[str, Any], case_dir: Path) -> str:
     return _wrap_document_xml("".join(body))
 
 
+def _eb1a_migrator_document_xml(config: dict[str, Any], case_dir: Path) -> str:
+    structure = _load_working_structure(config)
+    tokens = _beneficiary_tokens(config)
+    document_data = structure.get("document", {})
+    if not isinstance(document_data, dict):
+        document_data = {}
+    criteria_data = structure.get("criteria", {})
+    if not isinstance(criteria_data, dict):
+        criteria_data = {}
+    selected_roles = _selected_criteria(config, case_dir)
+    selected_criteria = [
+        (role, criteria_data[role])
+        for role in selected_roles
+        if role in criteria_data and isinstance(criteria_data[role], dict)
+    ]
+
+    body: list[str] = []
+    body.append(_rich_paragraph([("INDEX:", {"bold": True})], style="Heading1"))
+    evidence_entries = _evidence_index_entries(case_dir, config)
+    if evidence_entries:
+        for exhibit_heading, evidence_items in evidence_entries:
+            body.append(_rich_paragraph([(exhibit_heading, {"bold": True})], style="Heading2"))
+            for item_kind, item_title in evidence_items:
+                style = "Heading3" if item_kind == "episode" else "Normal"
+                body.append(
+                    _rich_paragraph(
+                        [(item_title, {})],
+                        style=style,
+                        num_id=2 if item_kind == "document" else None,
+                    )
+                )
+    else:
+        index_rows = structure.get("index_rows", [])
+        if isinstance(index_rows, list):
+            for row in index_rows:
+                body.append(_rich_paragraph([(_format_case_text(str(row), tokens), {})]))
+        body.append(_placeholder_paragraph("[SCRIPT PLACEHOLDER: final exhibit titles and page ranges are generated from indexes after PDF assembly.]"))
+    body.append(_page_break_paragraph())
+
+    body.append(_rich_paragraph([(tokens["petition_date"], {})]))
+    body.append(_rich_paragraph([("TO USCIS", {"bold": True})], style="Heading1"))
+    body.append(_rich_paragraph([(tokens["uscis_address"], {})]))
+    body.append(_rich_paragraph([("RE: I-140 Petition for Alien of Extraordinary Ability", {"bold": True})]))
+    body.append(_rich_paragraph([(f'Petitioner: {tokens["formal_name"]}', {"bold": True})]))
+    body.append(_rich_paragraph([(f'Beneficiary: {tokens["formal_name"]}', {"bold": True})]))
+    body.append(_rich_paragraph([(f'Citizenship: {tokens["citizenship"]}', {"bold": True})]))
+    body.append(_rich_paragraph([("Dear Sir or Madam:", {})]))
+    body.append(
+        _rich_paragraph(
+            [
+                (
+                    f'This memorandum is submitted in support of {tokens["formal_name"]}\'s self-petition '
+                    f'for classification as an alien of extraordinary ability in {tokens["field"]}, '
+                    f'with a specialization in {tokens["specialization"]}.',
+                    {},
+                )
+            ]
+        )
+    )
+    body.append(
+        _rich_paragraph(
+            [
+                (
+                    f'The enclosed record demonstrates that {tokens["preferred_reference"]} satisfies at least '
+                    'three of the regulatory criteria at 8 C.F.R. § 204.5(h)(3) and merits a favorable final '
+                    'merits determination.',
+                    {},
+                )
+            ]
+        )
+    )
+    for _role, criterion in selected_criteria:
+        cover_text = _format_case_text(str(criterion.get("cover_text", criterion.get("title", ""))), tokens)
+        body.append(_rich_paragraph([(cover_text, {})], num_id=2))
+    body.append(_page_break_paragraph())
+
+    body.append(_rich_paragraph([("OVERVIEW OF THE BENEFICIARY'S QUALIFICATIONS AND ACHIEVEMENTS", {"bold": True})], style="Heading1"))
+    body.append(
+        _draft_step_xml(case_dir, "final_overview")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: concise overview of the beneficiary's qualifications and achievements.]")
+    )
+    body.append(
+        _draft_step_xml(case_dir, "professional_biography", strip_opening_headings=True)
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: professional biography, education, and specialization.]")
+    )
+    body.append(_rich_paragraph([("Recommendation Letters", {"bold": True})], style="Heading2"))
+    body.append(
+        _draft_step_xml(case_dir, "recommendation_letters_roster")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: recommendation_letters_roster]")
+    )
+    body.append(
+        _draft_step_xml(case_dir, "recommendation_letters_quotes")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: recommendation_letters_quotes]")
+    )
+
+    body.append(_page_break_paragraph())
+    body.append(_rich_paragraph([("OVERVIEW OF THE INDUSTRY", {"bold": True})], style="Heading1"))
+    body.append(
+        _draft_step_xml(case_dir, "industry_overview")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: U.S.-focused industry overview and benefit of the specialization.]")
+    )
+
+    body.append(_page_break_paragraph())
+    body.append(_rich_paragraph([("EVIDENTIAL CRITERIA OF ELIGIBILITY", {"bold": True})], style="Heading1"))
+    for role, criterion in selected_criteria:
+        body.append(_page_break_paragraph())
+        title = _format_case_text(str(criterion.get("title", EB1A_CRITERION_STEP_BY_ROLE.get(role, ('', role))[1])), tokens)
+        body.append(_rich_paragraph([(title, {"bold": True})], style="Heading1"))
+        step_ids = criterion.get("step_ids", [])
+        if not isinstance(step_ids, list):
+            step_ids = [step_ids]
+        for step_id in step_ids:
+            body.append(
+                _draft_step_xml(case_dir, str(step_id), episode_style="Heading2", episode_label="")
+                or _placeholder_paragraph(f"[LLM SECTION PLACEHOLDER: {step_id}]")
+            )
+
+    body.append(_page_break_paragraph())
+    body.append(
+        _rich_paragraph(
+            [("BENEFICIARY WILL CONTINUE TO WORK IN CLAIMED AREA OF EXPERTISE. FINAL MERIT DETERMINATION.", {"bold": True})],
+            style="Heading1",
+        )
+    )
+    body.append(
+        _draft_step_xml(case_dir, "employment_plan", episode_style="Heading2", episode_label="")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: employment_plan]")
+    )
+    body.append(_page_break_paragraph())
+    body.append(_rich_paragraph([("Conclusions", {"bold": True})], style="Heading1"))
+    body.append(
+        _draft_step_xml(case_dir, "final_overview")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: final EB-1A conclusion.]")
+    )
+    body.append(_page_break_paragraph())
+    body.append(_rich_paragraph([("Beneficiary Statement", {"bold": True})], style="Heading1"))
+    body.append(
+        _draft_step_xml(case_dir, "beneficiary_statement")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: first-person beneficiary statement.]")
+    )
+    body.append(_section_properties())
+    return _wrap_document_xml("".join(body))
+
+
 def _eb1a_document_xml(config: dict[str, Any], case_dir: Path) -> str:
+    if eb1a_template_variant(config) == "migrator":
+        return _eb1a_migrator_document_xml(config, case_dir)
     structure = _load_working_structure(config)
     tokens = _beneficiary_tokens(config)
     document_data = structure.get("document", {})
@@ -1909,8 +2161,10 @@ def _draft_paths_for_step(case_dir: Path, step_id: str) -> list[Path]:
         "professional_biography": root / "professional_biography.md",
         "recommendation_letters_roster": root / "recommendation_letters_roster.md",
         "recommendation_letters_quotes": root / "recommendation_letters_quotes.md",
+        "industry_overview": root / "industry_overview.md",
         "specialization_essay": root / "specialization_essay.md",
         "final_overview": root / "final_overview.md",
+        "beneficiary_statement": root / "beneficiary_statement.md",
     }
     if step_id in fixed:
         return [fixed[step_id]] if fixed[step_id].exists() else []

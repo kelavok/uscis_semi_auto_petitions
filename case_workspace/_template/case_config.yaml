@@ -22,7 +22,10 @@ drafting_objective: Prepare EB-1A petition memorandum
 llm_provider: manual
 working_memo_file: final_memo/working_memo.md
 source_folder_template: templates/EB1A/case_folders_template
+eb1a_template_variant: base
 working_document_template: templates/EB1A/EB1A_working_document_structure.yaml
+eb1a_llm_template_file: templates/EB1A/EB1A_unified_template_LLM.txt
+eb1a_human_template_file: templates/EB1A/!Актуальный шаблон EB1.docx
 
 paths:
   case_instructions: user_case_instructions.md

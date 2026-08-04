@@ -107,6 +107,7 @@ def workflow_for(task_type: str) -> str:
 
 
 def _o1b_case_config_text(text: str) -> str:
+    text = _remove_eb1a_template_variant_fields(text)
     text = text.replace(
         "source_folder_template: templates/EB1A/case_folders_template",
         "source_folder_template: templates/O1B/case_folders_template",
@@ -174,6 +175,7 @@ def _o1b_case_config_text(text: str) -> str:
 
 
 def _rfe_case_config_text(text: str) -> str:
+    text = _remove_eb1a_template_variant_fields(text)
     text = text.replace(
         "source_folder_template: templates/EB1A/case_folders_template",
         "source_folder_template: templates/RFE/EB1",
@@ -236,6 +238,7 @@ def _rfe_case_config_text(text: str) -> str:
 
 
 def _document_layout_case_config_text(text: str) -> str:
+    text = _remove_eb1a_template_variant_fields(text)
     text = re.sub(
         r"(?m)^procedural_context:\s*.*$",
         "procedural_context: Standalone document layout assembly",
@@ -262,6 +265,14 @@ def _document_layout_case_config_text(text: str) -> str:
             1,
         )
     return text
+
+
+def _remove_eb1a_template_variant_fields(text: str) -> str:
+    return re.sub(
+        r"(?m)^(?:eb1a_template_variant|eb1a_llm_template_file|eb1a_human_template_file):.*\n",
+        "",
+        text,
+    )
 
 
 def _create_eb1a_rfe_structure(target: Path) -> None:

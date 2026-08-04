@@ -8,6 +8,7 @@ from .workflow import (
     _case_path_value,
     _normalize_path_list,
     _repeatable_episode_candidates,
+    _step_enabled_for_case,
     destination_for_step,
     determine_next_action,
     load_case,
@@ -29,6 +30,8 @@ CRITERION_LABELS = {
     "high_salary": "High salary",
     "commercial_success": "Commercial success",
     "employment_plan": "Employment plan",
+    "industry_overview": "Industry overview",
+    "beneficiary_statement": "Beneficiary statement",
     "lead_starring_productions": "O-1B Criterion (i): lead/starring productions or events",
     "published_recognition": "O-1B Criterion (ii): published recognition",
     "organization_role": "O-1B Criterion (iii): organizational role",
@@ -94,6 +97,8 @@ def build_llm_stage(case_id: str) -> LLMStage:
         execution = str(step.get("execution", ""))
         if not step_id or execution.startswith("deterministic") or step_id in disabled_steps:
             continue
+        if not _step_enabled_for_case(loaded.config, step):
+            continue
         criterion = _criterion_for_step(step_id, step)
         if (
             str(loaded.config.get("task_type", "")) == "o1b_petition"
@@ -101,7 +106,7 @@ def build_llm_stage(case_id: str) -> LLMStage:
             and criterion == "comparable_evidence"
         ):
             continue
-        if criterion and criterion != "employment_plan" and claimed and criterion not in claimed:
+        if criterion and criterion not in {"employment_plan", "industry_overview", "beneficiary_statement"} and claimed and criterion not in claimed:
             continue
         if "repeatable" in execution:
             if enabled_steps and step_id not in enabled_steps:
@@ -238,6 +243,8 @@ def _criterion_for_step(step_id: str, step: dict[str, Any]) -> str:
         ("criterion_media", "media"),
         ("criterion_judging", "judging"),
         ("employment_plan", "employment_plan"),
+        ("industry_overview", "industry_overview"),
+        ("beneficiary_statement", "beneficiary_statement"),
     )
     for prefix, criterion in mapping:
         if step_id.startswith(prefix):
