@@ -1,7 +1,13 @@
 from pathlib import Path
 
 
-PROMPT_CONTEXT_SIDECAR_NAMES = {"info", "readme"}
+PROMPT_CONTEXT_SIDECAR_NAMES = {
+    "case preparation",
+    "info",
+    "information file",
+    "readme",
+    "user_case_instructions",
+}
 PROMPT_CONTEXT_SIDECAR_SUFFIXES = {".txt", ".md", ".docx"}
 
 
@@ -9,8 +15,12 @@ def prompt_sidecar_kind(path: Path) -> str:
     """Return the prompt-only sidecar kind, or an empty string for normal evidence."""
     stem = path.stem.casefold()
     suffix = path.suffix.casefold()
-    if stem == "extracts" and suffix == ".txt":
+    if stem in {"extract", "extracts"} and suffix == ".txt":
         return "extracts"
+    if stem.startswith("case preparation") and suffix in PROMPT_CONTEXT_SIDECAR_SUFFIXES:
+        return "case preparation"
+    if stem.endswith("_ai_instructions") and suffix in PROMPT_CONTEXT_SIDECAR_SUFFIXES:
+        return "instructions"
     if stem in PROMPT_CONTEXT_SIDECAR_NAMES and suffix in PROMPT_CONTEXT_SIDECAR_SUFFIXES:
         return stem
     return ""

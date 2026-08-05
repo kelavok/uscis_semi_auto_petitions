@@ -265,6 +265,15 @@ steps:
     section_instructions: instructions/task_types/eb1a_petition/sections/two_phase_criterion_phase_1.md
     evidence_folder_roles:
       - leading_critical_role
+    phase_subfolder_terms:
+      - status employment position
+      - employment role facts
+      - role facts
+      - leading role
+      - critical role
+      - responsibilities
+      - duties
+      - position
     destination_pattern: draft_sections/criteria/leading_critical_role/{episode_id}_phase_1.md
 
   - step_id: criterion_leading_critical_role_reputation
@@ -277,6 +286,20 @@ steps:
     section_instructions: instructions/task_types/eb1a_petition/sections/two_phase_criterion_phase_2.md
     evidence_folder_roles:
       - leading_critical_role
+    phase_subfolder_terms:
+      - distinguished reputation
+      - reputation
+      - awards
+      - award
+      - ranking
+      - ratings
+      - market
+      - media
+      - brand
+      - марка
+      - мельница
+      - экспортер
+      - репутация
     destination_pattern: draft_sections/criteria/leading_critical_role/{episode_id}_phase_2.md
 
   - step_id: criterion_high_salary_fact

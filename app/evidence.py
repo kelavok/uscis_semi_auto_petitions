@@ -122,10 +122,12 @@ def scan_documents(case_id: str) -> ScanSummary:
     extracted_texts = 0
     non_text_files = 0
     manual_description_files = 0
+    seen_paths: set[str] = set()
 
     for file_path, source_kind in _iter_source_files(loaded):
         scanned_files += 1
         rel_path = _normalize_slashes(file_path.relative_to(loaded.case_dir).as_posix())
+        seen_paths.add(rel_path)
         existing = by_path.get(rel_path)
         if existing and _truthy(existing.get("manual_edit_lock", "")):
             locked_rows_skipped += 1
@@ -172,6 +174,15 @@ def scan_documents(case_id: str) -> ScanSummary:
         row["source_fingerprint"] = fingerprint
         row["last_scanned_at"] = now
         row["notes"] = _merge_notes(row.get("notes", ""), extraction.note)
+
+    retained_rows: list[dict[str, str]] = []
+    for row in rows:
+        rel_path = _normalize_slashes(row.get("file_path", ""))
+        if not rel_path or rel_path in seen_paths or _truthy(row.get("manual_edit_lock", "")):
+            retained_rows.append(row)
+            continue
+        removed_rows += 1
+    rows = retained_rows
 
     index_path.parent.mkdir(parents=True, exist_ok=True)
     _write_index(index_path, rows)

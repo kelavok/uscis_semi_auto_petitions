@@ -473,6 +473,11 @@ def render_evidence_context(
                 parts.append(f"- missing: `{folder}`")
             parts.append("")
             continue
+        files = _filter_prompt_excluded_files(loaded, step, options, files, document_index)
+        if not files:
+            parts.append("[All indexed files for this role were excluded for this prompt.]")
+            parts.append("")
+            continue
         parts.append(render_evidence_files(loaded, files, document_index))
         parts.append("")
     return "\n".join(parts).strip()
@@ -523,6 +528,7 @@ def render_configured_evidence_sources(
             parts.append("")
             continue
         files = [p for p in sorted(evidence_folder.rglob("*")) if p.is_file() and p.name != ".gitkeep"]
+        files = _filter_prompt_excluded_files(loaded, step, options, files, document_index)
         if not files:
             parts.append("[No files in this folder yet.]")
             parts.append("")
@@ -660,6 +666,7 @@ def selected_documents_for_step(
                     files.extend(path for path in evidence_folder.rglob("*") if path.is_file())
 
     document_index = read_document_index(loaded)
+    excluded_ids = _prompt_excluded_document_ids(loaded.config, str(step.get("step_id", "")), options)
     selected: list[dict[str, str]] = []
     seen: set[str] = set()
     for path in sorted(set(files)):
@@ -672,6 +679,8 @@ def selected_documents_for_step(
         rows = document_index.get(_normalize_slashes(relative_path), [])
         row = rows[0] if rows else {}
         document_id = str(row.get("document_id", "")).strip()
+        if document_id in excluded_ids:
+            continue
         if not document_id or document_id in seen:
             continue
         selected.append(
@@ -683,6 +692,46 @@ def selected_documents_for_step(
         )
         seen.add(document_id)
     return selected
+
+
+def _filter_prompt_excluded_files(
+    loaded: LoadedCase,
+    step: dict[str, Any],
+    options: PromptOptions,
+    files: list[Path],
+    document_index: dict[str, list[dict[str, str]]],
+) -> list[Path]:
+    excluded_ids = _prompt_excluded_document_ids(
+        loaded.config, str(step.get("step_id", "")), options
+    )
+    if not excluded_ids:
+        return files
+    filtered: list[Path] = []
+    for path in files:
+        try:
+            relative_path = path.relative_to(loaded.case_dir).as_posix()
+        except ValueError:
+            filtered.append(path)
+            continue
+        rows = document_index.get(_normalize_slashes(relative_path), [])
+        document_id = str((rows[0] if rows else {}).get("document_id", "")).strip()
+        if document_id and document_id in excluded_ids:
+            continue
+        filtered.append(path)
+    return filtered
+
+
+def _prompt_excluded_document_ids(
+    config: dict[str, Any], step_id: str, options: PromptOptions
+) -> set[str]:
+    exclusions = config.get("prompt_document_exclusions", {})
+    if not isinstance(exclusions, dict):
+        return set()
+    keys = [output_stem(step_id, options.episode_id), step_id]
+    result: set[str] = set()
+    for key in keys:
+        result.update(_normalize_path_list(exclusions.get(key, [])))
+    return {document_id.strip() for document_id in result if document_id.strip()}
 
 
 def missing_selected_documents_from_output(
@@ -1769,6 +1818,8 @@ def read_textual_file(path: Path, limit: int) -> str:
 
 
 def _episode_folder_for(role_folder: Path, options: PromptOptions) -> Path:
+    if options.episode_folder in {".", ""} and options.episode_id in {"1", "."}:
+        return role_folder
     if options.episode_folder:
         return role_folder / options.episode_folder
     if not options.episode_id:
@@ -1811,6 +1862,11 @@ def _episode_folders_for(
         ]
         return _phase_folders_for(selected, step or {})
     if not options.episode_id and not options.episode_folder:
+        selected = [role_folder] if _folder_has_files(role_folder) else []
+        return _phase_folders_for(selected, step or {})
+    if options.episode_folder == "." or (
+        options.episode_id in {"1", "."} and not options.episode_folder
+    ):
         selected = [role_folder] if _folder_has_files(role_folder) else []
         return _phase_folders_for(selected, step or {})
 
