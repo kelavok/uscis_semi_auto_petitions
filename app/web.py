@@ -23,6 +23,7 @@ from .bundle_workflow import (
     prepare_selected_bundle,
     refresh_layout_indexes,
     render_separator_pdfs,
+    sync_layout_indexes_from_memo,
 )
 from .cli_support import CASE_ROOT, configure_console, create_case_from_template, validate_case_id
 from .document_layout import (
@@ -667,6 +668,13 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
             f"{status.assigned_used_documents}/{status.unique_used_documents} used document(s), "
             f"and built {status.exhibit_count} exhibit(s).{warning}"
         )
+    if action == "sync_layout_indexes_from_memo":
+        summary = sync_layout_indexes_from_memo(case_id)
+        return (
+            f"Synced indexes from working_memo.docx: {summary.documents_matched}/"
+            f"{summary.documents_seen} document(s), {summary.exhibits_seen} exhibit(s), "
+            f"{summary.episodes_seen} episode heading(s)."
+        )
     if action == "build_index":
         summary = build_exhibit_index(case_id)
         if summary.documents_seen and not summary.documents_with_exhibit_number:
@@ -1015,7 +1023,7 @@ def render_layout_page(case_id: str, params: dict[str, list[str]]) -> str:
           {_render_case_font_settings_form(case_id, action="save_layout_font_settings", compact=True)}
         </section>
         <section class="bundle-pipeline">
-          <div class="pipeline-phase {phase_one_class}"><span class="phase-number">1</span><h2>Refresh indexes</h2><p>Rescan evidence and derive exhibit numbering from validated Stage 2 outputs.</p>{post_button(case_id, "refresh_layout_indexes", "Refresh indexes")}</div>
+          <div class="pipeline-phase {phase_one_class}"><span class="phase-number">1</span><h2>Refresh indexes</h2><p>Rescan evidence from Stage 2 outputs, or after manual memo edits sync the technical indexes from the memo INDEX section.</p><div class="button-row">{post_button(case_id, "refresh_layout_indexes", "Refresh indexes")}{post_button(case_id, "sync_layout_indexes_from_memo", "Sync indexes from memo")}</div></div>
           <div class="pipeline-arrow" aria-hidden="true">→</div>
           <div class="pipeline-phase {phase_two_class}"><span class="phase-number">2</span><h2>Select & prepare</h2><p>Choose all or only the exhibits and documents you need. Separator generation, PDF rendering, and validation run together.</p><p class="muted small">{escape(preparation_text)}</p></div>
           <div class="pipeline-arrow" aria-hidden="true">→</div>
@@ -2900,6 +2908,7 @@ def _action_route(action: str) -> str:
         return "/llm"
     if action in {
         "refresh_layout_indexes",
+        "sync_layout_indexes_from_memo",
         "build_index",
         "separators",
         "separator_pdfs",

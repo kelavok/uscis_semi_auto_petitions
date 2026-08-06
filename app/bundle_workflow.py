@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import difflib
 import hashlib
 import json
 import logging
@@ -137,6 +138,18 @@ class FinalFilingSummary:
     placeholders_resolved: int
     placeholders_unresolved: int
     iterations: int
+
+
+@dataclass(frozen=True)
+class MemoIndexSyncSummary:
+    memo_docx_path: Path
+    document_index_path: Path
+    exhibit_index_path: Path
+    exhibits_seen: int
+    episodes_seen: int
+    documents_seen: int
+    documents_matched: int
+    unmatched_titles: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -516,6 +529,270 @@ def refresh_layout_indexes(case_id: str) -> LayoutIndexRefreshSummary:
         documents_assigned=assigned,
         exhibit_summary=exhibit_summary,
         status=status,
+    )
+
+
+def sync_layout_indexes_from_memo(case_id: str, *, memo_docx_path: str = "") -> MemoIndexSyncSummary:
+    loaded = load_case(case_id)
+    final_memo_root = loaded.case_dir / _case_path_value(loaded.config, "final_memo")
+    memo_path = Path(memo_docx_path) if memo_docx_path else final_memo_root / "working_memo.docx"
+    if not memo_path.is_absolute():
+        memo_path = loaded.case_dir / memo_path
+    if not memo_path.exists():
+        raise SystemExit(f"Memo DOCX not found: {memo_path}")
+
+    parsed = _parse_memo_index_docx(memo_path)
+    document_index_path = loaded.case_dir / _case_path_value(loaded.config, "document_index")
+    exhibit_index_path = loaded.case_dir / _case_path_value(loaded.config, "exhibit_index")
+    document_rows = _read_csv(document_index_path, INDEX_FIELDS)
+    document_matches, unmatched = _match_memo_index_documents(parsed["documents"], document_rows)
+    if unmatched:
+        raise SystemExit(
+            "Could not match memo Evidence Index document(s) to document_index.csv:\n- "
+            + "\n- ".join(unmatched[:50])
+        )
+
+    matched_ids = [match["document_id"] for match in document_matches]
+    rows_by_id = {row.get("document_id", ""): row for row in document_rows if row.get("document_id")}
+    document_ids_by_exhibit: dict[str, list[str]] = {exhibit["number"]: [] for exhibit in parsed["exhibits"]}
+    episode_overrides: dict[str, str] = {}
+    title_by_document: dict[str, str] = {}
+    for order, match in enumerate(document_matches, start=1):
+        document_id = match["document_id"]
+        row = rows_by_id[document_id]
+        exhibit_number = match["exhibit_number"]
+        document_ids_by_exhibit.setdefault(exhibit_number, []).append(document_id)
+        title_by_document[document_id] = match["display_title"]
+        row["display_title"] = match["display_title"]
+        row["exhibit_number"] = exhibit_number
+        row["final_bundle_order"] = str(order)
+        row["separator_title_type"] = "document"
+        row["user_approval_status"] = row.get("user_approval_status") or "pending"
+        row["manual_edit_lock"] = "false"
+        row["notes"] = _merge_note(row.get("notes", ""), "Synced from working_memo.docx index.")
+        episode_overrides[document_id] = match["episode_title"]
+
+    matched_set = set(matched_ids)
+    for row in document_rows:
+        if row.get("document_id", "") not in matched_set:
+            row["exhibit_number"] = ""
+            row["final_bundle_order"] = ""
+
+    exhibit_rows: list[dict[str, str]] = []
+    for order, exhibit in enumerate(parsed["exhibits"], start=1):
+        row = _blank_exhibit_row()
+        row["exhibit_id"] = f"EXH{order:03d}"
+        row["exhibit_number"] = exhibit["number"]
+        row["display_title"] = exhibit["title"]
+        row["task_type"] = str(loaded.config.get("task_type", ""))
+        row["memo_section"] = _memo_section_for_exhibit_title(exhibit["title"])
+        row["separator_title_type"] = "exhibit"
+        row["document_ids"] = ";".join(document_ids_by_exhibit.get(exhibit["number"], []))
+        row["original_translation_order"] = str(
+            loaded.config.get("translation_order", "original_then_translation")
+        )
+        row["final_bundle_order"] = str(order)
+        row["user_approval_status"] = "pending"
+        row["manual_edit_lock"] = "false"
+        row["notes"] = "Synced from working_memo.docx index."
+        exhibit_rows.append(row)
+
+    _write_csv(document_index_path, document_rows, INDEX_FIELDS)
+    _write_csv(exhibit_index_path, exhibit_rows, EXHIBIT_FIELDS)
+    config = dict(loaded.config)
+    config["document_episode_overrides"] = episode_overrides
+    config["document_title_overrides"] = title_by_document
+    _write_yaml_config(loaded.case_dir / "case_config.yaml", config)
+    _save_bundle_selection(
+        loaded,
+        BundleSelection(
+            tuple(exhibit["number"] for exhibit in parsed["exhibits"]),
+            tuple(matched_ids),
+        ),
+    )
+    return MemoIndexSyncSummary(
+        memo_docx_path=memo_path,
+        document_index_path=document_index_path,
+        exhibit_index_path=exhibit_index_path,
+        exhibits_seen=len(parsed["exhibits"]),
+        episodes_seen=len(parsed["episodes"]),
+        documents_seen=len(parsed["documents"]),
+        documents_matched=len(document_matches),
+        unmatched_titles=tuple(unmatched),
+    )
+
+
+def _parse_memo_index_docx(memo_path: Path) -> dict[str, list[dict[str, str]]]:
+    try:
+        from docx import Document  # type: ignore
+    except ModuleNotFoundError as exc:
+        raise SystemExit("python-docx is required to parse the memo Evidence Index.") from exc
+    document = Document(str(memo_path))
+    lines = [paragraph.text.strip() for paragraph in document.paragraphs if paragraph.text.strip()]
+    start = next((index for index, line in enumerate(lines) if line.casefold() == "index:"), -1)
+    if start < 0:
+        raise SystemExit("Could not find the memo INDEX: section.")
+
+    raw_items: list[dict[str, str]] = []
+    current_exhibit = ""
+    for line in lines[start + 1 :]:
+        exhibit_match = re.match(r"^Exhibit\s+([^:]+):\s*(.+)$", line, flags=re.IGNORECASE)
+        number_match = re.match(r"^(\d+(?:\.\d+){0,3})\.\s+(.+)$", line)
+        if exhibit_match:
+            current_exhibit = exhibit_match.group(1).strip()
+            raw_items.append(
+                {
+                    "kind": "exhibit",
+                    "number": current_exhibit,
+                    "title": _clean_memo_index_title(exhibit_match.group(2)),
+                }
+            )
+            continue
+        if number_match and current_exhibit:
+            raw_items.append(
+                {
+                    "kind": "numbered",
+                    "number": number_match.group(1).strip(),
+                    "title": _clean_memo_index_title(number_match.group(2)),
+                    "exhibit_number": current_exhibit,
+                }
+            )
+            continue
+        if raw_items and not line.startswith("("):
+            break
+
+    exhibits = [item for item in raw_items if item["kind"] == "exhibit"]
+    numbered = [item for item in raw_items if item["kind"] == "numbered"]
+    episodes: list[dict[str, str]] = []
+    documents: list[dict[str, str]] = []
+    current_episode_by_exhibit: dict[str, dict[str, str]] = {}
+    numbers = [item["number"] for item in numbered]
+    for item in numbered:
+        number = item["number"]
+        exhibit_number = item["exhibit_number"]
+        has_child = any(other.startswith(number + ".") for other in numbers)
+        depth = len(number.split("."))
+        if depth == 2 and has_child:
+            episode = {
+                "number": number,
+                "title": item["title"],
+                "exhibit_number": exhibit_number,
+            }
+            episodes.append(episode)
+            current_episode_by_exhibit[exhibit_number] = episode
+            continue
+        episode = current_episode_by_exhibit.get(exhibit_number)
+        documents.append(
+            {
+                "number": number,
+                "title": item["title"],
+                "display_title": _clean_memo_document_display_title(item["title"]),
+                "exhibit_number": exhibit_number,
+                "episode_number": episode["number"] if episode else "",
+                "episode_title": episode["title"] if episode else "",
+            }
+        )
+    if not exhibits or not documents:
+        raise SystemExit("The memo INDEX: section did not contain exhibits and documents.")
+    return {"exhibits": exhibits, "episodes": episodes, "documents": documents}
+
+
+def _match_memo_index_documents(
+    memo_documents: list[dict[str, str]],
+    document_rows: list[dict[str, str]],
+) -> tuple[list[dict[str, str]], list[str]]:
+    available = {row.get("document_id", ""): row for row in document_rows if row.get("document_id")}
+    matches: list[dict[str, str]] = []
+    unmatched: list[str] = []
+    used: set[str] = set()
+    for item in memo_documents:
+        best_score = -1.0
+        best_id = ""
+        for document_id, row in available.items():
+            if document_id in used:
+                continue
+            score = _memo_document_match_score(item, row)
+            if score > best_score:
+                best_score = score
+                best_id = document_id
+        if not best_id or best_score < 0.55:
+            unmatched.append(f"{item.get('number', '')}. {item.get('title', '')}")
+            continue
+        used.add(best_id)
+        matches.append(
+            {
+                **item,
+                "document_id": best_id,
+                "match_score": f"{best_score:.3f}",
+            }
+        )
+    return matches, unmatched
+
+
+def _memo_document_match_score(item: dict[str, str], row: dict[str, str]) -> float:
+    needle = _normalize_memo_index_match_text(item.get("display_title") or item.get("title", ""))
+    candidates = [
+        row.get("display_title", ""),
+        row.get("original_file_name", ""),
+        f"{row.get('display_title', '')} {row.get('original_file_name', '')}",
+    ]
+    score = 0.0
+    for candidate in candidates:
+        normalized = _normalize_memo_index_match_text(candidate)
+        if not normalized:
+            continue
+        candidate_score = difflib.SequenceMatcher(None, needle, normalized).ratio()
+        if needle and (needle in normalized or normalized in needle):
+            candidate_score = max(candidate_score, 0.95)
+        score = max(score, candidate_score)
+    return score
+
+
+def _normalize_memo_index_match_text(value: str) -> str:
+    value = value.casefold()
+    value = re.sub(r"\b(?:original|english translation|original and english translation)\b", " ", value)
+    value = re.sub(r"[^\w]+", " ", value, flags=re.UNICODE)
+    return " ".join(value.split())
+
+
+def _clean_memo_index_title(value: str) -> str:
+    return re.sub(r"\s+", " ", value).strip().rstrip(".")
+
+
+def _clean_memo_document_display_title(value: str) -> str:
+    title = _clean_memo_index_title(value)
+    title = re.sub(
+        r"[,;]?\s*original\s+and\s+English\s+translation\s*$",
+        "",
+        title,
+        flags=re.IGNORECASE,
+    ).strip()
+    title = re.sub(r"[,;]?\s*English\s+translation\s*$", "", title, flags=re.IGNORECASE).strip()
+    return title.rstrip(".")
+
+
+def _memo_section_for_exhibit_title(title: str) -> str:
+    lowered = title.casefold()
+    for role, number in EXHIBIT_NUMBER_BY_ROLE.items():
+        if f"criterion {number}" in lowered or role.replace("_", " ") in lowered:
+            return role
+    if "professional biography" in lowered or "education" in lowered:
+        return "identity_cv_education"
+    if "recommender" in lowered or "recommendation" in lowered:
+        return "recommendation_letters"
+    if "employment plan" in lowered or "proposed endeavor" in lowered:
+        return "employment_plan"
+    return ""
+
+
+def _write_yaml_config(path: Path, data: dict[str, object]) -> None:
+    try:
+        import yaml  # type: ignore
+    except ModuleNotFoundError as exc:
+        raise SystemExit("PyYAML is required to update case_config.yaml.") from exc
+    path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
     )
 
 
@@ -1804,9 +2081,19 @@ def _convert_docx_to_pdf_with_word(docx_path: Path, pdf_path: Path) -> None:
         opened.ExportAsFixedFormat(str(pdf_path.resolve()), 17)
     finally:
         if opened is not None:
-            opened.Close(False)
+            try:
+                opened.Close(False)
+            except Exception as exc:  # noqa: BLE001
+                if not pdf_path.exists():
+                    raise
+                logging.warning("Microsoft Word disconnected while closing %s: %s", docx_path, exc)
         if word is not None:
-            word.Quit()
+            try:
+                word.Quit()
+            except Exception as exc:  # noqa: BLE001
+                if not pdf_path.exists():
+                    raise
+                logging.warning("Microsoft Word disconnected while quitting after %s: %s", docx_path, exc)
         pythoncom.CoUninitialize()
     if not pdf_path.exists():
         raise SystemExit(f"Microsoft Word did not create PDF: {pdf_path}")
@@ -2453,6 +2740,10 @@ def _numbered_episode_document_sections(
 
 
 def _document_episode_title(document: dict[str, str], config: dict[str, object]) -> str:
+    overrides = config.get("document_episode_overrides", {})
+    document_id = document.get("document_id", "").strip()
+    if isinstance(overrides, dict) and document_id in overrides:
+        return str(overrides.get(document_id, "")).strip()
     raw_path = _normalize_slashes(document.get("file_path", "").strip())
     if not raw_path:
         return ""

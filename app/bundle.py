@@ -10,6 +10,7 @@ from .bundle_workflow import (
     generate_separator_pages,
     refresh_layout_indexes,
     render_separator_pdfs,
+    sync_layout_indexes_from_memo,
 )
 from .cli_support import add_case_argument, configure_console
 
@@ -43,6 +44,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Rescan sources and derive Exhibit assignments from validated LLM outputs",
     )
     add_case_argument(refresh_indexes)
+
+    sync_from_memo = commands.add_parser(
+        "sync-indexes-from-memo",
+        help="Replace Exhibit/document ordering from the working memo INDEX section",
+    )
+    add_case_argument(sync_from_memo)
+    sync_from_memo.add_argument(
+        "--memo",
+        default="",
+        help="Optional DOCX memo path; defaults to final_memo/working_memo.docx",
+    )
 
     separators = commands.add_parser("separators", help="Generate markdown separator pages from indexes")
     add_case_argument(separators)
@@ -116,6 +128,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Stale document IDs: {', '.join(summary.status.stale_document_ids) or '[none]'}")
         print(f"Assignment conflicts: {len(summary.status.assignment_conflicts)}")
         print(f"Unsupported documents: {len(summary.status.unsupported_documents)}")
+        return 0
+    if args.command == "sync-indexes-from-memo":
+        summary = sync_layout_indexes_from_memo(args.case_id, memo_docx_path=args.memo)
+        print(f"Memo: {summary.memo_docx_path}")
+        print(f"Exhibits: {summary.exhibits_seen}")
+        print(f"Episodes: {summary.episodes_seen}")
+        print(f"Documents matched: {summary.documents_matched}/{summary.documents_seen}")
+        print(f"Document index: {summary.document_index_path}")
+        print(f"Exhibit index: {summary.exhibit_index_path}")
+        if summary.unmatched_titles:
+            print("Unmatched:")
+            for title in summary.unmatched_titles:
+                print(f"- {title}")
         return 0
     if args.command == "separators":
         summary = generate_separator_pages(args.case_id)
