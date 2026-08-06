@@ -48,6 +48,7 @@ from .evidence import (
     unlink_translation,
 )
 from .memo_builder import (
+    _write_yaml_file,
     apply_case_intake,
     build_working_memo,
     parse_machine_template,
@@ -469,6 +470,8 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
                 "work_location": data.get("work_location", ""),
                 "duties_summary": data.get("duties_summary", ""),
                 "eb1a_template_variant": data.get("eb1a_template_variant", ""),
+                "memo_font_family": data.get("memo_font_family", ""),
+                "bundle_font_family": data.get("bundle_font_family", ""),
             },
             case_info_file=data.get("case_info_file", ""),
             source_folder_path=data.get("source_folder_path", ""),
@@ -504,6 +507,13 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
             else None,
         )
         return f"Updated {summary.fields_updated} field(s); copied {summary.source_files_copied} source file(s)."
+    if action in {"save_intake_font_settings", "save_layout_font_settings"}:
+        _save_case_font_settings(
+            case_id,
+            memo_font_family=data.get("memo_font_family", ""),
+            bundle_font_family=data.get("bundle_font_family", ""),
+        )
+        return "Saved memo and bundle font settings."
     if action == "build_working_memo":
         summary = build_working_memo(case_id, template_path=data.get("template_path", ""))
         return f"Built working memo: {summary.docx_path.name}; sections {summary.sections_written}; placeholders {summary.placeholders_seen}."
@@ -835,6 +845,7 @@ def render_intake_page(case_id: str, params: dict[str, list[str]]) -> str:
           {'' if task_type == 'eb1a_rfe_response' else post_button(case_id, "link_translations", "Auto-link translations")}
           {'' if task_type == 'eb1a_rfe_response' else f'<a class="action-link" href="/translations?case={quote(case_id)}">Review translation links</a>'}
           {'' if task_type == 'eb1a_rfe_response' else '</div>'}
+          {_render_case_font_settings_form(case_id, action="save_intake_font_settings", compact=True)}
         </section>
         {render_rfe_panel(case_id) if task_type == 'eb1a_rfe_response' else render_intake_panel(case_id, task_type)}
         <section class="panel"><h2>Evidence status</h2><pre>{escape(status)}</pre></section>
@@ -1001,6 +1012,7 @@ def render_layout_page(case_id: str, params: dict[str, list[str]]) -> str:
           {index_notice}
           {unsupported_notice}
           <p class="muted small">Validated evidence references: {index_status.used_document_references}; unique documents: {index_status.unique_used_documents}; assigned: {index_status.assigned_used_documents}; exhibits: {index_status.exhibit_count}.</p>
+          {_render_case_font_settings_form(case_id, action="save_layout_font_settings", compact=True)}
         </section>
         <section class="bundle-pipeline">
           <div class="pipeline-phase {phase_one_class}"><span class="phase-number">1</span><h2>Refresh indexes</h2><p>Rescan evidence and derive exhibit numbering from validated Stage 2 outputs.</p>{post_button(case_id, "refresh_layout_indexes", "Refresh indexes")}</div>
@@ -1008,7 +1020,7 @@ def render_layout_page(case_id: str, params: dict[str, list[str]]) -> str:
           <div class="pipeline-phase {phase_two_class}"><span class="phase-number">2</span><h2>Select & prepare</h2><p>Choose all or only the exhibits and documents you need. Separator generation, PDF rendering, and validation run together.</p><p class="muted small">{escape(preparation_text)}</p></div>
           <div class="pipeline-arrow" aria-hidden="true">→</div>
           <div class="pipeline-phase {phase_three_class}"><span class="phase-number">3</span><h2>Build PDF</h2><p>Assemble the prepared selection into one evidence bundle.</p>{post_button(case_id, "bundle_build", "Build selected PDF", disabled=not preparation_ready)}</div>
-          <div class="pipeline-arrow" aria-hidden="true">â†’</div>
+          <div class="pipeline-arrow" aria-hidden="true">→</div>
           <div class="pipeline-phase {phase_four_class}"><span class="phase-number">4</span><h2>Final filing</h2><p>After manual memo edits, replace PAGE placeholders using document separator pages and merge the memo with the evidence bundle.</p>{post_button(case_id, "final_filing_build", "Build final filing PDF", disabled=not preparation_ready)}</div>
         </section>
         <section class="panel"><h2>Exhibits and documents</h2><p class="muted">Review the contents, select entire exhibits or individual documents, then prepare the selection.</p>{selector}</section>
@@ -2064,7 +2076,7 @@ def page(title: str, body: str) -> str:
     .source-actions {{ display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; }}
     .source-actions code {{ max-width:320px; overflow-wrap:anywhere; }}
     .folder-link {{ display:inline-flex; align-items:center; padding:9px 11px; border:1px solid #93c5fd; border-radius:9px; background:#eff6ff; font-size:.88rem; font-weight:600; }}
-    .bundle-pipeline {{ display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr); gap:12px; align-items:stretch; margin-bottom:18px; }}
+    .bundle-pipeline {{ display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr); gap:12px; align-items:stretch; margin-bottom:18px; }}
     .pipeline-phase {{ position:relative; background:#fff; border:1px solid var(--line); border-radius:16px; padding:20px; }}
     .pipeline-phase.done {{ border-color:#86efac; background:#f0fdf4; }}
     .pipeline-phase.current {{ border-color:#93c5fd; background:#eff6ff; }}
@@ -2091,6 +2103,9 @@ def page(title: str, body: str) -> str:
     .layout-picker-grid {{ display:flex; flex-direction:column; gap:12px; margin-bottom:14px; }}
     .layout-picker-row {{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:end; padding:12px; border:1px solid var(--line); border-radius:12px; background:#f9fafb; }}
     .layout-picker-row form {{ margin:0; }}
+    .font-settings {{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; gap:12px; align-items:end; margin-top:14px; padding:12px; border:1px solid var(--line); border-radius:12px; background:#f8fafc; }}
+    .font-settings p {{ grid-column:1 / -1; margin:0; }}
+    .font-settings.compact {{ margin-top:16px; }}
     .layout-exhibit-card {{ border:1px solid var(--line); border-radius:14px; padding:14px; background:#fbfcfd; }}
     .layout-exhibit-head, .layout-episode-head, .layout-document-row {{ display:grid; grid-template-columns:120px minmax(0,1fr); gap:10px; align-items:center; }}
     .layout-exhibit-number {{ max-width:120px; }}
@@ -2122,6 +2137,7 @@ def page(title: str, body: str) -> str:
       .bundle-pipeline {{ grid-template-columns:1fr; }}
       .pipeline-arrow {{ transform:rotate(90deg); justify-self:center; }}
       .layout-picker-row {{ grid-template-columns:1fr; }}
+      .font-settings {{ grid-template-columns:1fr; }}
       .layout-mapping-columns {{ grid-template-columns:1fr; }}
       .inventory-grid {{ grid-template-columns:1fr; }}
     }}
@@ -2816,6 +2832,55 @@ def _stage_percent(progress: CaseProgress, keys: set[str]) -> int:
     return round((sum(step.complete for step in selected) / len(selected)) * 100)
 
 
+def _case_font_settings(case_id: str) -> tuple[str, str, list[str]]:
+    config = load_case(case_id).config
+    memo_font = str(config.get("memo_font_family", "")).strip() or "Times New Roman"
+    bundle_font = str(config.get("bundle_font_family", "")).strip() or str(config.get("font_family", "")).strip() or "Times New Roman"
+    fonts = list_installed_fonts()
+    for name in (memo_font, bundle_font, "Times New Roman"):
+        if name and name not in fonts:
+            fonts.insert(0, name)
+    return memo_font, bundle_font, fonts
+
+
+def _font_select_options(fonts: list[str], selected: str) -> str:
+    return "".join(
+        f'<option value="{escape(name, quote=True)}"{" selected" if name == selected else ""}>{escape(name)}</option>'
+        for name in fonts
+    )
+
+
+def _render_case_font_settings_form(case_id: str, *, action: str, compact: bool = False) -> str:
+    memo_font, bundle_font, fonts = _case_font_settings(case_id)
+    memo_options = _font_select_options(fonts, memo_font)
+    bundle_options = _font_select_options(fonts, bundle_font)
+    note = (
+        "Memo font applies the next time working_memo.docx is built; bundle font applies when separators/text conversions are prepared again."
+    )
+    wrapper_class = "font-settings compact" if compact else "font-settings"
+    return f"""
+    <form method="post" class="{wrapper_class}">
+      <input type="hidden" name="case" value="{escape(case_id)}">
+      <input type="hidden" name="action" value="{escape(action)}">
+      <label><strong>Memo font</strong><select name="memo_font_family">{memo_options}</select></label>
+      <label><strong>Bundle / separator font</strong><select name="bundle_font_family">{bundle_options}</select></label>
+      <button class="secondary">Save font settings</button>
+      <p class="muted small">{escape(note)}</p>
+    </form>
+    """
+
+
+def _save_case_font_settings(case_id: str, *, memo_font_family: str, bundle_font_family: str) -> None:
+    loaded = load_case(case_id)
+    config = dict(loaded.config)
+    config["memo_font_family"] = memo_font_family.strip() or "Times New Roman"
+    config["bundle_font_family"] = bundle_font_family.strip() or "Times New Roman"
+    legacy_font = str(config.get("font_family", "")).strip()
+    if legacy_font:
+        config["font_family"] = config["bundle_font_family"]
+    _write_yaml_file(loaded.case_dir / "case_config.yaml", config)
+
+
 def _action_route(action: str) -> str:
     if action in {
         "apply_intake",
@@ -2828,6 +2893,7 @@ def _action_route(action: str) -> str:
         "import_rfe_strategy_output",
         "import_rfe_evidence",
         "refresh_intake_sources",
+        "save_intake_font_settings",
     }:
         return "/intake"
     if action in {"run_next", "build_prompt", "import_output", "insert_section", "refresh_unit_documents"}:
@@ -2841,6 +2907,7 @@ def _action_route(action: str) -> str:
         "prepare_selected_bundle",
         "bundle_build",
         "final_filing_build",
+        "save_layout_font_settings",
     }:
         return "/layout"
     if action in {

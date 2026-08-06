@@ -4,6 +4,7 @@ import csv
 import hashlib
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -1066,7 +1067,7 @@ def render_separator_pdfs(case_id: str) -> SeparatorPdfSummary:
             "or run this command with the bundled Codex Python runtime."
         ) from exc
 
-    font_name = _register_pdf_font(pdfmetrics, TTFont)
+    font_name = _register_pdf_font(pdfmetrics, TTFont, _bundle_font_family(loaded.config))
     output_dir.mkdir(parents=True, exist_ok=True)
     for stale_path in output_dir.glob("*.pdf"):
         stale_path.unlink()
@@ -1137,7 +1138,7 @@ def render_separator_pdfs(case_id: str) -> SeparatorPdfSummary:
         ParagraphStyle(
             name="SeparatorPlease",
             parent=styles["BodyText"],
-            fontName="Times-Italic",
+            fontName=font_name,
             fontSize=12,
             leading=15,
             spaceBefore=0.85 * inch,
@@ -1370,15 +1371,13 @@ def build_evidence_bundle(case_id: str) -> BundleBuildSummary:
             converted_items += 1
         elif item["status"] == "convertible_text":
             pdf_path = converted_dir / f"{int(item['sequence']):04d}_{_safe_filename(item['document_id'] or item['item_type'])}.pdf"
-            _text_source_to_pdf(source_path, pdf_path)
+            _text_source_to_pdf(source_path, pdf_path, _bundle_font_family(loaded.config))
             converted_items += 1
         elif item["status"] != "ready_pdf":
             skipped_items += 1
             continue
 
-        reader = PdfReader(str(pdf_path))
-        for page in reader.pages:
-            writer.add_page(page)
+        _add_pdf_pages(writer, PdfReader, pdf_path, strip_annotations=True)
         merged_items += 1
 
     try:
@@ -1388,6 +1387,7 @@ def build_evidence_bundle(case_id: str) -> BundleBuildSummary:
         final_pdf_path = final_pdf_path.with_name(final_pdf_path.stem + "_updated.pdf")
         with final_pdf_path.open("wb") as handle:
             writer.write(handle)
+    final_pdf_path = _clean_pdf_if_possible(final_pdf_path)
     return BundleBuildSummary(
         final_pdf_path=final_pdf_path,
         plan_csv_path=plan_summary.plan_csv_path,
@@ -1840,9 +1840,7 @@ def _merge_memo_and_bundle(memo_pdf: Path, evidence_pdf: Path, final_pdf: Path) 
         raise SystemExit("pypdf is required to merge the final filing PDF.") from exc
     writer = PdfWriter()
     for source in (memo_pdf, evidence_pdf):
-        reader = PdfReader(str(source))
-        for page in reader.pages:
-            writer.add_page(page)
+        _add_pdf_pages(writer, PdfReader, source, strip_annotations=True)
     try:
         with final_pdf.open("wb") as handle:
             writer.write(handle)
@@ -1850,7 +1848,51 @@ def _merge_memo_and_bundle(memo_pdf: Path, evidence_pdf: Path, final_pdf: Path) 
         final_pdf = final_pdf.with_name(final_pdf.stem + "_updated.pdf")
         with final_pdf.open("wb") as handle:
             writer.write(handle)
-    return final_pdf
+    return _clean_pdf_if_possible(final_pdf)
+
+
+def _add_pdf_pages(
+    writer: object,
+    PdfReader: object,
+    pdf_path: Path,
+    *,
+    strip_annotations: bool,
+) -> int:
+    from pypdf.generic import NameObject  # type: ignore
+
+    reader = PdfReader(str(pdf_path))  # type: ignore[operator]
+    pages_added = 0
+    for page in reader.pages:  # type: ignore[attr-defined]
+        if strip_annotations and "/Annots" in page:
+            page.pop(NameObject("/Annots"), None)
+        writer.add_page(page)  # type: ignore[attr-defined]
+        pages_added += 1
+    return pages_added
+
+
+def _clean_pdf_if_possible(path: Path) -> Path:
+    try:
+        import pikepdf  # type: ignore
+    except ModuleNotFoundError:
+        return path
+    temp_path = path.with_name(path.stem + ".cleaning.pdf")
+    try:
+        with pikepdf.open(path) as pdf:
+            pdf.save(
+                temp_path,
+                linearize=True,
+                compress_streams=True,
+                object_stream_mode=pikepdf.ObjectStreamMode.generate,
+            )
+        temp_path.replace(path)
+    except Exception as exc:  # noqa: BLE001
+        logging.warning("Could not clean PDF %s with pikepdf: %s", path, exc)
+        if temp_path.exists():
+            try:
+                temp_path.unlink()
+            except OSError:
+                pass
+    return path
 
 
 def _render_final_filing_report(
@@ -2623,7 +2665,7 @@ def _image_to_pdf(
     c.save()
 
 
-def _text_source_to_pdf(source_path: Path, pdf_path: Path) -> None:
+def _text_source_to_pdf(source_path: Path, pdf_path: Path, font_family: str = "Times New Roman") -> None:
     try:
         from reportlab.lib.pagesizes import LETTER  # type: ignore
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet  # type: ignore
@@ -2635,7 +2677,7 @@ def _text_source_to_pdf(source_path: Path, pdf_path: Path) -> None:
         raise SystemExit("Missing reportlab for text conversion.") from exc
 
     text = extract_docx_text(source_path) if source_path.suffix.lower() in DOCX_SOURCE_EXTENSIONS else source_path.read_text(encoding="utf-8-sig", errors="replace")
-    font_name = _register_pdf_font(pdfmetrics, TTFont)
+    font_name = _register_pdf_font(pdfmetrics, TTFont, font_family)
     styles = getSampleStyleSheet()
     styles.add(
         ParagraphStyle(
@@ -2666,8 +2708,16 @@ def _text_source_to_pdf(source_path: Path, pdf_path: Path) -> None:
     document.build(story)
 
 
-def _register_pdf_font(pdfmetrics: object, TTFont: object) -> str:
-    candidates = [
+def _bundle_font_family(config: dict[str, object]) -> str:
+    value = str(config.get("bundle_font_family", "")).strip()
+    if not value:
+        value = str(config.get("font_family", "")).strip()
+    return value or "Times New Roman"
+
+
+def _register_pdf_font(pdfmetrics: object, TTFont: object, preferred_family: str = "") -> str:
+    candidates = _preferred_font_candidates(preferred_family or "Times New Roman") + [
+        Path("C:/Windows/Fonts/times.ttf"),
         Path("C:/Windows/Fonts/arial.ttf"),
         Path("C:/Windows/Fonts/calibri.ttf"),
         Path("C:/Windows/Fonts/tahoma.ttf"),
@@ -2677,13 +2727,41 @@ def _register_pdf_font(pdfmetrics: object, TTFont: object) -> str:
     ]
     for font_path in candidates:
         if font_path.exists():
-            font_name = font_path.stem.replace(" ", "")
+            font_name = f"PetitionsFont_{re.sub(r'[^A-Za-z0-9]+', '', font_path.stem) or 'Default'}"
             try:
                 pdfmetrics.registerFont(TTFont(font_name, str(font_path)))  # type: ignore[attr-defined]
                 return font_name
             except Exception:
                 continue
-    return "Helvetica"
+    return "Times-Roman"
+
+
+def _preferred_font_candidates(family: str) -> list[Path]:
+    normalized = family.strip().casefold()
+    if not normalized:
+        return []
+    windows_fonts = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts"
+    known_windows = {
+        "times new roman": ["times.ttf"],
+        "arial": ["arial.ttf"],
+        "calibri": ["calibri.ttf"],
+        "tahoma": ["tahoma.ttf"],
+        "georgia": ["georgia.ttf"],
+        "cambria": ["cambria.ttc", "cambria.ttf"],
+    }
+    candidates = [windows_fonts / name for name in known_windows.get(normalized, [])]
+    token = re.sub(r"[^a-z0-9]+", "", normalized)
+    if token:
+        candidates.extend(sorted(windows_fonts.glob(f"*{token}*.ttf")))
+        candidates.extend(sorted(windows_fonts.glob(f"*{token}*.ttc")))
+    seen: set[str] = set()
+    unique: list[Path] = []
+    for path in candidates:
+        key = str(path).casefold()
+        if key not in seen:
+            seen.add(key)
+            unique.append(path)
+    return unique
 
 
 def _markdown_to_reportlab_story(text: str, styles: object, Spacer: object) -> list[object]:

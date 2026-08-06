@@ -368,7 +368,8 @@ def write_docx(path: Path, case_id: str, config: dict[str, Any], skeleton: list[
         document_xml = _o1b_document_xml(config, path.parent.parent)
     else:
         document_xml = _document_xml(case_id, config, skeleton)
-    styles_xml = _o1b_styles_xml() if task_type == "o1b_petition" else _styles_xml()
+    memo_font = _memo_font_family(config)
+    styles_xml = _o1b_styles_xml(memo_font) if task_type == "o1b_petition" else _styles_xml(memo_font)
     content_types = _content_types_xml(include_footer=task_type == "o1b_petition")
     rels = _rels_xml()
     doc_rels = _document_rels_xml(include_footer=task_type == "o1b_petition")
@@ -431,21 +432,32 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
         if child.tag != qn("w:sectPr"):
             body.remove(child)
 
+    memo_font = _memo_font_family(config)
+
+    def apply_font(target: object) -> None:
+        target.font.name = memo_font  # type: ignore[attr-defined]
+        target._element.rPr.rFonts.set(qn("w:ascii"), memo_font)  # type: ignore[attr-defined]
+        target._element.rPr.rFonts.set(qn("w:hAnsi"), memo_font)  # type: ignore[attr-defined]
+        target._element.rPr.rFonts.set(qn("w:eastAsia"), memo_font)  # type: ignore[attr-defined]
+
+    def apply_run_font(run: object) -> None:
+        run.font.name = memo_font  # type: ignore[attr-defined]
+        r_fonts = run._element.get_or_add_rPr().rFonts  # type: ignore[attr-defined]
+        r_fonts.set(qn("w:ascii"), memo_font)
+        r_fonts.set(qn("w:hAnsi"), memo_font)
+        r_fonts.set(qn("w:eastAsia"), memo_font)
+
     normal = document.styles["Normal"]
-    normal.font.name = "Times New Roman"
+    apply_font(normal)
     normal.font.size = Pt(12)
-    normal._element.rPr.rFonts.set(qn("w:ascii"), "Times New Roman")
-    normal._element.rPr.rFonts.set(qn("w:hAnsi"), "Times New Roman")
     normal.paragraph_format.line_spacing = 1.5
     normal.paragraph_format.space_after = Pt(10)
     normal.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     for heading_name, size in (("Heading 1", 16), ("Heading 2", 14), ("Heading 3", 12)):
         style = document.styles[heading_name]
-        style.font.name = "Times New Roman"
+        apply_font(style)
         style.font.size = Pt(size)
         style.font.bold = True
-        style._element.rPr.rFonts.set(qn("w:ascii"), "Times New Roman")
-        style._element.rPr.rFonts.set(qn("w:hAnsi"), "Times New Roman")
         style.paragraph_format.keep_with_next = True
         style.paragraph_format.space_before = Pt(12)
         style.paragraph_format.space_after = Pt(8)
@@ -457,11 +469,9 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
         else:
             style = document.styles.add_style(name, WD_STYLE_TYPE.PARAGRAPH)
             style.base_style = normal
-        style.font.name = "Times New Roman"
+        apply_font(style)
         style.font.size = Pt(12)
         style.font.italic = italic
-        style._element.rPr.rFonts.set(qn("w:ascii"), "Times New Roman")
-        style._element.rPr.rFonts.set(qn("w:hAnsi"), "Times New Roman")
         if gray:
             style.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
         style.paragraph_format.left_indent = Inches(indent)
@@ -490,18 +500,16 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
         run = paragraph.add_run(text)
         run.bold = bold
         run.italic = italic
-        run.font.name = "Times New Roman"
-        run._element.get_or_add_rPr().rFonts.set(qn("w:ascii"), "Times New Roman")
-        run._element.get_or_add_rPr().rFonts.set(qn("w:hAnsi"), "Times New Roman")
+        apply_run_font(run)
         return paragraph
 
     def add_label_value(label: str, value: str):
         paragraph = document.add_paragraph(style="Normal")
         label_run = paragraph.add_run(label)
         label_run.bold = True
-        label_run.font.name = "Times New Roman"
+        apply_run_font(label_run)
         value_run = paragraph.add_run(value)
-        value_run.font.name = "Times New Roman"
+        apply_run_font(value_run)
         return paragraph
 
     def add_criterion_line(role: str):
@@ -1227,6 +1235,8 @@ def _normalize_intake_fields(fields: dict[str, str]) -> dict[str, str]:
         "work_location": "us_work.work_location",
         "duties_summary": "us_work.duties_summary",
         "eb1a_template_variant": "eb1a_template_variant",
+        "memo_font_family": "memo_font_family",
+        "bundle_font_family": "bundle_font_family",
     }
     result: dict[str, str] = {}
     for key, value in fields.items():
@@ -1234,6 +1244,11 @@ def _normalize_intake_fields(fields: dict[str, str]) -> dict[str, str]:
         if value.strip():
             result[normalized] = value.strip()
     return result
+
+
+def _memo_font_family(config: dict[str, Any]) -> str:
+    value = str(config.get("memo_font_family", "")).strip()
+    return value or "Times New Roman"
 
 
 def _apply_gender_defaults(config: dict[str, Any]) -> int:
@@ -2446,10 +2461,11 @@ def _o1b_section_properties() -> str:
     )
 
 
-def _styles_xml() -> str:
-    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+def _styles_xml(font_family: str = "Times New Roman") -> str:
+    font = html.escape(font_family or "Times New Roman", quote=True)
+    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:eastAsia="Aptos"/><w:sz w:val="24"/></w:rPr><w:pPr><w:spacing w:after="160" w:line="278" w:lineRule="auto"/></w:pPr></w:style>
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:rPr><w:rFonts w:ascii="{font}" w:hAnsi="{font}" w:eastAsia="{font}"/><w:sz w:val="24"/></w:rPr><w:pPr><w:spacing w:after="160" w:line="278" w:lineRule="auto"/></w:pPr></w:style>
   <w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="24"/></w:rPr><w:pPr><w:spacing w:before="0" w:after="160"/></w:pPr></w:style>
   <w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="24"/></w:rPr><w:pPr><w:spacing w:before="0" w:after="160"/><w:keepNext/></w:pPr></w:style>
   <w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="24"/></w:rPr><w:pPr><w:spacing w:before="0" w:after="160"/><w:keepNext/></w:pPr></w:style>
@@ -2462,10 +2478,11 @@ def _styles_xml() -> str:
 </w:styles>"""
 
 
-def _o1b_styles_xml() -> str:
-    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+def _o1b_styles_xml(font_family: str = "Times New Roman") -> str:
+    font = html.escape(font_family or "Times New Roman", quote=True)
+    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman"/><w:sz w:val="24"/></w:rPr><w:pPr><w:jc w:val="both"/><w:spacing w:before="0" w:after="160" w:line="360" w:lineRule="auto"/></w:pPr></w:style>
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:rPr><w:rFonts w:ascii="{font}" w:hAnsi="{font}" w:eastAsia="{font}"/><w:sz w:val="24"/></w:rPr><w:pPr><w:jc w:val="both"/><w:spacing w:before="0" w:after="160" w:line="360" w:lineRule="auto"/></w:pPr></w:style>
   <w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="240"/></w:pPr></w:style>
   <w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:pPr><w:spacing w:before="240" w:after="160"/><w:keepNext/></w:pPr></w:style>
   <w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="28"/></w:rPr><w:pPr><w:spacing w:before="200" w:after="120"/><w:keepNext/></w:pPr></w:style>
