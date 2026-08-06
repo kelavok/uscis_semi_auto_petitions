@@ -11,6 +11,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from html import escape
+from io import BytesIO
 from pathlib import Path, PurePosixPath
 
 from .cli_support import PROJECT_ROOT
@@ -1734,7 +1735,7 @@ def build_final_filing_pdf(case_id: str, *, memo_docx_path: str = "") -> FinalFi
             break
         memo_pages = next_memo_pages
 
-    final_pdf = _merge_memo_and_bundle(numbered_pdf, evidence_pdf, final_pdf)
+    final_pdf = _merge_memo_and_bundle(numbered_pdf, evidence_pdf, final_pdf, memo_pages=memo_pages)
     final_pages = _pdf_page_count(final_pdf)
     unresolved = replacement_summary.get("unresolved", [])
     unresolved_count = len(unresolved) if isinstance(unresolved, list) else 0
@@ -2120,14 +2121,20 @@ def _pdf_page_count(path: Path) -> int:
     return len(PdfReader(str(path)).pages)
 
 
-def _merge_memo_and_bundle(memo_pdf: Path, evidence_pdf: Path, final_pdf: Path) -> Path:
+def _merge_memo_and_bundle(memo_pdf: Path, evidence_pdf: Path, final_pdf: Path, *, memo_pages: int) -> Path:
     try:
         from pypdf import PdfReader, PdfWriter  # type: ignore
     except ModuleNotFoundError as exc:
         raise SystemExit("pypdf is required to merge the final filing PDF.") from exc
     writer = PdfWriter()
-    for source in (memo_pdf, evidence_pdf):
-        _add_pdf_pages(writer, PdfReader, source, strip_annotations=True)
+    _add_pdf_pages(writer, PdfReader, memo_pdf, strip_annotations=True)
+    _add_pdf_pages(
+        writer,
+        PdfReader,
+        evidence_pdf,
+        strip_annotations=True,
+        page_number_start=memo_pages + 1,
+    )
     try:
         with final_pdf.open("wb") as handle:
             writer.write(handle)
@@ -2144,6 +2151,7 @@ def _add_pdf_pages(
     pdf_path: Path,
     *,
     strip_annotations: bool,
+    page_number_start: int | None = None,
 ) -> int:
     from pypdf.generic import NameObject  # type: ignore
 
@@ -2152,9 +2160,30 @@ def _add_pdf_pages(
     for page in reader.pages:  # type: ignore[attr-defined]
         if strip_annotations and "/Annots" in page:
             page.pop(NameObject("/Annots"), None)
+        if page_number_start is not None:
+            _stamp_absolute_page_number(page, PdfReader, page_number_start + pages_added)
+        if strip_annotations and "/Annots" in page:
+            page.pop(NameObject("/Annots"), None)
         writer.add_page(page)  # type: ignore[attr-defined]
         pages_added += 1
     return pages_added
+
+
+def _stamp_absolute_page_number(page: object, PdfReader: object, page_number: int) -> None:
+    try:
+        from reportlab.pdfgen import canvas  # type: ignore
+    except ModuleNotFoundError as exc:
+        raise SystemExit("reportlab is required to stamp final PDF page numbers.") from exc
+    width = float(page.mediabox.width)  # type: ignore[attr-defined]
+    height = float(page.mediabox.height)  # type: ignore[attr-defined]
+    buffer = BytesIO()
+    overlay = canvas.Canvas(buffer, pagesize=(width, height))
+    overlay.setFont("Times-Roman", 9)
+    overlay.drawString(36, 18, str(page_number))
+    overlay.save()
+    buffer.seek(0)
+    overlay_page = PdfReader(buffer).pages[0]  # type: ignore[operator]
+    page.merge_page(overlay_page)  # type: ignore[attr-defined]
 
 
 def _clean_pdf_if_possible(path: Path) -> Path:
