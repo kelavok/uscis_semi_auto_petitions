@@ -1523,7 +1523,7 @@ def _evidence_index_entries(
             )
             if is_translation and parent in selected_ids:
                 continue
-            episode_title = _evidence_document_episode_title(document)
+            episode_title = _evidence_document_episode_title(document, config)
             document_title = (
                 document.get("display_title", "").strip()
                 or document.get("original_file_name", "").strip()
@@ -1560,7 +1560,7 @@ def _evidence_index_label(exhibit_number: str, *positions: int) -> str:
     return ".".join(part for part in parts if part) + "."
 
 
-def _evidence_document_episode_title(document: dict[str, str]) -> str:
+def _evidence_document_episode_title(document: dict[str, str], config: dict[str, Any]) -> str:
     raw_path = str(document.get("file_path", "")).replace("\\", "/").strip()
     if not raw_path:
         return ""
@@ -1575,7 +1575,31 @@ def _evidence_document_episode_title(document: dict[str, str]) -> str:
     relative_parts = parts[evidence_root_index + 1 :]
     if len(relative_parts) < 3:
         return ""
-    return relative_parts[1].strip()
+    return _episode_title_override(config, relative_parts[1].strip())
+
+
+def _episode_title_override(config: dict[str, Any], raw_title: str) -> str:
+    title = raw_title.strip()
+    overrides = config.get("episode_title_overrides", {})
+    if not isinstance(overrides, dict) or not title:
+        return title
+    exact = str(overrides.get(title, "")).strip()
+    if exact:
+        return exact
+    normalized_title = _normalize_episode_override_key(title)
+    for key, value in overrides.items():
+        if _normalize_episode_override_key(str(key)) == normalized_title:
+            replacement = str(value).strip()
+            if replacement:
+                return replacement
+    return title
+
+
+def _normalize_episode_override_key(value: str) -> str:
+    value = re.sub(r"^\s*\d+(?:\.\d+)*[\).\s-]+", "", value).strip()
+    return " ".join(
+        "".join(character.casefold() if character.isalnum() else " " for character in value).split()
+    )
 
 
 def _exhibit_index_sort_key(row: dict[str, str]) -> tuple[int, list[object], str]:

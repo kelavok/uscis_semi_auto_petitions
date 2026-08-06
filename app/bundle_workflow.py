@@ -959,14 +959,14 @@ def generate_separator_pages(
         document_groups = _logical_document_groups(document_ids, documents_by_id)
         exhibit_file = separators_dir / f"{exhibit_position:03d}_exhibit_{_safe_filename(exhibit_number)}.md"
         exhibit_file.write_text(
-            _render_exhibit_separator(exhibit, document_groups),
+            _render_exhibit_separator(exhibit, document_groups, loaded.config),
             encoding="utf-8",
         )
         exhibit_pages_written += 1
         manifest_lines.append(f"- {exhibit_file.relative_to(bundle_root).as_posix()}")
 
         for episode_position, section in enumerate(
-            _numbered_episode_document_sections(exhibit, document_groups),
+            _numbered_episode_document_sections(exhibit, document_groups, loaded.config),
             start=1,
         ):
             episode_title = str(section["episode_title"])
@@ -1215,7 +1215,7 @@ def build_bundle_plan(
         sequence += 1
 
         for episode_position, section in enumerate(
-            _numbered_episode_document_sections(exhibit, document_groups),
+            _numbered_episode_document_sections(exhibit, document_groups, loaded.config),
             start=1,
         ):
             episode_title = str(section["episode_title"])
@@ -1643,6 +1643,7 @@ def _exhibit_heading(exhibit: dict[str, str]) -> str:
 def _render_exhibit_separator(
     exhibit: dict[str, str],
     document_groups: list[tuple[dict[str, str], list[dict[str, str]]]],
+    config: dict[str, object] | None = None,
 ) -> str:
     lines = [
         f"# {_exhibit_heading(exhibit)}",
@@ -1653,7 +1654,7 @@ def _render_exhibit_separator(
         lines.extend(["## Evidentiary thesis", "", thesis, ""])
     lines.extend(["## Documents included", ""])
     if document_groups:
-        for section in _numbered_episode_document_sections(exhibit, document_groups):
+        for section in _numbered_episode_document_sections(exhibit, document_groups, config or {}):
             episode_title = str(section["episode_title"])
             episode_number = str(section["episode_number"])
             numbered_groups = section["documents"]
@@ -1695,12 +1696,13 @@ def _render_episode_separator(
 
 
 def _episode_document_sections(
-    document_groups: list[tuple[dict[str, str], list[dict[str, str]]]]
+    document_groups: list[tuple[dict[str, str], list[dict[str, str]]]],
+    config: dict[str, object],
 ) -> list[tuple[str, list[tuple[dict[str, str], list[dict[str, str]]]]]]:
     sections: list[tuple[str, list[tuple[dict[str, str], list[dict[str, str]]]]]] = []
     section_index: dict[str, int] = {}
     for document, translations in document_groups:
-        episode_title = _document_episode_title(document)
+        episode_title = _document_episode_title(document, config)
         if episode_title not in section_index:
             section_index[episode_title] = len(sections)
             sections.append((episode_title, []))
@@ -1711,13 +1713,19 @@ def _episode_document_sections(
 def _numbered_episode_document_sections(
     exhibit: dict[str, str],
     document_groups: list[tuple[dict[str, str], list[dict[str, str]]]],
+    config: dict[str, object],
 ) -> list[dict[str, object]]:
     exhibit_number = exhibit.get("exhibit_number", "").strip() or "1"
     sections: list[dict[str, object]] = []
     episode_counter = 1
     direct_counter = 1
-    for raw_episode_title, groups in _episode_document_sections(document_groups):
-        episode_title = _display_episode_title(raw_episode_title)
+    for raw_episode_title, groups in _episode_document_sections(document_groups, config):
+        overridden_episode_title = _episode_title_override(config, raw_episode_title)
+        episode_title = (
+            overridden_episode_title
+            if overridden_episode_title != raw_episode_title
+            else _display_episode_title(raw_episode_title)
+        )
         numbered_groups: list[tuple[str, dict[str, str], list[dict[str, str]]]] = []
         if episode_title:
             episode_number = f"{exhibit_number}.{episode_counter}"
@@ -1739,7 +1747,7 @@ def _numbered_episode_document_sections(
     return sections
 
 
-def _document_episode_title(document: dict[str, str]) -> str:
+def _document_episode_title(document: dict[str, str], config: dict[str, object]) -> str:
     raw_path = _normalize_slashes(document.get("file_path", "").strip())
     if not raw_path:
         return ""
@@ -1759,6 +1767,30 @@ def _document_episode_title(document: dict[str, str]) -> str:
 
 def _display_episode_title(value: str) -> str:
     return re.sub(r"^\s*\d+(?:\.\d+)*[\).\s-]+", "", value).strip() or value.strip()
+
+
+def _episode_title_override(config: dict[str, object], raw_title: str) -> str:
+    title = raw_title.strip()
+    overrides = config.get("episode_title_overrides", {})
+    if not isinstance(overrides, dict) or not title:
+        return title
+    exact = str(overrides.get(title, "")).strip()
+    if exact:
+        return exact
+    normalized_title = _normalize_episode_override_key(title)
+    for key, value in overrides.items():
+        if _normalize_episode_override_key(str(key)) == normalized_title:
+            replacement = str(value).strip()
+            if replacement:
+                return replacement
+    return title
+
+
+def _normalize_episode_override_key(value: str) -> str:
+    value = re.sub(r"^\s*\d+(?:\.\d+)*[\).\s-]+", "", value).strip()
+    return " ".join(
+        "".join(character.casefold() if character.isalnum() else " " for character in value).split()
+    )
 
 
 def _render_document_separator(
