@@ -310,6 +310,26 @@ steps:
     section_instructions: instructions/task_types/eb1a_petition/sections/two_phase_criterion_phase_1.md
     evidence_folder_roles:
       - high_salary
+    phase_subfolder_terms:
+      - compensation fact
+      - compensation facts
+      - salary fact
+      - salary facts
+      - pay records
+      - payroll
+      - employment contract
+      - contract
+      - bonus
+      - bonuses
+      - tax
+      - income
+      - факт
+      - получение
+      - получения
+      - зарплата
+      - зп
+      - премии
+      - договор
     destination_pattern: draft_sections/criteria/high_salary/{episode_id}_phase_1.md
 
   - step_id: criterion_high_salary_comparison
@@ -320,6 +340,32 @@ steps:
     section_instructions: instructions/task_types/eb1a_petition/sections/two_phase_criterion_phase_2.md
     evidence_folder_roles:
       - high_salary
+    phase_subfolder_terms:
+      - comparison
+      - comparative
+      - benchmark
+      - benchmarks
+      - market data
+      - salary survey
+      - salary surveys
+      - survey
+      - surveys
+      - source
+      - sources
+      - rosstat
+      - hh
+      - gorodrabot
+      - citywork
+      - rbk
+      - kommersant
+      - сравнительная
+      - сравнение
+      - база
+      - источники
+      - рынок
+      - росстат
+      - городработ
+      - коммерсант
     destination_pattern: draft_sections/criteria/high_salary/{episode_id}_phase_2.md
 
   - step_id: criterion_commercial_success_episode

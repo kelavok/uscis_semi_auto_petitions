@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from html import escape
 from pathlib import Path, PurePosixPath
 
+from .cli_support import PROJECT_ROOT
 from .evidence import INDEX_FIELDS, scan_documents
 from .file_rules import prompt_sidecar_kind
 from .workflow import (
@@ -18,6 +19,7 @@ from .workflow import (
     find_step,
     format_missing_selected_documents_message,
     load_case,
+    load_yaml_file,
     LoadedCase,
     missing_selected_documents_from_output,
     PromptOptions,
@@ -678,13 +680,61 @@ def _exhibit_metadata_for_output(
         section_title = str(unit.get("section_title", "")).strip()
         role = str(unit.get("criterion_role", "")).strip()
         return section_title or str(unit.get("title", "")).strip(), role
+    title_from_structure, role_from_structure = _criterion_metadata_from_working_structure(
+        loaded, step_id
+    )
+    if title_from_structure:
+        return title_from_structure, role_from_structure
     try:
         step = find_step(loaded.workflow, step_id)
     except SystemExit:
         return "", ""
     title = str(step.get("exhibit_title", "") or step.get("title", "")).strip()
-    memo_section = str(step.get("memo_section", "") or step.get("criterion_role", "")).strip()
+    roles = _normalize_step_roles(step)
+    memo_section = str(
+        step.get("memo_section", "") or step.get("criterion_role", "") or (roles[0] if len(roles) == 1 else "")
+    ).strip()
     return title, memo_section
+
+
+def _criterion_metadata_from_working_structure(
+    loaded: LoadedCase, step_id: str
+) -> tuple[str, str]:
+    task_type = str(loaded.config.get("task_type", ""))
+    if task_type not in {"eb1a_petition", "o1b_petition"}:
+        return "", ""
+    value = str(loaded.config.get("working_document_template", "")).strip()
+    if not value:
+        return "", ""
+    path = Path(value)
+    resolved = path if path.is_absolute() else PROJECT_ROOT / path
+    if not resolved.exists():
+        return "", ""
+    try:
+        structure = load_yaml_file(resolved)
+    except Exception:  # noqa: BLE001 - metadata fallback should not block bundle diagnostics.
+        return "", ""
+    criteria = structure.get("criteria", {}) if isinstance(structure, dict) else {}
+    if not isinstance(criteria, dict):
+        return "", ""
+    for role, criterion in criteria.items():
+        if not isinstance(criterion, dict):
+            continue
+        step_ids = criterion.get("step_ids", [])
+        if not isinstance(step_ids, list):
+            step_ids = [step_ids]
+        if step_id not in {str(item).strip() for item in step_ids}:
+            continue
+        title = str(criterion.get("title", "")).strip()
+        return title, str(role).strip()
+    return "", ""
+
+
+def _normalize_step_roles(step: dict[str, object]) -> list[str]:
+    roles = step.get("evidence_folder_roles", [])
+    if not isinstance(roles, list):
+        roles = [roles]
+    return [str(role).strip() for role in roles if str(role).strip()]
 
 
 def _exhibit_number_for_output(loaded: LoadedCase, data: dict[str, object]) -> str:

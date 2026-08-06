@@ -140,6 +140,11 @@ def _split_key_value(stripped_line: str) -> tuple[str, str]:
 def _parse_scalar(value: str) -> Any:
     if value in {"[]", "null", "Null", "NULL", "~"}:
         return [] if value == "[]" else None
+    if value.startswith("[") and value.endswith("]"):
+        inner = value[1:-1].strip()
+        if not inner:
+            return []
+        return [_parse_scalar(part.strip()) for part in _split_inline_list(inner)]
     if value in {"true", "True", "TRUE"}:
         return True
     if value in {"false", "False", "FALSE"}:
@@ -149,6 +154,40 @@ def _parse_scalar(value: str) -> Any:
     ):
         return value[1:-1]
     return value
+
+
+def _split_inline_list(value: str) -> list[str]:
+    parts: list[str] = []
+    current: list[str] = []
+    quote: str | None = None
+    escape = False
+    for char in value:
+        if escape:
+            current.append(char)
+            escape = False
+            continue
+        if char == "\\" and quote == '"':
+            current.append(char)
+            escape = True
+            continue
+        if quote:
+            current.append(char)
+            if char == quote:
+                quote = None
+            continue
+        if char in {'"', "'"}:
+            current.append(char)
+            quote = char
+            continue
+        if char == ",":
+            parts.append("".join(current).strip())
+            current = []
+            continue
+        current.append(char)
+    tail = "".join(current).strip()
+    if tail:
+        parts.append(tail)
+    return parts
 
 
 def _indent_of(line: str) -> int:

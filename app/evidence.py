@@ -52,8 +52,7 @@ DOCX_EXTENSIONS = {".docx"}
 PDF_EXTENSIONS = {".pdf"}
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp", ".heic"}
 MANUAL_DESCRIPTION_PLACEHOLDER = "[Write factual manual description here. Replace this line.]"
-PDF_MAX_PAGES = 20
-PDF_MAX_CHARACTERS = 200_000
+EXTRACTION_PIPELINE_VERSION = "full-evidence-text-v2"
 
 
 @dataclass(frozen=True)
@@ -173,7 +172,7 @@ def scan_documents(case_id: str) -> ScanSummary:
         row["text_extraction_path"] = extraction.relative_text_path
         row["source_fingerprint"] = fingerprint
         row["last_scanned_at"] = now
-        row["notes"] = _merge_notes(row.get("notes", ""), extraction.note)
+        row["notes"] = _merge_notes(_without_obsolete_extraction_notes(row.get("notes", "")), extraction.note)
 
     retained_rows: list[dict[str, str]] = []
     for row in rows:
@@ -652,19 +651,13 @@ def _extract_pdf_text(file_path: Path) -> tuple[str, str, str]:
             logging.getLogger("pypdf").setLevel(logging.ERROR)
             reader = PdfReader(str(file_path))
             pages = []
-            total_characters = 0
             for page_number, page in enumerate(reader.pages):
-                if page_number >= PDF_MAX_PAGES or total_characters >= PDF_MAX_CHARACTERS:
-                    break
                 page_text = (page.extract_text() or "").strip()
                 if page_text:
                     pages.append(page_text)
-                    total_characters += len(page_text)
             text = "\n\n".join(page for page in pages if page)
             if text.strip():
-                truncated = len(reader.pages) > PDF_MAX_PAGES or len(text) >= PDF_MAX_CHARACTERS
-                note = f"PDF extraction limited to first {PDF_MAX_PAGES} pages / {PDF_MAX_CHARACTERS} characters." if truncated else ""
-                return text[:PDF_MAX_CHARACTERS], "text_extracted", note
+                return text, "text_extracted", ""
             return "", "pdf_no_extractable_text", "PDF appears scanned or image-only; OCR/manual description needed."
         except Exception as exc:  # noqa: BLE001
             pypdf_error = exc
@@ -682,12 +675,10 @@ def _extract_pdf_text(file_path: Path) -> tuple[str, str, str]:
 
     try:
         with pdfplumber.open(file_path) as pdf:
-            pages = [(page.extract_text() or "").strip() for page in pdf.pages[:PDF_MAX_PAGES]]
+            pages = [(page.extract_text() or "").strip() for page in pdf.pages]
         text = "\n\n".join(page for page in pages if page)
         if text.strip():
-            truncated = len(pdf.pages) > PDF_MAX_PAGES or len(text) >= PDF_MAX_CHARACTERS
-            note = f"PDF extraction limited to first {PDF_MAX_PAGES} pages / {PDF_MAX_CHARACTERS} characters." if truncated else ""
-            return text[:PDF_MAX_CHARACTERS], "text_extracted", note
+            return text, "text_extracted", ""
         return "", "pdf_no_extractable_text", "PDF appears scanned or image-only; OCR/manual description needed."
     except Exception as exc:  # noqa: BLE001
         note = f"pypdf failed: {pypdf_error}; " if pypdf_error else ""
@@ -841,10 +832,22 @@ def _source_key_for_kind(loaded: LoadedCase, source_kind: str) -> str:
 
 def _fingerprint(path: Path) -> str:
     digest = hashlib.sha256()
+    digest.update((EXTRACTION_PIPELINE_VERSION + "\0").encode("utf-8"))
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return "sha256:" + digest.hexdigest()
+
+
+def _without_obsolete_extraction_notes(notes: str) -> str:
+    obsolete_prefixes = (
+        "PDF extraction limited to first ",
+    )
+    return " | ".join(
+        part
+        for part in (item.strip() for item in (notes or "").split("|"))
+        if part and not any(part.startswith(prefix) for prefix in obsolete_prefixes)
+    )
 
 
 def _merge_notes(existing: str, new: str) -> str:

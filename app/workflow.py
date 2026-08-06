@@ -21,7 +21,7 @@ from .template_variants import eb1a_template_variant, eb1a_variant_source_path
 TEXT_EXTENSIONS = {".txt", ".md", ".csv", ".json", ".yaml", ".yml"}
 DOCX_EXTENSIONS = {".docx"}
 PROMPT_TEXT_LIMIT = 18_000
-EVIDENCE_TEXT_LIMIT = 12_000
+EVIDENCE_TEXT_LIMIT: int | None = None
 
 
 @dataclass(frozen=True)
@@ -870,8 +870,20 @@ def insert_section(
     if target.exists() and not force:
         raise SystemExit(f"Draft section already exists; use --force to replace: {target}")
     target.write_text(str(data["draft_text"]).strip() + "\n", encoding="utf-8")
-    # Keep the human-facing Word memorandum synchronized with validated draft sections when
-    # a working memo template is available for this case.
+    # Keep exhibit assignments synchronized before rebuilding the human-facing
+    # memorandum. Validated LLM output may introduce new used_documents (for
+    # example a newly completed awards episode); if the layout indexes are not
+    # refreshed first, the rebuilt memo can contain citations to an Exhibit that
+    # is still absent from the Evidence Index and Stage 3 bundle plan.
+    try:
+        from .bundle_workflow import refresh_layout_indexes
+
+        refresh_layout_indexes(case_id)
+    except SystemExit:
+        pass
+
+    # Keep the human-facing Word memorandum synchronized with validated draft
+    # sections when a working memo template is available for this case.
     try:
         from .memo_builder import build_working_memo
 
@@ -1166,6 +1178,7 @@ def _repeatable_episode_candidates(loaded: LoadedCase, step: dict[str, Any]) -> 
     roles = _normalize_path_list(step.get("evidence_folder_roles", []))
     role_map = folder_role_map(loaded.config)
     grouped_candidates: dict[str, tuple[str, str, int]] = {}
+    phase_terms = _repeatable_group_phase_terms(loaded, step)
     for role in roles:
         folder_name = str(role_map.get(role, role))
         for priority, source_key in enumerate(["source_originals", "source_translations", "source_other"]):
@@ -1176,8 +1189,13 @@ def _repeatable_episode_candidates(loaded: LoadedCase, step: dict[str, Any]) -> 
             subfolders = [
                 path for path in sorted(role_folder.iterdir()) if path.is_dir() and _folder_has_files(path)
             ]
-            if subfolders:
-                for folder in subfolders:
+            episode_subfolders = [
+                path
+                for path in subfolders
+                if not (phase_terms and _episode_folder_matches_terms(path.name, phase_terms))
+            ]
+            if episode_subfolders:
+                for folder in episode_subfolders:
                     display_name = folder.name
                     existing_key = _matching_episode_group_key(grouped_candidates, display_name)
                     group_key = existing_key or _episode_group_key(display_name)
@@ -1190,6 +1208,24 @@ def _repeatable_episode_candidates(loaded: LoadedCase, step: dict[str, Any]) -> 
                 grouped_candidates.setdefault(".", (candidate[0], candidate[1], priority))
     ordered = sorted(grouped_candidates.values(), key=lambda item: (item[2], item[1].casefold()))
     return [(episode_id, folder_name) for episode_id, folder_name, _priority in ordered]
+
+
+def _repeatable_group_phase_terms(loaded: LoadedCase, step: dict[str, Any]) -> tuple[str, ...]:
+    """Return phase-folder aliases for sibling steps sharing this repeatable evidence group."""
+    repeat_unit = str(step.get("repeat_unit", "")).strip()
+    roles = tuple(_normalize_path_list(step.get("evidence_folder_roles", [])))
+    if not repeat_unit or not roles:
+        return tuple(_normalize_path_list(step.get("phase_subfolder_terms", [])))
+    terms: list[str] = []
+    for candidate in loaded.workflow.get("steps", []):
+        if not isinstance(candidate, dict):
+            continue
+        if str(candidate.get("repeat_unit", "")).strip() != repeat_unit:
+            continue
+        if tuple(_normalize_path_list(candidate.get("evidence_folder_roles", []))) != roles:
+            continue
+        terms.extend(_normalize_path_list(candidate.get("phase_subfolder_terms", [])))
+    return tuple(dict.fromkeys(terms))
 
 
 def _scoped_repeatable_episode_candidate(
@@ -1801,7 +1837,7 @@ def safe_path_component(value: str) -> str:
     return safe
 
 
-def read_textual_file(path: Path, limit: int) -> str:
+def read_textual_file(path: Path, limit: int | None = None) -> str:
     suffix = path.suffix.lower()
     try:
         if suffix in TEXT_EXTENSIONS:
@@ -1812,7 +1848,7 @@ def read_textual_file(path: Path, limit: int) -> str:
             text = f"[Unsupported source file type for prompt text extraction: {path.name}]"
     except Exception as exc:  # noqa: BLE001 - prompt should include extraction failures.
         text = f"[Could not read file: {path} ({exc})]"
-    if len(text) > limit:
+    if limit is not None and len(text) > limit:
         return text[:limit] + f"\n\n[Truncated at {limit} characters.]"
     return text
 

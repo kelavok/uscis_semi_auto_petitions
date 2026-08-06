@@ -1536,12 +1536,28 @@ def _evidence_index_entries(
                     episode_groups.append((episode_title, []))
                 episode_groups[episode_index[episode_title]][1].append(document_title)
         evidence_items: list[tuple[str, str]] = []
-        for episode_title, titles in episode_groups:
+        has_episode_groups = any(episode_title for episode_title, _titles in episode_groups)
+        for episode_position, (episode_title, titles) in enumerate(episode_groups, start=1):
             if episode_title:
-                evidence_items.append(("episode", episode_title))
-            evidence_items.extend(("document", title) for title in titles)
+                evidence_items.append(
+                    (
+                        "episode",
+                        f"{_evidence_index_label(number, episode_position)} {episode_title}",
+                    )
+                )
+            for document_position, title in enumerate(titles, start=1):
+                if has_episode_groups:
+                    label = _evidence_index_label(number, episode_position, document_position)
+                else:
+                    label = _evidence_index_label(number, document_position)
+                evidence_items.append(("document", f"{label} {title}"))
         entries.append((heading, evidence_items))
     return entries
+
+
+def _evidence_index_label(exhibit_number: str, *positions: int) -> str:
+    parts = [exhibit_number.strip(), *(str(position) for position in positions)]
+    return ".".join(part for part in parts if part) + "."
 
 
 def _evidence_document_episode_title(document: dict[str, str]) -> str:
@@ -1760,7 +1776,6 @@ def _eb1a_migrator_document_xml(config: dict[str, Any], case_dir: Path) -> str:
                     _rich_paragraph(
                         [(item_title, {})],
                         style=style,
-                        num_id=2 if item_kind == "document" else None,
                     )
                 )
     else:
