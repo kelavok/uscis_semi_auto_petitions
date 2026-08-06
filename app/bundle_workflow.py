@@ -3,7 +3,10 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import logging
 import re
+import shutil
+import subprocess
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path, PurePosixPath
@@ -47,6 +50,7 @@ TEXT_SOURCE_EXTENSIONS = {".txt", ".md", ".csv", ".json", ".yaml", ".yml"}
 DOCX_SOURCE_EXTENSIONS = {".docx"}
 IMAGE_SOURCE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp"}
 PDF_SOURCE_EXTENSIONS = {".pdf"}
+logging.getLogger("pypdf").setLevel(logging.ERROR)
 AUTO_DOCUMENT_INDEX_NOTE = "Auto-assigned from validated LLM outputs."
 AUTO_EXHIBIT_INDEX_NOTE = "Generated/updated from document_index.csv."
 EXHIBIT_NUMBER_BY_ROLE = {
@@ -116,6 +120,22 @@ class BundleBuildSummary:
     merged_items: int
     converted_items: int
     skipped_items: int
+
+
+@dataclass(frozen=True)
+class FinalFilingSummary:
+    final_pdf_path: Path
+    numbered_memo_docx_path: Path
+    numbered_memo_pdf_path: Path
+    evidence_bundle_pdf_path: Path
+    report_path: Path
+    memo_pages: int
+    bundle_pages: int
+    final_pages: int
+    placeholders_seen: int
+    placeholders_resolved: int
+    placeholders_unresolved: int
+    iterations: int
 
 
 @dataclass(frozen=True)
@@ -1375,6 +1395,507 @@ def build_evidence_bundle(case_id: str) -> BundleBuildSummary:
         converted_items=converted_items,
         skipped_items=skipped_items,
     )
+
+
+def build_final_filing_pdf(case_id: str, *, memo_docx_path: str = "") -> FinalFilingSummary:
+    """Stage 4: resolve memo PAGE placeholders and merge memo + evidence bundle."""
+    loaded = load_case(case_id)
+    preparation = inspect_bundle_preparation(case_id)
+    if not preparation.ready_to_build:
+        raise SystemExit(f"Stage 3 bundle is not ready: {preparation.reason}")
+
+    bundle_summary = build_evidence_bundle(case_id)
+    evidence_pdf = bundle_summary.final_pdf_path
+    if not evidence_pdf.exists():
+        raise SystemExit(f"Evidence bundle PDF not found: {evidence_pdf}")
+
+    final_memo_root = loaded.case_dir / _case_path_value(loaded.config, "final_memo")
+    source_memo = Path(memo_docx_path) if memo_docx_path else final_memo_root / "working_memo.docx"
+    if not source_memo.is_absolute():
+        source_memo = loaded.case_dir / source_memo
+    if not source_memo.exists():
+        raise SystemExit(f"Memo DOCX not found: {source_memo}")
+
+    bundle_root = loaded.case_dir / _case_path_value(loaded.config, "bundle_root")
+    final_dir = bundle_root / "final"
+    final_dir.mkdir(parents=True, exist_ok=True)
+    numbered_docx = final_memo_root / "working_memo_numbered.docx"
+    numbered_pdf = final_memo_root / "working_memo_numbered.pdf"
+    final_pdf = final_dir / "final_filing.pdf"
+    report_path = final_dir / "final_filing_report.md"
+
+    document_lookup = _bundle_document_citation_index(loaded)
+    plan_items = _read_plan_csv(bundle_summary.plan_csv_path)
+    evidence_page_count = _pdf_page_count(evidence_pdf)
+
+    memo_pages = 0
+    replacement_summary: dict[str, object] = {
+        "seen": 0,
+        "resolved": 0,
+        "unresolved": [],
+    }
+    iterations = 0
+    for iterations in range(1, 5):
+        if iterations == 1:
+            probe_pdf = final_memo_root / "working_memo_probe.pdf"
+            _convert_docx_to_pdf(source_memo, probe_pdf)
+            memo_pages = _pdf_page_count(probe_pdf)
+        separator_pages = _document_separator_pages_from_plan(loaded, plan_items)
+        absolute_pages = {
+            document_id: memo_pages + bundle_page
+            for document_id, bundle_page in separator_pages.items()
+        }
+        shutil.copy2(source_memo, numbered_docx)
+        replacement_summary = _replace_memo_page_placeholders(
+            numbered_docx,
+            document_lookup=document_lookup,
+            absolute_pages=absolute_pages,
+        )
+        _convert_docx_to_pdf(numbered_docx, numbered_pdf)
+        next_memo_pages = _pdf_page_count(numbered_pdf)
+        if next_memo_pages == memo_pages:
+            break
+        memo_pages = next_memo_pages
+
+    final_pdf = _merge_memo_and_bundle(numbered_pdf, evidence_pdf, final_pdf)
+    final_pages = _pdf_page_count(final_pdf)
+    unresolved = replacement_summary.get("unresolved", [])
+    unresolved_count = len(unresolved) if isinstance(unresolved, list) else 0
+    report_path.write_text(
+        _render_final_filing_report(
+            case_id=case_id,
+            source_memo=source_memo,
+            numbered_docx=numbered_docx,
+            numbered_pdf=numbered_pdf,
+            evidence_pdf=evidence_pdf,
+            final_pdf=final_pdf,
+            memo_pages=memo_pages,
+            bundle_pages=evidence_page_count,
+            final_pages=final_pages,
+            placeholders_seen=int(replacement_summary.get("seen", 0)),
+            placeholders_resolved=int(replacement_summary.get("resolved", 0)),
+            unresolved=replacement_summary.get("unresolved", []),
+            iterations=iterations,
+        ),
+        encoding="utf-8",
+    )
+    return FinalFilingSummary(
+        final_pdf_path=final_pdf,
+        numbered_memo_docx_path=numbered_docx,
+        numbered_memo_pdf_path=numbered_pdf,
+        evidence_bundle_pdf_path=evidence_pdf,
+        report_path=report_path,
+        memo_pages=memo_pages,
+        bundle_pages=evidence_page_count,
+        final_pages=final_pages,
+        placeholders_seen=int(replacement_summary.get("seen", 0)),
+        placeholders_resolved=int(replacement_summary.get("resolved", 0)),
+        placeholders_unresolved=unresolved_count,
+        iterations=iterations,
+    )
+
+
+def _document_separator_pages_from_plan(
+    loaded: LoadedCase, items: list[dict[str, str]]
+) -> dict[str, int]:
+    pages: dict[str, int] = {}
+    bundle_page = 1
+    for item in items:
+        path_value = item.get("path", "").strip()
+        if not path_value:
+            continue
+        pdf_path = loaded.case_dir / path_value
+        if item.get("item_type") == "document_separator" and item.get("document_id"):
+            pages.setdefault(item["document_id"], bundle_page)
+        if pdf_path.exists() and item.get("status") in {"ready_pdf", "convertible_image", "convertible_text"}:
+            try:
+                bundle_page += _pdf_page_count(pdf_path)
+            except Exception:
+                bundle_page += 1
+    return pages
+
+
+def _bundle_document_citation_index(
+    loaded: LoadedCase,
+) -> dict[str, dict[object, object]]:
+    document_index_path = loaded.case_dir / _case_path_value(loaded.config, "document_index")
+    exhibit_index_path = loaded.case_dir / _case_path_value(loaded.config, "exhibit_index")
+    document_rows = _read_csv(document_index_path, INDEX_FIELDS)
+    exhibit_rows = _read_csv(exhibit_index_path, EXHIBIT_FIELDS)
+    documents_by_id = {
+        row.get("document_id", ""): row
+        for row in document_rows
+        if row.get("document_id")
+    }
+    by_number: dict[tuple[str, str], str] = {}
+    by_title: dict[tuple[str, str], list[str]] = {}
+    titles_by_id: dict[str, str] = {}
+    for exhibit in sorted(exhibit_rows, key=_exhibit_sort_key):
+        exhibit_number = exhibit.get("exhibit_number", "").strip()
+        document_ids = [
+            part.strip()
+            for part in exhibit.get("document_ids", "").split(";")
+            if part.strip()
+        ]
+        document_groups = _logical_document_groups(document_ids, documents_by_id)
+        for section in _numbered_episode_document_sections(exhibit, document_groups, loaded.config):
+            for document_number, document, translations in section["documents"]:
+                document_id = document.get("document_id", "")
+                if not document_id:
+                    continue
+                by_number[(exhibit_number, str(document_number).rstrip("."))] = document_id
+                candidate_titles = [
+                    _document_title(document),
+                    document.get("display_title", ""),
+                    document.get("original_file_name", ""),
+                ]
+                if translations:
+                    candidate_titles.append(f"{_document_title(document)}; English translation")
+                titles_by_id[document_id] = _document_title(document)
+                for title in candidate_titles:
+                    normalized = _normalize_citation_text(title)
+                    if normalized:
+                        by_title.setdefault((exhibit_number, normalized), []).append(document_id)
+    return {
+        "by_number": by_number,
+        "by_title": by_title,
+        "titles_by_id": titles_by_id,
+    }
+
+
+def _replace_memo_page_placeholders(
+    docx_path: Path,
+    *,
+    document_lookup: dict[str, dict[object, object]],
+    absolute_pages: dict[str, int],
+) -> dict[str, object]:
+    try:
+        from docx import Document  # type: ignore
+    except ModuleNotFoundError as exc:
+        raise SystemExit("python-docx is required to update memo page placeholders.") from exc
+
+    document = Document(docx_path)
+    seen = 0
+    resolved = 0
+    unresolved: list[str] = []
+    for paragraph in _iter_docx_paragraphs(document):
+        text = paragraph.text
+        if "PAGE" not in text:
+            continue
+        replacements: list[str | None] = []
+        for match in re.finditer(r"\bPAGE\b", text):
+            seen += 1
+            document_id = _resolve_page_placeholder_document_id(
+                text,
+                match.start(),
+                document_lookup=document_lookup,
+            )
+            if document_id and document_id in absolute_pages:
+                replacements.append(str(absolute_pages[document_id]))
+                resolved += 1
+            else:
+                replacements.append(None)
+                unresolved.append(_placeholder_context(text, match.start()))
+        _replace_page_tokens_in_paragraph(paragraph, replacements)
+    document.save(docx_path)
+    return {"seen": seen, "resolved": resolved, "unresolved": unresolved}
+
+
+def _resolve_page_placeholder_document_id(
+    text: str,
+    page_offset: int,
+    *,
+    document_lookup: dict[str, dict[object, object]],
+) -> str:
+    start = text.rfind("Exhibit", 0, page_offset)
+    if start < 0:
+        start = max(0, page_offset - 240)
+    end = text.find(")", page_offset)
+    if end < 0:
+        end = min(len(text), page_offset + 520)
+    fragment = text[start:end]
+    exhibit_match = re.search(r"Exhibit\s+([0-9]+(?:-[0-9]+)?)", fragment, re.IGNORECASE)
+    if not exhibit_match:
+        return ""
+    exhibit_number = exhibit_match.group(1)
+    after_page = text[page_offset + len("PAGE") : end]
+    next_reference = re.search(r";\s*Exhibit\s+", after_page, re.IGNORECASE)
+    if next_reference:
+        after_page = after_page[: next_reference.start()]
+    desc = after_page
+    if ":" in desc:
+        desc = desc.split(":", 1)[1]
+    desc = desc.strip(" .;:")
+    number_match = re.match(
+        r"([0-9]+(?:-[0-9]+)?(?:\.\d+)+)\.?\s*(?:[-–—]\s*)?(.*)",
+        desc,
+    )
+    by_number = document_lookup.get("by_number", {})
+    if number_match:
+        item_number = number_match.group(1).rstrip(".")
+        document_id = by_number.get((exhibit_number, item_number))
+        if isinstance(document_id, str) and document_id:
+            return document_id
+        desc = number_match.group(2).strip(" .;:")
+
+    normalized_desc = _normalize_citation_text(desc)
+    if not normalized_desc:
+        return ""
+    by_title = document_lookup.get("by_title", {})
+    exact = by_title.get((exhibit_number, normalized_desc))
+    if isinstance(exact, list) and len(set(exact)) == 1:
+        return exact[0]
+    candidates: list[str] = []
+    for key, values in by_title.items():
+        if not isinstance(key, tuple) or len(key) != 2 or key[0] != exhibit_number:
+            continue
+        title = str(key[1])
+        if title and (title in normalized_desc or normalized_desc in title):
+            if isinstance(values, list):
+                candidates.extend(values)
+    unique = sorted(set(candidates))
+    if len(unique) == 1:
+        return unique[0]
+
+    scored: list[tuple[float, str]] = []
+    desc_tokens = set(normalized_desc.split())
+    if not desc_tokens:
+        return ""
+    for key, values in by_title.items():
+        if not isinstance(key, tuple) or len(key) != 2 or key[0] != exhibit_number:
+            continue
+        title = str(key[1])
+        title_tokens = set(title.split())
+        if not title_tokens:
+            continue
+        overlap = len(desc_tokens & title_tokens)
+        title_coverage = overlap / max(1, len(title_tokens))
+        desc_coverage = overlap / max(1, len(desc_tokens))
+        score = (0.75 * title_coverage) + (0.25 * desc_coverage)
+        if score >= 0.62 and isinstance(values, list):
+            for document_id in values:
+                scored.append((score, document_id))
+    if not scored:
+        return ""
+    scored.sort(reverse=True)
+    best_score = scored[0][0]
+    best_ids = sorted({document_id for score, document_id in scored if score == best_score})
+    return best_ids[0] if len(best_ids) == 1 else ""
+
+
+def _replace_page_tokens_in_paragraph(paragraph: object, replacements: list[str | None]) -> None:
+    if not replacements:
+        return
+    remaining = list(replacements)
+    run_page_tokens = sum(str(run.text).count("PAGE") for run in paragraph.runs)
+    if run_page_tokens == len(replacements):
+        for run in paragraph.runs:
+            text = str(run.text)
+            while "PAGE" in text and remaining:
+                replacement = remaining.pop(0)
+                text = text.replace("PAGE", replacement if replacement is not None else "PAGE", 1)
+            run.text = text
+        return
+
+    text = paragraph.text
+    for replacement in replacements:
+        text = re.sub(r"\bPAGE\b", replacement if replacement is not None else "PAGE", text, count=1)
+    for run in paragraph.runs:
+        run.text = ""
+    if paragraph.runs:
+        paragraph.runs[0].text = text
+
+
+def _iter_docx_paragraphs(document: object) -> list[object]:
+    paragraphs: list[object] = []
+    paragraphs.extend(document.paragraphs)
+    for table in document.tables:
+        paragraphs.extend(_iter_table_paragraphs(table))
+    for section in document.sections:
+        paragraphs.extend(section.header.paragraphs)
+        paragraphs.extend(section.footer.paragraphs)
+        for table in section.header.tables:
+            paragraphs.extend(_iter_table_paragraphs(table))
+        for table in section.footer.tables:
+            paragraphs.extend(_iter_table_paragraphs(table))
+    return paragraphs
+
+
+def _iter_table_paragraphs(table: object) -> list[object]:
+    paragraphs: list[object] = []
+    for row in table.rows:
+        for cell in row.cells:
+            paragraphs.extend(cell.paragraphs)
+            for nested_table in cell.tables:
+                paragraphs.extend(_iter_table_paragraphs(nested_table))
+    return paragraphs
+
+
+def _placeholder_context(text: str, offset: int) -> str:
+    start = max(0, offset - 120)
+    end = min(len(text), offset + 260)
+    return " ".join(text[start:end].split())
+
+
+def _normalize_citation_text(value: str) -> str:
+    value = value.casefold()
+    value = re.sub(r"\boriginal and english translation\b", " ", value)
+    value = re.sub(r"\benglish translation\b", " ", value)
+    value = re.sub(r"\boriginal\b", " ", value)
+    value = re.sub(r"^\s*[0-9]+(?:-[0-9]+)?(?:\.\d+)*\.?\s*[-–—]?\s*", " ", value)
+    return " ".join(
+        "".join(character if character.isalnum() else " " for character in value).split()
+    )
+
+
+def _convert_docx_to_pdf(docx_path: Path, pdf_path: Path) -> None:
+    pdf_path.parent.mkdir(parents=True, exist_ok=True)
+    if pdf_path.exists():
+        try:
+            pdf_path.unlink()
+        except PermissionError:
+            pdf_path = pdf_path.with_name(pdf_path.stem + "_updated.pdf")
+    soffice = _find_soffice()
+    if soffice:
+        output_dir = pdf_path.parent
+        subprocess.run(
+            [
+                soffice,
+                "--headless",
+                "--convert-to",
+                "pdf",
+                "--outdir",
+                str(output_dir),
+                str(docx_path),
+            ],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        converted = output_dir / (docx_path.stem + ".pdf")
+        if converted != pdf_path:
+            if pdf_path.exists():
+                pdf_path.unlink()
+            converted.replace(pdf_path)
+        if not pdf_path.exists():
+            raise SystemExit(f"DOCX to PDF conversion did not create: {pdf_path}")
+        return
+    _convert_docx_to_pdf_with_word(docx_path, pdf_path)
+
+
+def _convert_docx_to_pdf_with_word(docx_path: Path, pdf_path: Path) -> None:
+    try:
+        import pythoncom  # type: ignore
+        import win32com.client  # type: ignore
+    except ModuleNotFoundError as exc:
+        raise SystemExit(
+            "DOCX to PDF conversion requires LibreOffice (`soffice`) or Microsoft Word "
+            "automation (`pip install pywin32`)."
+        ) from exc
+    word = None
+    opened = None
+    pythoncom.CoInitialize()
+    try:
+        word = win32com.client.DispatchEx("Word.Application")
+        word.Visible = False
+        word.DisplayAlerts = 0
+        opened = word.Documents.Open(str(docx_path.resolve()), ReadOnly=True)
+        opened.ExportAsFixedFormat(str(pdf_path.resolve()), 17)
+    finally:
+        if opened is not None:
+            opened.Close(False)
+        if word is not None:
+            word.Quit()
+        pythoncom.CoUninitialize()
+    if not pdf_path.exists():
+        raise SystemExit(f"Microsoft Word did not create PDF: {pdf_path}")
+
+
+def _find_soffice() -> str:
+    on_path = shutil.which("soffice")
+    if on_path:
+        return on_path
+    for candidate in (
+        "C:/Program Files/LibreOffice/program/soffice.exe",
+        "C:/Program Files (x86)/LibreOffice/program/soffice.exe",
+    ):
+        if Path(candidate).exists():
+            return candidate
+    return ""
+
+
+def _pdf_page_count(path: Path) -> int:
+    try:
+        from pypdf import PdfReader  # type: ignore
+    except ModuleNotFoundError as exc:
+        raise SystemExit("pypdf is required to count PDF pages.") from exc
+    return len(PdfReader(str(path)).pages)
+
+
+def _merge_memo_and_bundle(memo_pdf: Path, evidence_pdf: Path, final_pdf: Path) -> Path:
+    try:
+        from pypdf import PdfReader, PdfWriter  # type: ignore
+    except ModuleNotFoundError as exc:
+        raise SystemExit("pypdf is required to merge the final filing PDF.") from exc
+    writer = PdfWriter()
+    for source in (memo_pdf, evidence_pdf):
+        reader = PdfReader(str(source))
+        for page in reader.pages:
+            writer.add_page(page)
+    try:
+        with final_pdf.open("wb") as handle:
+            writer.write(handle)
+    except PermissionError:
+        final_pdf = final_pdf.with_name(final_pdf.stem + "_updated.pdf")
+        with final_pdf.open("wb") as handle:
+            writer.write(handle)
+    return final_pdf
+
+
+def _render_final_filing_report(
+    *,
+    case_id: str,
+    source_memo: Path,
+    numbered_docx: Path,
+    numbered_pdf: Path,
+    evidence_pdf: Path,
+    final_pdf: Path,
+    memo_pages: int,
+    bundle_pages: int,
+    final_pages: int,
+    placeholders_seen: int,
+    placeholders_resolved: int,
+    unresolved: object,
+    iterations: int,
+) -> str:
+    unresolved_items = unresolved if isinstance(unresolved, list) else []
+    lines = [
+        "# Final filing build report",
+        "",
+        f"- case_id: `{case_id}`",
+        f"- source memo: `{source_memo}`",
+        f"- numbered memo DOCX: `{numbered_docx}`",
+        f"- numbered memo PDF: `{numbered_pdf}`",
+        f"- evidence bundle PDF: `{evidence_pdf}`",
+        f"- final filing PDF: `{final_pdf}`",
+        f"- memo pages: {memo_pages}",
+        f"- evidence bundle pages: {bundle_pages}",
+        f"- final pages: {final_pages}",
+        f"- PAGE placeholders seen: {placeholders_seen}",
+        f"- PAGE placeholders resolved: {placeholders_resolved}",
+        f"- PAGE placeholders unresolved: {len(unresolved_items)}",
+        f"- page-count iterations: {iterations}",
+        "",
+    ]
+    if unresolved_items:
+        lines.extend(["## Unresolved PAGE placeholders", ""])
+        for item in unresolved_items[:100]:
+            lines.append(f"- {item}")
+        if len(unresolved_items) > 100:
+            lines.append(f"- ... {len(unresolved_items) - 100} more")
+        lines.append("")
+    return "\n".join(lines)
 
 
 def order_documents_original_then_translation(rows: list[dict[str, str]]) -> list[dict[str, str]]:

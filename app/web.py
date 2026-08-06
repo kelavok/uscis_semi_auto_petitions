@@ -15,6 +15,7 @@ from .bundle_workflow import (
     build_bundle_plan,
     build_evidence_bundle,
     build_exhibit_index,
+    build_final_filing_pdf,
     generate_separator_pages,
     inspect_bundle_preparation,
     inspect_layout_index_status,
@@ -693,6 +694,18 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
     if action == "bundle_build":
         summary = build_evidence_bundle(case_id)
         return f"Built final PDF: {summary.final_pdf_path}."
+    if action == "final_filing_build":
+        summary = build_final_filing_pdf(case_id)
+        warning = (
+            f" {summary.placeholders_unresolved} PAGE placeholder(s) could not be resolved; review {summary.report_path}."
+            if summary.placeholders_unresolved
+            else ""
+        )
+        return (
+            f"Built final filing PDF: {summary.final_pdf_path}. "
+            f"Resolved {summary.placeholders_resolved}/{summary.placeholders_seen} PAGE placeholder(s); "
+            f"memo pages: {summary.memo_pages}; final pages: {summary.final_pages}.{warning}"
+        )
     raise ValueError(f"Unknown action: {action}")
 
 
@@ -968,9 +981,13 @@ def render_layout_page(case_id: str, params: dict[str, list[str]]) -> str:
     ) if catalog else '<p class="muted">Refresh indexes to load the exhibit list.</p>'
     preparation_ready = bool(preparation and preparation.ready_to_build)
     preparation_text = preparation.reason if preparation else "Refresh indexes first."
+    case_root = CASE_ROOT / case_id
+    final_filing_pdf = case_root / "bundle" / "final" / "final_filing.pdf"
+    final_filing_ready = final_filing_pdf.exists() and final_filing_pdf.is_file()
     phase_one_class = "done" if index_ready else "current"
     phase_two_class = "done" if preparation_ready else ("current" if index_ready else "locked")
-    phase_three_class = "current" if preparation_ready else "locked"
+    phase_three_class = "done" if final_filing_ready else ("current" if preparation_ready else "locked")
+    phase_four_class = "done" if final_filing_ready else ("current" if preparation_ready else "locked")
     return page(
         f"Layout - {case_id}",
         f"""
@@ -991,6 +1008,8 @@ def render_layout_page(case_id: str, params: dict[str, list[str]]) -> str:
           <div class="pipeline-phase {phase_two_class}"><span class="phase-number">2</span><h2>Select & prepare</h2><p>Choose all or only the exhibits and documents you need. Separator generation, PDF rendering, and validation run together.</p><p class="muted small">{escape(preparation_text)}</p></div>
           <div class="pipeline-arrow" aria-hidden="true">→</div>
           <div class="pipeline-phase {phase_three_class}"><span class="phase-number">3</span><h2>Build PDF</h2><p>Assemble the prepared selection into one evidence bundle.</p>{post_button(case_id, "bundle_build", "Build selected PDF", disabled=not preparation_ready)}</div>
+          <div class="pipeline-arrow" aria-hidden="true">â†’</div>
+          <div class="pipeline-phase {phase_four_class}"><span class="phase-number">4</span><h2>Final filing</h2><p>After manual memo edits, replace PAGE placeholders using document separator pages and merge the memo with the evidence bundle.</p>{post_button(case_id, "final_filing_build", "Build final filing PDF", disabled=not preparation_ready)}</div>
         </section>
         <section class="panel"><h2>Exhibits and documents</h2><p class="muted">Review the contents, select entire exhibits or individual documents, then prepare the selection.</p>{selector}</section>
         <section class="panel"><h2>Bundle status</h2><pre>{escape(_safe_text(lambda: build_status_report(case_id)))}</pre></section>
@@ -2821,6 +2840,7 @@ def _action_route(action: str) -> str:
         "bundle_dry_run",
         "prepare_selected_bundle",
         "bundle_build",
+        "final_filing_build",
     }:
         return "/layout"
     if action in {

@@ -6,6 +6,7 @@ from .bundle_workflow import (
     build_evidence_bundle,
     build_bundle_plan,
     build_exhibit_index,
+    build_final_filing_pdf,
     generate_separator_pages,
     refresh_layout_indexes,
     render_separator_pdfs,
@@ -22,6 +23,17 @@ def build_parser() -> argparse.ArgumentParser:
     build = commands.add_parser("build", help="Validate indexes and assemble one evidence bundle")
     add_case_argument(build)
     build.add_argument("--dry-run", action="store_true", help="Validate and report without creating a PDF")
+
+    final_filing = commands.add_parser(
+        "final-filing",
+        help="Resolve memo PAGE placeholders and merge the memo with the evidence bundle",
+    )
+    add_case_argument(final_filing)
+    final_filing.add_argument(
+        "--memo",
+        default="",
+        help="Optional DOCX memo path; defaults to final_memo/working_memo.docx",
+    )
 
     build_index = commands.add_parser("build-index", help="Build exhibit_index.csv from document_index.csv")
     add_case_argument(build_index)
@@ -61,6 +73,22 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Merged items: {summary.merged_items}")
         print(f"Converted items: {summary.converted_items}")
         print(f"Skipped items: {summary.skipped_items}")
+        return 0
+    if args.command == "final-filing":
+        summary = build_final_filing_pdf(args.case_id, memo_docx_path=args.memo)
+        print(f"Final filing PDF: {summary.final_pdf_path}")
+        print(f"Numbered memo DOCX: {summary.numbered_memo_docx_path}")
+        print(f"Numbered memo PDF: {summary.numbered_memo_pdf_path}")
+        print(f"Evidence bundle PDF: {summary.evidence_bundle_pdf_path}")
+        print(f"Report: {summary.report_path}")
+        print(f"Memo pages: {summary.memo_pages}")
+        print(f"Bundle pages: {summary.bundle_pages}")
+        print(f"Final pages: {summary.final_pages}")
+        print(
+            f"PAGE placeholders: {summary.placeholders_resolved}/"
+            f"{summary.placeholders_seen} resolved"
+        )
+        print(f"Unresolved placeholders: {summary.placeholders_unresolved}")
         return 0
     if args.command == "build-index":
         summary = build_exhibit_index(args.case_id)
