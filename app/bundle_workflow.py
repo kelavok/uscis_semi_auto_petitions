@@ -399,14 +399,14 @@ def refresh_layout_indexes(case_id: str) -> LayoutIndexRefreshSummary:
         if row and title and not _truthy(row.get("manual_edit_lock", "")):
             row["display_title"] = title
 
+    numbered_context = _numbered_document_sort_context(
+        (rows_by_id[document_id] for document_id in desired if document_id in rows_by_id),
+        fallback_order=plan.document_order,
+        document_to_exhibit=desired,
+    )
     assignments = sorted(
         desired.items(),
-        key=lambda item: (
-            plan.exhibit_order.get(item[1], 10**9),
-            plan.document_order.get(item[0], 10**9),
-            _natural_sort_key(item[1]),
-            _natural_sort_key(item[0]),
-        ),
+        key=lambda item: _assignment_sort_key(item, plan, numbered_context),
     )
     assigned = 0
     for bundle_order, (document_id, exhibit_number) in enumerate(assignments, start=1):
@@ -1379,6 +1379,7 @@ def build_evidence_bundle(case_id: str) -> BundleBuildSummary:
 
 def order_documents_original_then_translation(rows: list[dict[str, str]]) -> list[dict[str, str]]:
     by_id = {row.get("document_id", ""): row for row in rows if row.get("document_id")}
+    numbered_context = _numbered_document_sort_context(rows)
     translations_by_parent: dict[str, list[dict[str, str]]] = {}
     originals: list[dict[str, str]] = []
     unpaired_translations: list[dict[str, str]] = []
@@ -1394,18 +1395,23 @@ def order_documents_original_then_translation(rows: list[dict[str, str]]) -> lis
             originals.append(row)
 
     ordered: list[dict[str, str]] = []
-    for original in sorted(originals, key=_document_sort_key):
+    for original in sorted(originals, key=lambda row: _document_sort_key(row, numbered_context)):
         ordered.append(original)
         linked = translations_by_parent.pop(original.get("document_id", ""), [])
-        ordered.extend(sorted(linked, key=_document_sort_key))
+        ordered.extend(sorted(linked, key=lambda row: _document_sort_key(row, numbered_context)))
 
     for parent_id in sorted(translations_by_parent, key=_natural_sort_key):
         parent = by_id.get(parent_id)
         if parent and parent not in ordered:
             ordered.append(parent)
-        ordered.extend(sorted(translations_by_parent[parent_id], key=_document_sort_key))
+        ordered.extend(
+            sorted(
+                translations_by_parent[parent_id],
+                key=lambda row: _document_sort_key(row, numbered_context),
+            )
+        )
 
-    ordered.extend(sorted(unpaired_translations, key=_document_sort_key))
+    ordered.extend(sorted(unpaired_translations, key=lambda row: _document_sort_key(row, numbered_context)))
     return ordered
 
 
@@ -1549,7 +1555,143 @@ def _blank_exhibit_row() -> dict[str, str]:
     return {field: "" for field in EXHIBIT_FIELDS}
 
 
-def _document_sort_key(row: dict[str, str]) -> tuple[int, list[object], str]:
+NumberedSortContext = dict[str, tuple[tuple[int, object], tuple[int, object]]]
+
+
+def _assignment_sort_key(
+    item: tuple[str, str],
+    plan: EvidenceLayoutPlan,
+    numbered_context: NumberedSortContext,
+) -> tuple[object, ...]:
+    document_id, exhibit_number = item
+    episode_order, document_order = numbered_context.get(
+        document_id,
+        ((1, plan.document_order.get(document_id, 10**9)), (1, plan.document_order.get(document_id, 10**9))),
+    )
+    return (
+        plan.exhibit_order.get(exhibit_number, 10**9),
+        episode_order,
+        document_order,
+        plan.document_order.get(document_id, 10**9),
+        _natural_sort_key(exhibit_number),
+        _natural_sort_key(document_id),
+    )
+
+
+def _numbered_document_sort_context(
+    rows: object,
+    *,
+    fallback_order: dict[str, int] | None = None,
+    document_to_exhibit: dict[str, str] | None = None,
+) -> NumberedSortContext:
+    fallback_order = fallback_order or {}
+    document_to_exhibit = document_to_exhibit or {}
+    row_list = [row for row in rows if isinstance(row, dict) and row.get("document_id")]
+    groups: dict[tuple[str, str], list[dict[str, str]]] = {}
+    for row in row_list:
+        document_id = row.get("document_id", "")
+        exhibit_number = document_to_exhibit.get(document_id) or row.get("exhibit_number", "").strip()
+        episode_title = _document_episode_title(row, {})
+        groups.setdefault((exhibit_number, episode_title), []).append(row)
+
+    context: NumberedSortContext = {}
+    for (_exhibit_number, episode_title), group_rows in groups.items():
+        episode_prefix = _manual_order_prefix(episode_title)
+        first_fallback = min(
+            (fallback_order.get(row.get("document_id", ""), _base_document_order(row)) for row in group_rows),
+            default=10**9,
+        )
+        episode_order: tuple[int, tuple[int, ...] | int] = (
+            (0, episode_prefix) if episode_prefix is not None else (1, first_fallback)
+        )
+        document_path_orders = {
+            row.get("document_id", ""): _manual_path_order_key(row)
+            for row in group_rows
+        }
+        has_numbered_documents = any(order is not None for order in document_path_orders.values())
+        for row in group_rows:
+            document_id = row.get("document_id", "")
+            path_order = document_path_orders.get(document_id)
+            fallback = fallback_order.get(document_id, _base_document_order(row))
+            document_order: tuple[int, object]
+            if has_numbered_documents and path_order is not None:
+                document_order = (0, path_order)
+            elif has_numbered_documents:
+                document_order = (1, fallback)
+            else:
+                document_order = (1, fallback)
+            context[document_id] = (episode_order, document_order)
+    return context
+
+
+def _manual_path_order_key(row: dict[str, str]) -> tuple[tuple[int, object], ...] | None:
+    raw_path = _normalize_slashes(row.get("file_path", "").strip())
+    if not raw_path:
+        return None
+    parts = PurePosixPath(raw_path).parts
+    evidence_root_index = -1
+    for marker in ("originals", "translations"):
+        if marker in parts:
+            evidence_root_index = parts.index(marker)
+            break
+    if evidence_root_index < 0:
+        return None
+    relative_parts = parts[evidence_root_index + 1 :]
+    if len(relative_parts) < 3:
+        return None
+    sortable_parts: list[tuple[int, object]] = []
+    has_numbered_component = False
+    for part in relative_parts[2:]:
+        prefix = _manual_order_prefix(part)
+        if prefix is not None:
+            sortable_parts.append((0, prefix))
+            has_numbered_component = True
+        else:
+            sortable_parts.append((1, tuple(_natural_sort_key(part))))
+    if not has_numbered_component:
+        return None
+    return tuple(sortable_parts)
+
+
+def _manual_order_prefix(value: str) -> tuple[int, ...] | None:
+    match = re.match(
+        r"^\s*(\d{1,3}(?:\.\d{1,3})*)(?:\.\s+|\.(?=[^\d\s])|[\)_-]\s*)",
+        value,
+    )
+    if not match:
+        return None
+    try:
+        parts = tuple(int(part) for part in match.group(1).split("."))
+    except ValueError:
+        return None
+    return parts or None
+
+
+def _base_document_order(row: dict[str, str]) -> int:
+    order = row.get("final_bundle_order", "").strip()
+    if order.isdigit():
+        return int(order)
+    return 10**9
+
+
+def _document_sort_key(
+    row: dict[str, str], numbered_context: NumberedSortContext | None = None
+) -> tuple[object, ...]:
+    context = (numbered_context or {}).get(row.get("document_id", ""))
+    if context:
+        episode_order, document_order = context
+        return (
+            0,
+            episode_order,
+            document_order,
+            _base_document_order(row),
+            _natural_sort_key(row.get("file_path", "") or row.get("document_id", "")),
+            row.get("document_id", ""),
+        )
+    return _base_document_sort_key(row)
+
+
+def _base_document_sort_key(row: dict[str, str]) -> tuple[int, list[object], str]:
     order = row.get("final_bundle_order", "").strip()
     if order.isdigit():
         return (0, [int(order)], row.get("document_id", ""))
