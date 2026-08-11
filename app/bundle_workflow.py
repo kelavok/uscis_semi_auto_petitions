@@ -219,6 +219,16 @@ class BundlePreparationStatus:
 
 
 @dataclass(frozen=True)
+class BundleDisplayTitleSaveSummary:
+    exhibit_titles_updated: int
+    episode_overrides_saved: int
+    document_titles_updated: int
+    config_path: Path
+    exhibit_index_path: Path
+    document_index_path: Path
+
+
+@dataclass(frozen=True)
 class EvidenceLayoutPlan:
     document_to_exhibit: dict[str, str]
     document_order: dict[str, int]
@@ -259,6 +269,143 @@ def bundle_catalog(case_id: str) -> list[dict[str, object]]:
             }
         )
     return catalog
+
+
+def bundle_display_title_review(case_id: str) -> list[dict[str, object]]:
+    loaded = load_case(case_id)
+    document_rows = _read_csv(
+        loaded.case_dir / _case_path_value(loaded.config, "document_index"), INDEX_FIELDS
+    )
+    exhibit_rows = _read_csv(
+        loaded.case_dir / _case_path_value(loaded.config, "exhibit_index"), EXHIBIT_FIELDS
+    )
+    documents_by_id = {
+        row.get("document_id", ""): row for row in document_rows if row.get("document_id")
+    }
+    review: list[dict[str, object]] = []
+    for exhibit in sorted(exhibit_rows, key=_exhibit_sort_key):
+        exhibit_number = exhibit.get("exhibit_number", "").strip()
+        if not exhibit_number:
+            continue
+        document_ids = [
+            part.strip()
+            for part in exhibit.get("document_ids", "").split(";")
+            if part.strip()
+        ]
+        document_groups = _logical_document_groups(document_ids, documents_by_id)
+        episodes: list[dict[str, object]] = []
+        for raw_episode_title, groups in _episode_document_sections(document_groups, loaded.config):
+            overridden_episode_title = _episode_title_override(loaded.config, raw_episode_title)
+            display_episode_title = (
+                overridden_episode_title
+                if overridden_episode_title != raw_episode_title
+                else _display_episode_title(raw_episode_title)
+            )
+            documents: list[dict[str, object]] = []
+            for document, translations in groups:
+                documents.append(
+                    {
+                        "document_id": document.get("document_id", ""),
+                        "display_title": _document_title(document),
+                        "raw_title": document.get("original_file_name", "") or document.get("display_title", ""),
+                        "file_path": document.get("file_path", ""),
+                        "translation_ids": [
+                            translation.get("document_id", "") for translation in translations
+                        ],
+                    }
+                )
+            episodes.append(
+                {
+                    "raw_title": raw_episode_title,
+                    "display_title": display_episode_title,
+                    "documents": documents,
+                }
+            )
+        review.append(
+            {
+                "exhibit_number": exhibit_number,
+                "display_title": exhibit.get("display_title", "") or f"Exhibit {exhibit_number}",
+                "episodes": episodes,
+            }
+        )
+    return review
+
+
+def save_bundle_display_titles(
+    case_id: str,
+    *,
+    exhibit_titles: dict[str, str],
+    episode_titles: dict[str, str],
+    document_titles: dict[str, str],
+) -> BundleDisplayTitleSaveSummary:
+    loaded = load_case(case_id)
+    document_index_path = loaded.case_dir / _case_path_value(loaded.config, "document_index")
+    exhibit_index_path = loaded.case_dir / _case_path_value(loaded.config, "exhibit_index")
+    document_rows = _read_csv(document_index_path, INDEX_FIELDS)
+    exhibit_rows = _read_csv(exhibit_index_path, EXHIBIT_FIELDS)
+
+    exhibit_titles_updated = 0
+    for row in exhibit_rows:
+        exhibit_number = row.get("exhibit_number", "").strip()
+        if not exhibit_number or exhibit_number not in exhibit_titles:
+            continue
+        title = exhibit_titles[exhibit_number].strip()
+        if title and row.get("display_title", "") != title:
+            row["display_title"] = title
+            exhibit_titles_updated += 1
+
+    document_titles_updated = 0
+    for row in document_rows:
+        document_id = row.get("document_id", "").strip()
+        if not document_id or document_id not in document_titles:
+            continue
+        title = document_titles[document_id].strip()
+        if title and row.get("display_title", "") != title:
+            row["display_title"] = title
+            document_titles_updated += 1
+
+    config = dict(loaded.config)
+    raw_overrides = config.get("episode_title_overrides", {})
+    overrides = dict(raw_overrides) if isinstance(raw_overrides, dict) else {}
+    episode_overrides_saved = 0
+    for raw_title, title in episode_titles.items():
+        raw_title = raw_title.strip()
+        title = title.strip()
+        if not raw_title:
+            continue
+        default_title = _display_episode_title(raw_title)
+        previous = str(overrides.get(raw_title, "")).strip()
+        if not title or title == default_title:
+            if raw_title in overrides:
+                overrides.pop(raw_title, None)
+                episode_overrides_saved += 1
+            continue
+        if previous != title:
+            overrides[raw_title] = title
+            episode_overrides_saved += 1
+    if overrides:
+        config["episode_title_overrides"] = overrides
+    else:
+        config.pop("episode_title_overrides", None)
+
+    if exhibit_titles_updated:
+        _write_csv(exhibit_index_path, exhibit_rows, EXHIBIT_FIELDS)
+    if document_titles_updated:
+        _write_csv(document_index_path, document_rows, INDEX_FIELDS)
+    config_path = loaded.case_dir / "case_config.yaml"
+    if episode_overrides_saved:
+        _write_yaml(config_path, config)
+    if exhibit_titles_updated or document_titles_updated or episode_overrides_saved:
+        _invalidate_bundle_preparation(loaded)
+
+    return BundleDisplayTitleSaveSummary(
+        exhibit_titles_updated=exhibit_titles_updated,
+        episode_overrides_saved=episode_overrides_saved,
+        document_titles_updated=document_titles_updated,
+        config_path=config_path,
+        exhibit_index_path=exhibit_index_path,
+        document_index_path=document_index_path,
+    )
 
 
 def load_bundle_selection(case_id: str) -> BundleSelection:
@@ -2428,6 +2575,16 @@ def _write_csv(path: Path, rows: list[dict[str, str]], fields: list[str]) -> Non
         writer.writeheader()
         for row in rows:
             writer.writerow({field: row.get(field, "") for field in fields})
+
+
+def _write_yaml(path: Path, data: dict[str, object]) -> None:
+    try:
+        import yaml  # type: ignore
+
+        text = yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
+    except ModuleNotFoundError:
+        text = json.dumps(data, ensure_ascii=False, indent=2)
+    path.write_text(text, encoding="utf-8")
 
 
 def _blank_exhibit_row() -> dict[str, str]:

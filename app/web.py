@@ -11,6 +11,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from .bundle_workflow import (
+    bundle_display_title_review,
     bundle_catalog,
     build_bundle_plan,
     build_evidence_bundle,
@@ -23,6 +24,7 @@ from .bundle_workflow import (
     prepare_selected_bundle,
     refresh_layout_indexes,
     render_separator_pdfs,
+    save_bundle_display_titles,
     sync_layout_indexes_from_memo,
 )
 from .cli_support import CASE_ROOT, configure_console, create_case_from_template, validate_case_id
@@ -691,6 +693,36 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
     if action == "bundle_dry_run":
         summary = build_bundle_plan(case_id)
         return f"Bundle plan: {summary.ready_items} ready, {summary.missing_items} missing, {summary.unsupported_items} unsupported."
+    if action == "save_bundle_display_titles":
+        exhibit_titles = {
+            key.removeprefix("exhibit_title_"): value
+            for key, value in data.items()
+            if key.startswith("exhibit_title_")
+        }
+        document_titles = {
+            key.removeprefix("document_title_"): value
+            for key, value in data.items()
+            if key.startswith("document_title_")
+        }
+        episode_titles: dict[str, str] = {}
+        for key, raw_title in data.items():
+            if not key.startswith("episode_raw_"):
+                continue
+            index = key.removeprefix("episode_raw_")
+            episode_titles[raw_title] = data.get(f"episode_title_{index}", "")
+        summary = save_bundle_display_titles(
+            case_id,
+            exhibit_titles=exhibit_titles,
+            episode_titles=episode_titles,
+            document_titles=document_titles,
+        )
+        return (
+            "Saved display titles: "
+            f"{summary.exhibit_titles_updated} exhibit title(s), "
+            f"{summary.episode_overrides_saved} episode override(s), "
+            f"{summary.document_titles_updated} document title(s). "
+            "Prepare the bundle again before building PDF."
+        )
     if action == "prepare_selected_bundle":
         selected_exhibits = [
             key.removeprefix("select_exhibit_")
@@ -922,6 +954,87 @@ def render_llm_page(case_id: str, params: dict[str, list[str]]) -> str:
     )
 
 
+def _render_bundle_display_title_form(case_id: str, *, disabled: bool = False) -> str:
+    review = bundle_display_title_review(case_id) if not disabled else []
+    if disabled or not review:
+        return (
+            '<section class="panel"><h2>Review display names</h2>'
+            '<p class="muted">Refresh indexes to review and edit exhibit, episode, and document names before preparing the bundle.</p>'
+            '</section>'
+        )
+    episode_index = 0
+    exhibit_blocks = []
+    for exhibit in review:
+        exhibit_number = str(exhibit.get("exhibit_number", ""))
+        episode_blocks = []
+        for episode in exhibit.get("episodes", []):
+            raw_title = str(episode.get("raw_title", ""))
+            display_title = str(episode.get("display_title", ""))
+            document_rows = []
+            for document in episode.get("documents", []):
+                document_id = str(document.get("document_id", ""))
+                translation_ids = [
+                    str(value) for value in document.get("translation_ids", []) if str(value)
+                ]
+                translation_note = (
+                    f' <small class="muted">translation(s): {escape(", ".join(translation_ids))}</small>'
+                    if translation_ids
+                    else ""
+                )
+                document_rows.append(
+                    '<label class="title-review-document">'
+                    f'<code>{escape(document_id)}</code>'
+                    f'<input name="document_title_{escape(document_id, quote=True)}" '
+                    f'value="{escape(str(document.get("display_title", "")), quote=True)}">'
+                    f'{translation_note}'
+                    f'<small class="muted">{escape(str(document.get("file_path", "")))}</small>'
+                    '</label>'
+                )
+            if raw_title:
+                episode_index += 1
+                episode_title_control = (
+                    '<label class="title-review-field">'
+                    '<span>Episode title</span>'
+                    f'<input type="hidden" name="episode_raw_{episode_index}" value="{escape(raw_title, quote=True)}">'
+                    f'<input name="episode_title_{episode_index}" value="{escape(display_title, quote=True)}">'
+                    f'<small class="muted">Raw folder-derived title: {escape(raw_title)}</small>'
+                    '</label>'
+                )
+            else:
+                episode_title_control = '<p class="muted small">Direct exhibit documents; no episode separator title.</p>'
+            episode_blocks.append(
+                '<div class="title-review-episode">'
+                f'{episode_title_control}'
+                '<div class="title-review-documents">'
+                + "".join(document_rows)
+                + '</div></div>'
+            )
+        exhibit_blocks.append(
+            '<details class="title-review-exhibit" open>'
+            f'<summary><strong>Exhibit {escape(exhibit_number)}</strong></summary>'
+            '<label class="title-review-field">'
+            '<span>Exhibit title</span>'
+            f'<input name="exhibit_title_{escape(exhibit_number, quote=True)}" '
+            f'value="{escape(str(exhibit.get("display_title", "")), quote=True)}">'
+            '</label>'
+            + "".join(episode_blocks)
+            + '</details>'
+        )
+    return (
+        '<section class="panel">'
+        '<h2>Review display names before bundle</h2>'
+        '<p class="muted">Edit final display titles without renaming folders. Episode overrides are saved in '
+        '<code>case_config.yaml</code>; exhibit and document titles are saved in the indexes. '
+        'After saving, prepare the bundle again so separators are regenerated.</p>'
+        '<form method="post" class="title-review-form">'
+        f'<input type="hidden" name="case" value="{escape(case_id)}">'
+        '<input type="hidden" name="action" value="save_bundle_display_titles">'
+        + "".join(exhibit_blocks)
+        + '<button class="secondary">Save display names</button>'
+        '</form></section>'
+    )
+
+
 def render_layout_page(case_id: str, params: dict[str, list[str]]) -> str:
     validate_case_id(case_id)
     stage = _safe_llm_stage(case_id)
@@ -1031,6 +1144,7 @@ def render_layout_page(case_id: str, params: dict[str, list[str]]) -> str:
           <div class="pipeline-arrow" aria-hidden="true">→</div>
           <div class="pipeline-phase {phase_four_class}"><span class="phase-number">4</span><h2>Final filing</h2><p>After manual memo edits, replace PAGE placeholders using document separator pages and merge the memo with the evidence bundle.</p>{post_button(case_id, "final_filing_build", "Build final filing PDF", disabled=not preparation_ready)}</div>
         </section>
+        {_render_bundle_display_title_form(case_id, disabled=not index_ready)}
         <section class="panel"><h2>Exhibits and documents</h2><p class="muted">Review the contents, select entire exhibits or individual documents, then prepare the selection.</p>{selector}</section>
         <section class="panel"><h2>Bundle status</h2><pre>{escape(_safe_text(lambda: build_status_report(case_id)))}</pre></section>
         """,
@@ -2103,6 +2217,15 @@ def page(title: str, body: str) -> str:
     .bundle-document span {{ overflow-wrap:anywhere; }}
     .bundle-document.missing {{ border:1px dashed #fca5a5; border-radius:10px; padding:8px; background:#fff7f7; }}
     .bundle-document small {{ color:var(--muted); }}
+    .title-review-form {{ display:flex; flex-direction:column; gap:12px; }}
+    .title-review-exhibit {{ border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:#f9fafb; }}
+    .title-review-exhibit summary {{ cursor:pointer; margin-bottom:10px; }}
+    .title-review-episode {{ border-left:3px solid #dbeafe; padding:10px 0 10px 12px; margin:10px 0; }}
+    .title-review-field {{ display:flex; flex-direction:column; gap:5px; margin:8px 0; }}
+    .title-review-field span {{ font-weight:650; }}
+    .title-review-document {{ display:grid; grid-template-columns:auto minmax(220px,1fr); gap:6px 10px; align-items:center; margin:7px 0; }}
+    .title-review-document small {{ grid-column:2; overflow-wrap:anywhere; }}
+    .title-review-document input {{ width:100%; }}
     .panel-disabled {{ opacity:.68; }}
     .layout-summary-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-top:12px; }}
     .layout-summary-grid div {{ border:1px solid var(--line); border-radius:12px; padding:12px; background:#f9fafb; }}
@@ -2913,6 +3036,7 @@ def _action_route(action: str) -> str:
         "separators",
         "separator_pdfs",
         "bundle_dry_run",
+        "save_bundle_display_titles",
         "prepare_selected_bundle",
         "bundle_build",
         "final_filing_build",

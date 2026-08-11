@@ -16,10 +16,12 @@ from app import workflow as workflow_module
 from app.bundle_workflow import (
     BundleSelection,
     build_bundle_plan,
+    bundle_display_title_review,
     build_exhibit_index,
     generate_separator_pages,
     refresh_layout_indexes,
     render_separator_pdfs,
+    save_bundle_display_titles,
 )
 from app.evidence import link_translations, manual_link_translation, scan_documents, unlink_translation
 from app.memo_builder import (
@@ -1695,6 +1697,72 @@ class CliSmokeTests(unittest.TestCase):
             doc_three_row = next(line for line in index_text.splitlines() if line.startswith("DOC0003,"))
             self.assertNotIn(",DOC0001,", doc_two_row)
             self.assertIn(",DOC0001,", doc_three_row)
+
+    def test_save_bundle_display_titles_updates_episode_overrides_and_invalidates_preparation(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            case_root = root / "case_workspace"
+            case_dir = case_root / "case_001"
+            workflow_dir = root / "workflows"
+            indexes_dir = case_dir / "indexes"
+            indexes_dir.mkdir(parents=True)
+            workflow_dir.mkdir(parents=True)
+            (case_dir / "bundle").mkdir(parents=True)
+            (workflow_dir / "eb1a_petition.yaml").write_text(
+                "task_type: eb1a_petition\nsteps: []\n", encoding="utf-8"
+            )
+            (case_dir / "case_config.yaml").write_text(
+                "case_id: case_001\n"
+                "task_type: eb1a_petition\n"
+                "workflow: workflows/eb1a_petition.yaml\n"
+                "paths:\n"
+                "  document_index: indexes/document_index.csv\n"
+                "  exhibit_index: indexes/exhibit_index.csv\n"
+                "  bundle_root: bundle\n",
+                encoding="utf-8",
+            )
+            (indexes_dir / "document_index.csv").write_text(
+                "document_id,original_file_name,display_title,file_path,document_type,category,"
+                "task_type_relevance,memo_section_relevance,exhibit_number,parent_document_id,"
+                "translation_status,relationship_type,document_date,person_or_organization,"
+                "short_description,extraction_status,text_extraction_path,user_approval_status,"
+                "separator_title_type,final_bundle_order,source_fingerprint,last_scanned_at,"
+                "manual_edit_lock,notes\n"
+                "DOC0001,doc.pdf,Old Document Title,source_documents/originals/1. Awards/1. Кириллица/doc.pdf,"
+                "pdf,awards,,,1,,original,,,,,,,,,,,,,\n",
+                encoding="utf-8",
+            )
+            (indexes_dir / "exhibit_index.csv").write_text(
+                "exhibit_id,exhibit_number,parent_exhibit_id,display_title,evidentiary_thesis,task_type,"
+                "memo_section,separator_title_type,document_ids,original_translation_order,final_bundle_order,"
+                "user_approval_status,manual_edit_lock,notes\n"
+                "EXH001,1,,Old Exhibit Title,,eb1a_petition,,exhibit,DOC0001,original_then_translation,1,pending,false,\n",
+                encoding="utf-8",
+            )
+            preparation = case_dir / "bundle" / "preparation.json"
+            preparation.write_text("{}", encoding="utf-8")
+
+            with (
+                patch.object(cli_support, "CASE_ROOT", case_root),
+                patch.object(workflow_module, "PROJECT_ROOT", root),
+            ):
+                review = bundle_display_title_review("case_001")
+                self.assertEqual(review[0]["episodes"][0]["raw_title"], "1. Кириллица")
+                summary = save_bundle_display_titles(
+                    "case_001",
+                    exhibit_titles={"1": "New Exhibit Title"},
+                    episode_titles={"1. Кириллица": "English Episode Title"},
+                    document_titles={"DOC0001": "New Document Title"},
+                )
+                updated = bundle_display_title_review("case_001")
+
+            self.assertEqual(summary.exhibit_titles_updated, 1)
+            self.assertEqual(summary.episode_overrides_saved, 1)
+            self.assertEqual(summary.document_titles_updated, 1)
+            self.assertFalse(preparation.exists())
+            self.assertEqual(updated[0]["display_title"], "New Exhibit Title")
+            self.assertEqual(updated[0]["episodes"][0]["display_title"], "English Episode Title")
+            self.assertEqual(updated[0]["episodes"][0]["documents"][0]["display_title"], "New Document Title")
 
     def test_build_exhibit_index_orders_original_before_translation(self) -> None:
         with TemporaryDirectory() as temp:
