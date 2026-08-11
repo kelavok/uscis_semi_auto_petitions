@@ -585,7 +585,7 @@ def render_strategy_unit_context(loaded: LoadedCase, unit_id: str) -> str:
     index = read_document_index(loaded)
     from .workflow import render_evidence_files
 
-    selected_by_label: list[tuple[str, list[Path]]] = []
+    raw_by_label: list[tuple[str, list[Path]]] = []
     for label, root in roots:
         folders = [source_folder, *unit.get("shared_source_folders", [])]
         scoped: list[Path] = []
@@ -596,8 +596,14 @@ def render_strategy_unit_context(loaded: LoadedCase, unit_id: str) -> str:
                     path for path in sorted(selected.rglob("*"))
                     if path.is_file() and path.name != ".gitkeep" and not is_office_temporary_file(path)
                 )
-        scoped = _filter_phase_files(scoped, source_folder, str(unit.get("phase", "")))
-        selected_by_label.append((label, list(dict.fromkeys(scoped))))
+        raw_by_label.append((label, list(dict.fromkeys(scoped))))
+
+    combined_files = [path for _label, scoped in raw_by_label for path in scoped]
+    filtered_files = set(_filter_phase_files(combined_files, source_folder, str(unit.get("phase", ""))))
+    selected_by_label = [
+        (label, [path for path in scoped if path in filtered_files])
+        for label, scoped in raw_by_label
+    ]
 
     parts.extend(["### Technical document selection for this unit", ""])
     parts.append(

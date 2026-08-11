@@ -11,6 +11,7 @@ from app import cli_support
 from app import bundle_workflow as bundle_workflow_module
 from app import evidence as evidence_module
 from app import progress as progress_module
+from app import rfe_strategy as rfe_strategy_module
 from app import workflow as workflow_module
 from app.bundle_workflow import (
     BundleSelection,
@@ -149,6 +150,75 @@ class CliSmokeTests(unittest.TestCase):
         )
 
         self.assertEqual(decision.candidate, primary_original)
+
+    def test_rfe_reputation_prompt_does_not_include_role_only_translations(self) -> None:
+        with TemporaryDirectory() as temp:
+            case_dir = Path(temp) / "case_001"
+            originals = case_dir / "source_documents" / "rfe_response" / "new_documents" / "originals"
+            translations = case_dir / "source_documents" / "rfe_response" / "new_documents" / "translations"
+            reputation_file = originals / "8. Critical role" / "Sberbank" / "Reputation" / "reputation.pdf"
+            role_translation = translations / "8. Critical role" / "Sberbank" / "Role" / "role translation.pdf"
+            reputation_file.parent.mkdir(parents=True)
+            role_translation.parent.mkdir(parents=True)
+            (case_dir / "indexes").mkdir(parents=True)
+            (case_dir / "case_strategy").mkdir(parents=True)
+            reputation_file.write_bytes(b"fake reputation pdf")
+            role_translation.write_bytes(b"fake role translation pdf")
+            (case_dir / "indexes" / "document_index.csv").write_text(
+                "document_id,original_file_name,display_title,file_path,document_type,category,"
+                "task_type_relevance,memo_section_relevance,exhibit_number,parent_document_id,"
+                "translation_status,relationship_type,document_date,person_or_organization,"
+                "short_description,extraction_status,text_extraction_path,user_approval_status,"
+                "separator_title_type,final_bundle_order,source_fingerprint,last_scanned_at,"
+                "manual_edit_lock,notes\n"
+                "DOC0001,reputation.pdf,Sberbank reputation,source_documents/rfe_response/new_documents/originals/8. Critical role/Sberbank/Reputation/reputation.pdf,pdf,leading_critical_role,,,,,original,,,,,,,,,,,,,\n"
+                "DOC0002,role translation.pdf,Sberbank role translation,source_documents/rfe_response/new_documents/translations/8. Critical role/Sberbank/Role/role translation.pdf,pdf,leading_critical_role,,,,,translation,,,,,,,,,,,,,\n",
+                encoding="utf-8",
+            )
+            (case_dir / "case_strategy" / "strategy_manifest.json").write_text(
+                """
+{
+  "global_strategy": "Global RFE strategy.",
+  "units": [
+    {
+      "unit_id": "leading_critical_role_sberbank",
+      "section_id": "criterion_8",
+      "section_order": 8,
+      "title": "Sberbank",
+      "section_title": "Criterion 8",
+      "section_type": "criterion",
+      "criterion_role": "leading_critical_role",
+      "source_folder": "8. Critical role/Sberbank",
+      "strategy": "Separate role and reputation.",
+      "rfe_issues": []
+    }
+  ]
+}
+""".strip(),
+                encoding="utf-8",
+            )
+            loaded = workflow_module.LoadedCase(
+                case_id="case_001",
+                case_dir=case_dir,
+                config={
+                    "task_type": "eb1a_rfe_response",
+                    "paths": {
+                        "source_rfe_new_originals": "source_documents/rfe_response/new_documents/originals",
+                        "source_rfe_new_translations": "source_documents/rfe_response/new_documents/translations",
+                        "document_index": "indexes/document_index.csv",
+                    },
+                    "eb1a_folder_roles": {"leading_critical_role": "8. Critical role"},
+                },
+                workflow={"steps": []},
+            )
+
+            context = rfe_strategy_module.render_strategy_unit_context(
+                loaded,
+                "leading_critical_role_Sberbank_reputation",
+            )
+
+            self.assertIn("DOC0001", context)
+            self.assertNotIn("DOC0002", context)
 
     def test_safe_path_component_accepts_cyrillic_episode_names(self) -> None:
         self.assertEqual(
