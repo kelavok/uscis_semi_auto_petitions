@@ -245,7 +245,7 @@ def link_translations(case_id: str, *, auto_match: bool = True) -> LinkSummary:
             translation["relationship_type"] = "translation"
             translation["translation_status"] = "translation"
             translation["notes"] = _merge_notes(
-                translation.get("notes", ""),
+                _without_translation_link_failure_notes(translation.get("notes", "")),
                 f"Linked as translation of {original.get('document_id', '')} by {decision.method} "
                 f"(confidence {decision.score:.3f}). Bundle order: original_then_translation.",
             )
@@ -394,7 +394,7 @@ def manual_link_translation(
     translation["relationship_type"] = "translation"
     translation["translation_status"] = "translation"
     translation["notes"] = _merge_notes(
-        translation.get("notes", ""),
+        _without_translation_link_failure_notes(translation.get("notes", "")),
         f"Manually confirmed as translation of {original_id}. Bundle order: original_then_translation.",
     )
     original["relationship_type"] = original.get("relationship_type") or "original"
@@ -850,6 +850,18 @@ def _without_obsolete_extraction_notes(notes: str) -> str:
     )
 
 
+def _without_translation_link_failure_notes(notes: str) -> str:
+    obsolete_prefixes = (
+        "No matching original found.",
+        "Translation link ambiguous.",
+    )
+    return " | ".join(
+        part
+        for part in (item.strip() for item in (notes or "").split("|"))
+        if part and not any(part.startswith(prefix) for prefix in obsolete_prefixes)
+    )
+
+
 def _merge_notes(existing: str, new: str) -> str:
     existing = (existing or "").strip()
     new = (new or "").strip()
@@ -874,11 +886,10 @@ def _translation_match_decision(
     if not scoped:
         return TranslationMatchDecision(None, "no_originals_in_category", 0.0, [])
 
-    exact_path = "source_documents/originals/" + translation_under_source
     exact_matches = [
         original
         for original in scoped
-        if _normalize_slashes(original.get("file_path", "")) == exact_path
+        if _path_under_source(original.get("file_path", ""), "source_documents/originals") == translation_under_source
     ]
     if len(exact_matches) == 1:
         return TranslationMatchDecision(exact_matches[0], "exact_relative_path", 1.0, [(exact_matches[0], 1.0)])
@@ -898,6 +909,7 @@ def _translation_match_decision(
         original_stem = _normalized_match_stem(PurePosixPath(original_under_source).stem)
         if original_stem == translation_stem:
             same_parent_matches.append(original)
+    same_parent_matches = _prefer_primary_originals(same_parent_matches)
     if len(same_parent_matches) == 1:
         return TranslationMatchDecision(
             same_parent_matches[0], "same_folder_normalized_name", 0.995, [(same_parent_matches[0], 0.995)]
@@ -908,6 +920,7 @@ def _translation_match_decision(
         original_under_source = _path_under_source(original.get("file_path", ""), "source_documents/originals")
         if original_under_source and _normalized_match_stem(PurePosixPath(original_under_source).stem) == translation_stem:
             category_name_matches.append(original)
+    category_name_matches = _prefer_primary_originals(category_name_matches)
     if len(category_name_matches) == 1:
         return TranslationMatchDecision(
             category_name_matches[0],
@@ -931,6 +944,7 @@ def _translation_match_decision(
         )
         directory_score = _directory_similarity(translation_under_source, original_under_source)
         combined = (0.74 * file_score) + (0.20 * episode_score) + (0.06 * directory_score)
+        combined -= _translation_name_penalty(original.get("file_path", ""))
         ranked.append((original, round(combined, 4)))
     ranked.sort(key=lambda item: item[1], reverse=True)
     alternatives = ranked[:3]
@@ -1002,6 +1016,26 @@ def _directory_similarity(translation_path: str, original_path: str) -> float:
         for translation_part in translation_parts
         for original_part in original_parts
     )
+
+
+def _prefer_primary_originals(originals: list[dict[str, str]]) -> list[dict[str, str]]:
+    if len(originals) <= 1:
+        return originals
+    primary = [original for original in originals if not _translation_name_penalty(original.get("file_path", ""))]
+    return primary if primary else originals
+
+
+def _translation_name_penalty(file_path: str) -> float:
+    stem = PurePosixPath(_normalize_slashes(file_path)).stem
+    normalized = _transliterate_cyrillic(stem.casefold())
+    tokens = {
+        token
+        for token in re.split(r"[^a-z0-9]+", normalized)
+        if token
+    }
+    if tokens & {"translation", "translated", "english", "eng", "en", "perevod", "angl", "angliiskii"}:
+        return 0.08
+    return 0.0
 
 
 def _match_similarity(left: str, right: str, *, allow_acronym: bool = False) -> float:
@@ -1123,10 +1157,26 @@ def _write_translation_report(path: Path, rows: list[dict[str, str]]) -> None:
 
 def _path_under_source(file_path: str, source_prefix: str) -> str:
     normalized = _normalize_slashes(file_path)
-    prefix = source_prefix.rstrip("/") + "/"
-    if not normalized.startswith(prefix):
-        return ""
-    return normalized[len(prefix) :]
+    for prefix_value in _equivalent_source_prefixes(source_prefix):
+        prefix = prefix_value.rstrip("/") + "/"
+        if normalized.startswith(prefix):
+            return normalized[len(prefix) :]
+    return ""
+
+
+def _equivalent_source_prefixes(source_prefix: str) -> tuple[str, ...]:
+    normalized = _normalize_slashes(source_prefix).rstrip("/")
+    equivalents = {
+        "source_documents/originals": (
+            "source_documents/originals",
+            "source_documents/rfe_response/new_documents/originals",
+        ),
+        "source_documents/translations": (
+            "source_documents/translations",
+            "source_documents/rfe_response/new_documents/translations",
+        ),
+    }
+    return equivalents.get(normalized, (normalized,))
 
 
 def _normalized_match_stem(stem: str) -> str:

@@ -109,6 +109,47 @@ class CliSmokeTests(unittest.TestCase):
         decision = evidence_module._translation_match_decision(translation, [original])
         self.assertEqual(decision.candidate, original)
 
+    def test_translation_match_handles_rfe_new_document_roots(self) -> None:
+        original = {
+            "document_id": "DOC0001",
+            "category": "awards",
+            "file_path": "source_documents/rfe_response/new_documents/originals/1. Awards/1. CIPR/10. Award rules.pdf",
+        }
+        translation = {
+            "document_id": "DOC0002",
+            "category": "awards",
+            "file_path": "source_documents/rfe_response/new_documents/translations/1. Awards/1. CIPR/10. Award rules.pdf",
+        }
+
+        decision = evidence_module._translation_match_decision(translation, [original])
+
+        self.assertEqual(decision.candidate, original)
+        self.assertEqual(decision.method, "exact_relative_path")
+
+    def test_translation_match_prefers_non_translation_named_original_candidate(self) -> None:
+        primary_original = {
+            "document_id": "DOC0001",
+            "category": "leading_critical_role",
+            "file_path": "source_documents/rfe_response/new_documents/originals/8. Critical role/Sberbank/Role/1. Employer letter Sberbank Osipov.pdf",
+        }
+        misplaced_english_copy = {
+            "document_id": "DOC0002",
+            "category": "leading_critical_role",
+            "file_path": "source_documents/rfe_response/new_documents/originals/8. Critical role/Sberbank/Role/Employer_letter_Sberbank_Osipov_eng.pdf",
+        }
+        translation = {
+            "document_id": "DOC0003",
+            "category": "leading_critical_role",
+            "file_path": "source_documents/rfe_response/new_documents/translations/8. Critical role/Sberbank/Role/1. Employer letter Sberbank Osipov (2).pdf",
+        }
+
+        decision = evidence_module._translation_match_decision(
+            translation,
+            [primary_original, misplaced_english_copy],
+        )
+
+        self.assertEqual(decision.candidate, primary_original)
+
     def test_safe_path_component_accepts_cyrillic_episode_names(self) -> None:
         self.assertEqual(
             workflow_module.safe_path_component("Вклад - подтверждение"),
