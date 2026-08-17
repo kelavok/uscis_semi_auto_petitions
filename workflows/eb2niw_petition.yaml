@@ -1,0 +1,474 @@
+schema_version: 0.1-draft
+task_type: eb2niw_petition
+status: active_draft
+
+purpose: >
+  Folder-driven EB-2 NIW petition workflow. The evidence tree determines the
+  applicable EB-2 threshold basis and the repeatable drafting units within
+  Dhanasar Prongs 1 and 2. The validated JSON outputs control both memorandum
+  insertion and deterministic exhibit ordering.
+
+opening_context:
+  template: instructions/task_types/eb2niw_petition/opening_context.md
+  required_case_fields:
+    - case_id
+    - beneficiary.full_name
+    - beneficiary.preferred_reference
+    - field
+    - specialization
+    - intended_occupation
+    - proposed_endeavor.title
+    - proposed_endeavor.one_sentence
+
+instruction_sources:
+  universal:
+    - instructions/universal/writing_rules.md
+    - instructions/universal/evidence_rules.md
+    - instructions/universal/citation_rules.md
+    - instructions/universal/quality_control.md
+  visa_or_rfe_specific:
+    - templates/EB2NIW/EB2_NIW_LLM_instructions.md
+    - templates/EB2NIW/EB2_NIW_general_memo_template.md
+  task_type:
+    - instructions/task_types/eb2niw_petition/task_rules.md
+  case_specific: user_case_instructions.md
+
+source_folder_template:
+  path: templates/EB2NIW/case_folder_template
+  manifest: templates/EB2NIW/case_folder_tree.txt
+  role: Model EB-2 NIW evidence tree copied into source_documents/originals.
+
+manual_provider:
+  mode: prompt_file_then_manual_import
+  prompt_dir: generated_prompts
+  output_dir: llm_outputs
+  validated_dir: validated_outputs
+  required_output_schema: schemas/llm_section_output.schema.json
+
+common_validation_rules:
+  - output_matches_case_and_step
+  - draft_text_is_present_for_llm_steps
+  - used_document_ids_exist_in_document_index
+  - all_selected_documents_are_returned_in_logical_order
+  - unsupported_claims_field_is_present
+  - questions_for_user_field_is_present
+  - quality_flags_field_is_present
+  - eb2_threshold_and_niw_prongs_remain_separate
+  - exhibit_references_match_exhibit_index_when_present
+
+steps:
+  - step_id: setup_case_workspace
+    execution: deterministic
+    title: Create EB-2 NIW workspace, evidence tree, and working memorandum
+    command: python -m app.draft init-case --case CASE_ID --task-type eb2niw_petition
+
+  - step_id: opening_context_intake
+    execution: llm_manual
+    title: Give LLM the full EB-2 NIW case context without drafting
+    objective: >
+      Read and understand the beneficiary, intended occupation, proposed
+      endeavor, CV/profile, education, case-context file, and available record.
+      Do not draft memorandum prose at this stage.
+    section_instructions: instructions/task_types/eb2niw_petition/opening_context.md
+    evidence_folder_roles:
+      - identity_context
+    destination: draft_sections/_context_notes.md
+
+  - step_id: template_review
+    execution: llm_manual
+    title: Review the EB-2 NIW structure and substantive drafting rules
+    objective: >
+      Understand the controlling EB-2 threshold, Dhanasar structure, block
+      sequence, evidence discipline, and exhibit conventions. Do not draft
+      substantive petition text.
+    section_instructions: instructions/task_types/eb2niw_petition/template_review.md
+    templates:
+      - templates/EB2NIW/2. Шаблон_Draft МЕМО EB-2NIW, ver.1.0.docx
+    destination: draft_sections/_template_notes.md
+
+  - step_id: eb2niw_overview
+    execution: llm_manual
+    title: Overview, professional biography, and proposed-endeavor roadmap
+    objective: >
+      Draft a concise professional overview that identifies the beneficiary,
+      qualifications, intended occupation, specific proposed endeavor, EB-2
+      threshold basis, and the three NIW conclusions without prematurely
+      arguing every evidentiary detail.
+    section_instructions: instructions/task_types/eb2niw_petition/overview.md
+    evidence_folder_roles:
+      - identity_context
+    exhibit_number: "1"
+    item_prefix: "1."
+    exhibit_title: General Documents and Professional Background
+    episode_title: General Documents and Professional Background
+    destination: draft_sections/eb2niw/overview.md
+
+  - step_id: eb2niw_basic_eligibility_intro
+    execution: llm_manual
+    title: Basic EB-2 eligibility introduction
+    objective: >
+      Identify the folder-supported threshold route: advanced degree,
+      exceptional ability, or both. Keep this legal threshold separate from
+      the national-interest-waiver analysis.
+    section_instructions: instructions/task_types/eb2niw_petition/basic_eligibility_intro.md
+    destination: draft_sections/eb2niw/basic_eligibility/intro.md
+
+  - step_id: eb2niw_advanced_degree
+    execution: llm_manual
+    title: Advanced Degree Professional
+    objective: >
+      Establish a qualifying advanced degree or a bachelor's degree followed
+      by at least five years of progressive post-baccalaureate experience, and
+      connect the credential and intended occupation without conflating them
+      with the proposed endeavor.
+    section_instructions: instructions/task_types/eb2niw_petition/advanced_degree.md
+    activation_folder_roles:
+      - advanced_degree_master
+      - advanced_degree_bachelor
+    evidence_folder_roles:
+      - advanced_degree_master
+      - advanced_degree_bachelor
+    requires_evidence: true
+    exhibit_number: "2"
+    exhibit_group: eb2_basic
+    exhibit_title: Basic Eligibility for EB-2
+    episode_title: Advanced Degree Professional
+    destination: draft_sections/eb2niw/basic_eligibility/advanced_degree.md
+
+  - step_id: eb2niw_exceptional_ability_intro
+    execution: llm_manual
+    title: Exceptional Ability introduction
+    objective: >
+      State the exceptional-ability regulatory framework and identify the
+      supported criteria. Do not cite or list the parent folder as evidence.
+    section_instructions: instructions/task_types/eb2niw_petition/exceptional_ability_intro.md
+    activation_folder_roles:
+      - exceptional_ability
+    requires_evidence: true
+    destination: draft_sections/eb2niw/basic_eligibility/exceptional_ability_intro.md
+
+  - step_id: eb2niw_exceptional_academic_record
+    execution: llm_manual
+    title: Exceptional Ability criterion 1 — academic record
+    objective: Establish the relevant academic record and its connection to the area of exceptional ability.
+    section_instructions: instructions/task_types/eb2niw_petition/exceptional_ability_criterion.md
+    evidence_folder_roles: [exceptional_academic_record]
+    requires_evidence: true
+    exhibit_number: "2"
+    exhibit_group: eb2_basic
+    exhibit_title: Basic Eligibility for EB-2
+    episode_title: Official Academic Record
+    destination: draft_sections/eb2niw/basic_eligibility/exceptional_academic_record.md
+
+  - step_id: eb2niw_exceptional_ten_years
+    execution: llm_manual
+    title: Exceptional Ability criterion 2 — ten years of experience
+    objective: Establish at least ten years of full-time experience in the occupation.
+    section_instructions: instructions/task_types/eb2niw_petition/exceptional_ability_criterion.md
+    evidence_folder_roles: [exceptional_ten_years]
+    requires_evidence: true
+    exhibit_number: "2"
+    exhibit_group: eb2_basic
+    exhibit_title: Basic Eligibility for EB-2
+    episode_title: At Least Ten Years of Full-Time Experience
+    destination: draft_sections/eb2niw/basic_eligibility/exceptional_ten_years.md
+
+  - step_id: eb2niw_exceptional_license
+    execution: llm_manual
+    title: Exceptional Ability criterion 3 — license or certification
+    objective: Establish a professional license or certification relevant to the occupation.
+    section_instructions: instructions/task_types/eb2niw_petition/exceptional_ability_criterion.md
+    evidence_folder_roles: [exceptional_license]
+    requires_evidence: true
+    exhibit_number: "2"
+    exhibit_group: eb2_basic
+    exhibit_title: Basic Eligibility for EB-2
+    episode_title: License or Certification
+    destination: draft_sections/eb2niw/basic_eligibility/exceptional_license.md
+
+  - step_id: eb2niw_exceptional_remuneration
+    execution: llm_manual
+    title: Exceptional Ability criterion 4 — remuneration
+    objective: Establish remuneration demonstrating exceptional ability using appropriate comparators and periods.
+    section_instructions: instructions/task_types/eb2niw_petition/exceptional_ability_criterion.md
+    evidence_folder_roles: [exceptional_remuneration]
+    requires_evidence: true
+    exhibit_number: "2"
+    exhibit_group: eb2_basic
+    exhibit_title: Basic Eligibility for EB-2
+    episode_title: Salary or Other Remuneration Demonstrating Exceptional Ability
+    destination: draft_sections/eb2niw/basic_eligibility/exceptional_remuneration.md
+
+  - step_id: eb2niw_exceptional_membership
+    execution: llm_manual
+    title: Exceptional Ability criterion 5 — professional associations
+    objective: Establish qualifying membership in professional associations and the significance of admission requirements.
+    section_instructions: instructions/task_types/eb2niw_petition/exceptional_ability_criterion.md
+    evidence_folder_roles: [exceptional_membership]
+    requires_evidence: true
+    exhibit_number: "2"
+    exhibit_group: eb2_basic
+    exhibit_title: Basic Eligibility for EB-2
+    episode_title: Membership in Professional Associations
+    destination: draft_sections/eb2niw/basic_eligibility/exceptional_membership.md
+
+  - step_id: eb2niw_exceptional_recognition
+    execution: llm_manual
+    title: Exceptional Ability criterion 6 — recognition and significant contributions
+    objective: Establish recognition for achievements and significant contributions by peers, government entities, or professional organizations.
+    section_instructions: instructions/task_types/eb2niw_petition/exceptional_ability_criterion.md
+    evidence_folder_roles: [exceptional_recognition]
+    requires_evidence: true
+    exhibit_number: "2"
+    exhibit_group: eb2_basic
+    exhibit_title: Basic Eligibility for EB-2
+    episode_title: Recognition for Achievements and Significant Contributions
+    destination: draft_sections/eb2niw/basic_eligibility/exceptional_recognition.md
+
+  - step_id: eb2niw_exceptional_final_merits
+    execution: llm_manual
+    title: Exceptional Ability final merits determination
+    objective: >
+      Evaluate all supported exceptional-ability evidence in the aggregate and
+      explain why it demonstrates expertise significantly above that ordinarily
+      encountered in the field.
+    section_instructions: instructions/task_types/eb2niw_petition/exceptional_final_merits.md
+    activation_folder_roles: [exceptional_ability]
+    requires_evidence: true
+    include_all_draft_sections: true
+    destination: draft_sections/eb2niw/basic_eligibility/exceptional_final_merits.md
+
+  - step_id: eb2niw_proposed_endeavor
+    execution: llm_manual
+    title: Specific proposed endeavor
+    objective: >
+      Define what the beneficiary will do in the United States, through what
+      mechanism, for whom, where, at what scale, and with what implementation
+      path. Do not substitute a broad occupation for the endeavor.
+    section_instructions: instructions/task_types/eb2niw_petition/proposed_endeavor.md
+    evidence_folder_roles: [prong1_endeavor]
+    requires_evidence: true
+    exhibit_number: "3"
+    item_prefix: "3.1."
+    exhibit_title: Prong 1 — Proposed Endeavor, Substantial Merit, and National Importance
+    episode_title: Proposed Endeavor and Substantial Merit
+    destination: draft_sections/eb2niw/prong1/proposed_endeavor.md
+
+  - step_id: eb2niw_prong1_substantial_merit
+    execution: llm_manual
+    title: Prong 1 — substantial merit
+    objective: >
+      Explain the endeavor's concrete economic, technological, scientific,
+      educational, cultural, health, or societal value using supplied evidence.
+    section_instructions: instructions/task_types/eb2niw_petition/prong1_substantial_merit.md
+    evidence_folder_roles: [prong1_endeavor]
+    requires_evidence: true
+    exhibit_number: "3"
+    item_prefix: "3.1."
+    exhibit_title: Prong 1 — Proposed Endeavor, Substantial Merit, and National Importance
+    episode_title: Proposed Endeavor and Substantial Merit
+    destination: draft_sections/eb2niw/prong1/substantial_merit.md
+
+  - step_id: eb2niw_prong1_national_importance_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_national_importance_thesis
+    title: Prong 1 — national importance thesis
+    objective: >
+      Draft one folder-defined national-importance thesis. Connect the specific
+      endeavor's prospective impact to broader field, regional, public-system,
+      market, infrastructure, technology, or national implications.
+    section_instructions: instructions/task_types/eb2niw_petition/prong1_national_importance.md
+    evidence_folder_roles: [prong1_national_importance]
+    requires_evidence: true
+    exhibit_number: "3"
+    exhibit_group: eb2_prong1_national
+    exhibit_group_offset: 1
+    exhibit_title: Prong 1 — Proposed Endeavor, Substantial Merit, and National Importance
+    destination_pattern: draft_sections/eb2niw/prong1/national_importance/{episode_id}.md
+
+  - step_id: eb2niw_prong1_totality
+    execution: llm_manual
+    title: Prong 1 synthesis and conclusion
+    objective: Synthesize substantial merit and national importance without introducing new facts or evidence.
+    section_instructions: instructions/task_types/eb2niw_petition/prong_totality.md
+    include_all_draft_sections: true
+    destination: draft_sections/eb2niw/prong1/totality.md
+
+  - step_id: eb2niw_prong2_intro
+    execution: llm_manual
+    title: Prong 2 roadmap — well positioned to advance the endeavor
+    objective: >
+      Introduce the beneficiary's education, skills, record of success,
+      implementation plan, progress, and interest or support from relevant
+      entities as a roadmap for the evidence that follows.
+    section_instructions: instructions/task_types/eb2niw_petition/prong2_intro.md
+    include_all_draft_sections: true
+    destination: draft_sections/eb2niw/prong2/intro.md
+
+  - step_id: eb2niw_prong2_implementation
+    execution: llm_manual
+    title: Prong 2 — steps already taken to implement the endeavor
+    objective: Establish a credible implementation plan and concrete progress already made.
+    section_instructions: instructions/task_types/eb2niw_petition/prong2_episode.md
+    evidence_folder_roles: [prong2_implementation]
+    requires_evidence: true
+    exhibit_number: "4"
+    exhibit_group: eb2_prong2
+    exhibit_title: Prong 2 — Well Positioned to Advance the Proposed Endeavor
+    episode_title: Steps Taken to Implement the Proposed Endeavor
+    destination: draft_sections/eb2niw/prong2/implementation.md
+
+  - step_id: eb2niw_prong2_us_support
+    execution: llm_manual
+    title: Prong 2 — interest and support from U.S. entities
+    objective: Establish concrete interest, commitments, support, or demand from U.S. companies or institutions.
+    section_instructions: instructions/task_types/eb2niw_petition/prong2_episode.md
+    evidence_folder_roles: [prong2_us_support]
+    requires_evidence: true
+    exhibit_number: "4"
+    exhibit_group: eb2_prong2
+    exhibit_title: Prong 2 — Well Positioned to Advance the Proposed Endeavor
+    episode_title: Interest and Support from U.S. Companies and Institutions
+    destination: draft_sections/eb2niw/prong2/us_support.md
+
+  - step_id: eb2niw_prong2_role_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_role_or_organization
+    title: Prong 2 — significant role and relevant achievements
+    objective: Draft one organization/role episode and connect supported achievements to capacity to advance the endeavor.
+    section_instructions: instructions/task_types/eb2niw_petition/prong2_episode.md
+    evidence_folder_roles: [prong2_role]
+    requires_evidence: true
+    exhibit_number: "4"
+    exhibit_group: eb2_prong2
+    exhibit_title: Prong 2 — Well Positioned to Advance the Proposed Endeavor
+    destination_pattern: draft_sections/eb2niw/prong2/role/{episode_id}.md
+
+  - step_id: eb2niw_prong2_awards_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_award_or_recognition
+    title: Prong 2 — awards and distinctions
+    objective: Draft one award episode and explain its supported relevance to the endeavor and record of success.
+    section_instructions: instructions/task_types/eb2niw_petition/prong2_episode.md
+    evidence_folder_roles: [prong2_awards]
+    requires_evidence: true
+    exhibit_number: "4"
+    exhibit_group: eb2_prong2
+    exhibit_title: Prong 2 — Well Positioned to Advance the Proposed Endeavor
+    destination_pattern: draft_sections/eb2niw/prong2/awards/{episode_id}.md
+
+  - step_id: eb2niw_prong2_publications_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_publication_or_media_group
+    title: Prong 2 — media and scholarly publications
+    objective: Draft one publication episode and accurately distinguish authored work from material about the beneficiary.
+    section_instructions: instructions/task_types/eb2niw_petition/prong2_episode.md
+    evidence_folder_roles: [prong2_publications]
+    requires_evidence: true
+    exhibit_number: "4"
+    exhibit_group: eb2_prong2
+    exhibit_title: Prong 2 — Well Positioned to Advance the Proposed Endeavor
+    destination_pattern: draft_sections/eb2niw/prong2/publications/{episode_id}.md
+
+  - step_id: eb2niw_prong2_judging_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_judging_engagement
+    title: Prong 2 — judging the work of others
+    objective: Draft one judging episode and establish actual participation, selection, and relevance.
+    section_instructions: instructions/task_types/eb2niw_petition/prong2_episode.md
+    evidence_folder_roles: [prong2_judging]
+    requires_evidence: true
+    exhibit_number: "4"
+    exhibit_group: eb2_prong2
+    exhibit_title: Prong 2 — Well Positioned to Advance the Proposed Endeavor
+    destination_pattern: draft_sections/eb2niw/prong2/judging/{episode_id}.md
+
+  - step_id: eb2niw_prong2_grants_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_grant_or_funding_source
+    title: Prong 2 — grants and funding
+    objective: Draft one grant/funding episode and explain what it objectively demonstrates about feasibility and positioning.
+    section_instructions: instructions/task_types/eb2niw_petition/prong2_episode.md
+    evidence_folder_roles: [prong2_grants]
+    requires_evidence: true
+    exhibit_number: "4"
+    exhibit_group: eb2_prong2
+    exhibit_title: Prong 2 — Well Positioned to Advance the Proposed Endeavor
+    destination_pattern: draft_sections/eb2niw/prong2/grants/{episode_id}.md
+
+  - step_id: eb2niw_prong2_patents_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_patent_or_development
+    title: Prong 2 — patents, technology, and developments
+    objective: Draft one development episode and distinguish ownership, inventorship, implementation, and impact precisely.
+    section_instructions: instructions/task_types/eb2niw_petition/prong2_episode.md
+    evidence_folder_roles: [prong2_patents]
+    requires_evidence: true
+    exhibit_number: "4"
+    exhibit_group: eb2_prong2
+    exhibit_title: Prong 2 — Well Positioned to Advance the Proposed Endeavor
+    destination_pattern: draft_sections/eb2niw/prong2/patents/{episode_id}.md
+
+  - step_id: eb2niw_prong2_conferences_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_conference_or_professional_event
+    title: Prong 2 — conferences and professional events
+    objective: Draft one conference episode and establish the beneficiary's actual role and its probative value.
+    section_instructions: instructions/task_types/eb2niw_petition/prong2_episode.md
+    evidence_folder_roles: [prong2_conferences]
+    requires_evidence: true
+    exhibit_number: "4"
+    exhibit_group: eb2_prong2
+    exhibit_title: Prong 2 — Well Positioned to Advance the Proposed Endeavor
+    destination_pattern: draft_sections/eb2niw/prong2/conferences/{episode_id}.md
+
+  - step_id: eb2niw_prong2_recommendations_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_recommender_or_letter
+    title: Prong 2 — U.S. recommendation and support letters
+    objective: Draft one letter episode, establish the author's authority, and use only specific supported first-hand observations.
+    section_instructions: instructions/task_types/eb2niw_petition/prong2_episode.md
+    evidence_folder_roles: [prong2_recommendations]
+    requires_evidence: true
+    exhibit_number: "4"
+    exhibit_group: eb2_prong2
+    exhibit_title: Prong 2 — Well Positioned to Advance the Proposed Endeavor
+    destination_pattern: draft_sections/eb2niw/prong2/recommendations/{episode_id}.md
+
+  - step_id: eb2niw_prong2_totality
+    execution: llm_manual
+    title: Prong 2 totality of circumstances
+    objective: Synthesize all supported preparation, progress, success, plan, and support evidence without introducing new facts.
+    section_instructions: instructions/task_types/eb2niw_petition/prong_totality.md
+    include_all_draft_sections: true
+    destination: draft_sections/eb2niw/prong2/totality.md
+
+  - step_id: eb2niw_prong3_balance
+    execution: llm_manual
+    title: Prong 3 — on-balance waiver analysis
+    objective: >
+      Apply the Dhanasar balancing considerations to the specific endeavor,
+      record, implementation path, urgency, and prospective U.S. benefit. Do
+      not make a crude comparison to available U.S. workers.
+    section_instructions: instructions/task_types/eb2niw_petition/prong3_balance.md
+    evidence_folder_roles: [prong3]
+    requires_evidence: true
+    include_all_draft_sections: true
+    exhibit_number: "5"
+    item_prefix: "5."
+    exhibit_title: Prong 3 — Benefit of Waiving the Job Offer and Labor Certification Requirements
+    episode_title: On-Balance National Interest Waiver Analysis
+    destination: draft_sections/eb2niw/prong3/balance.md
+
+  - step_id: eb2niw_conclusion
+    execution: llm_manual
+    title: EB-2 NIW conclusion
+    objective: Provide a short synthesis of the established EB-2 basis and all three Dhanasar prongs, then request approval.
+    section_instructions: instructions/task_types/eb2niw_petition/conclusion.md
+    include_all_draft_sections: true
+    destination: draft_sections/eb2niw/conclusion.md
+
+  - step_id: generate_exhibit_list
+    execution: deterministic
+    title: Generate evidence index from validated logical document order
+    command: python -m app.build_exhibits --case CASE_ID

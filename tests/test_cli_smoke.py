@@ -1,3 +1,4 @@
+import csv
 import unittest
 import importlib.util
 import zipfile
@@ -7,17 +8,28 @@ from unittest.mock import patch
 
 from app import bundle, draft, web
 from app import cli_support
+from app import bundle_workflow as bundle_workflow_module
 from app import evidence as evidence_module
 from app import progress as progress_module
+from app import rfe_strategy as rfe_strategy_module
 from app import workflow as workflow_module
 from app.bundle_workflow import (
+    BundleSelection,
     build_bundle_plan,
+    bundle_display_title_review,
     build_exhibit_index,
     generate_separator_pages,
+    refresh_layout_indexes,
     render_separator_pdfs,
+    save_bundle_display_titles,
 )
 from app.evidence import link_translations, manual_link_translation, scan_documents, unlink_translation
-from app.memo_builder import apply_case_intake, build_working_memo, parse_machine_template
+from app.memo_builder import (
+    apply_case_intake,
+    build_working_memo,
+    parse_machine_template,
+    refresh_case_sources,
+)
 from app.stages import build_llm_stage
 from app.workflow import find_step, load_yaml_file
 from app.simple_yaml import load_yaml_subset
@@ -35,6 +47,41 @@ class CliSmokeTests(unittest.TestCase):
             path.write_text("eb1a_folder_roles:\n  identity_cv_education: !CV, Passport\n", encoding="utf-8")
             parsed = load_yaml_file(path)
         self.assertEqual(parsed["eb1a_folder_roles"]["identity_cv_education"], "!CV, Passport")
+
+    def test_exhibit_separator_groups_documents_by_episode_folder(self) -> None:
+        exhibit = {"exhibit_number": "1", "display_title": "Awards"}
+        document_groups = [
+            (
+                {
+                    "document_id": "DOC0001",
+                    "display_title": "Award certificate",
+                    "file_path": "source_documents/originals/1. Награды/1. NBA/award.pdf",
+                },
+                [],
+            ),
+            (
+                {
+                    "document_id": "DOC0002",
+                    "display_title": "Jury confirmation",
+                    "file_path": "source_documents/originals/1. Награды/1. NBA/jury.pdf",
+                },
+                [],
+            ),
+        ]
+
+        text = bundle_workflow_module._render_exhibit_separator(exhibit, document_groups)
+
+        self.assertIn("### 1.1. NBA", text)
+        self.assertIn("1.1.1. Award certificate", text)
+        self.assertIn("1.1.2. Jury confirmation", text)
+
+    def test_exhibit_separator_can_be_rendered_without_documents(self) -> None:
+        exhibit = {"exhibit_number": "3", "display_title": "Published material"}
+
+        text = bundle_workflow_module._render_exhibit_separator(exhibit, [])
+
+        self.assertIn("# Exhibit 3: Published material", text)
+        self.assertIn("[No documents selected for this exhibit.]", text)
 
     def test_translation_match_handles_moved_folders_and_eng_suffix(self) -> None:
         original = {
@@ -64,6 +111,116 @@ class CliSmokeTests(unittest.TestCase):
         }
         decision = evidence_module._translation_match_decision(translation, [original])
         self.assertEqual(decision.candidate, original)
+
+    def test_translation_match_handles_rfe_new_document_roots(self) -> None:
+        original = {
+            "document_id": "DOC0001",
+            "category": "awards",
+            "file_path": "source_documents/rfe_response/new_documents/originals/1. Awards/1. CIPR/10. Award rules.pdf",
+        }
+        translation = {
+            "document_id": "DOC0002",
+            "category": "awards",
+            "file_path": "source_documents/rfe_response/new_documents/translations/1. Awards/1. CIPR/10. Award rules.pdf",
+        }
+
+        decision = evidence_module._translation_match_decision(translation, [original])
+
+        self.assertEqual(decision.candidate, original)
+        self.assertEqual(decision.method, "exact_relative_path")
+
+    def test_translation_match_prefers_non_translation_named_original_candidate(self) -> None:
+        primary_original = {
+            "document_id": "DOC0001",
+            "category": "leading_critical_role",
+            "file_path": "source_documents/rfe_response/new_documents/originals/8. Critical role/Sberbank/Role/1. Employer letter Sberbank Osipov.pdf",
+        }
+        misplaced_english_copy = {
+            "document_id": "DOC0002",
+            "category": "leading_critical_role",
+            "file_path": "source_documents/rfe_response/new_documents/originals/8. Critical role/Sberbank/Role/Employer_letter_Sberbank_Osipov_eng.pdf",
+        }
+        translation = {
+            "document_id": "DOC0003",
+            "category": "leading_critical_role",
+            "file_path": "source_documents/rfe_response/new_documents/translations/8. Critical role/Sberbank/Role/1. Employer letter Sberbank Osipov (2).pdf",
+        }
+
+        decision = evidence_module._translation_match_decision(
+            translation,
+            [primary_original, misplaced_english_copy],
+        )
+
+        self.assertEqual(decision.candidate, primary_original)
+
+    def test_rfe_reputation_prompt_does_not_include_role_only_translations(self) -> None:
+        with TemporaryDirectory() as temp:
+            case_dir = Path(temp) / "case_001"
+            originals = case_dir / "source_documents" / "rfe_response" / "new_documents" / "originals"
+            translations = case_dir / "source_documents" / "rfe_response" / "new_documents" / "translations"
+            reputation_file = originals / "8. Critical role" / "Sberbank" / "Reputation" / "reputation.pdf"
+            role_translation = translations / "8. Critical role" / "Sberbank" / "Role" / "role translation.pdf"
+            reputation_file.parent.mkdir(parents=True)
+            role_translation.parent.mkdir(parents=True)
+            (case_dir / "indexes").mkdir(parents=True)
+            (case_dir / "case_strategy").mkdir(parents=True)
+            reputation_file.write_bytes(b"fake reputation pdf")
+            role_translation.write_bytes(b"fake role translation pdf")
+            (case_dir / "indexes" / "document_index.csv").write_text(
+                "document_id,original_file_name,display_title,file_path,document_type,category,"
+                "task_type_relevance,memo_section_relevance,exhibit_number,parent_document_id,"
+                "translation_status,relationship_type,document_date,person_or_organization,"
+                "short_description,extraction_status,text_extraction_path,user_approval_status,"
+                "separator_title_type,final_bundle_order,source_fingerprint,last_scanned_at,"
+                "manual_edit_lock,notes\n"
+                "DOC0001,reputation.pdf,Sberbank reputation,source_documents/rfe_response/new_documents/originals/8. Critical role/Sberbank/Reputation/reputation.pdf,pdf,leading_critical_role,,,,,original,,,,,,,,,,,,,\n"
+                "DOC0002,role translation.pdf,Sberbank role translation,source_documents/rfe_response/new_documents/translations/8. Critical role/Sberbank/Role/role translation.pdf,pdf,leading_critical_role,,,,,translation,,,,,,,,,,,,,\n",
+                encoding="utf-8",
+            )
+            (case_dir / "case_strategy" / "strategy_manifest.json").write_text(
+                """
+{
+  "global_strategy": "Global RFE strategy.",
+  "units": [
+    {
+      "unit_id": "leading_critical_role_sberbank",
+      "section_id": "criterion_8",
+      "section_order": 8,
+      "title": "Sberbank",
+      "section_title": "Criterion 8",
+      "section_type": "criterion",
+      "criterion_role": "leading_critical_role",
+      "source_folder": "8. Critical role/Sberbank",
+      "strategy": "Separate role and reputation.",
+      "rfe_issues": []
+    }
+  ]
+}
+""".strip(),
+                encoding="utf-8",
+            )
+            loaded = workflow_module.LoadedCase(
+                case_id="case_001",
+                case_dir=case_dir,
+                config={
+                    "task_type": "eb1a_rfe_response",
+                    "paths": {
+                        "source_rfe_new_originals": "source_documents/rfe_response/new_documents/originals",
+                        "source_rfe_new_translations": "source_documents/rfe_response/new_documents/translations",
+                        "document_index": "indexes/document_index.csv",
+                    },
+                    "eb1a_folder_roles": {"leading_critical_role": "8. Critical role"},
+                },
+                workflow={"steps": []},
+            )
+
+            context = rfe_strategy_module.render_strategy_unit_context(
+                loaded,
+                "leading_critical_role_Sberbank_reputation",
+            )
+
+            self.assertIn("DOC0001", context)
+            self.assertNotIn("DOC0002", context)
 
     def test_safe_path_component_accepts_cyrillic_episode_names(self) -> None:
         self.assertEqual(
@@ -260,6 +417,15 @@ class CliSmokeTests(unittest.TestCase):
                 (role_episode / "1 role and contribution/role.txt").write_text(
                     "role evidence", encoding="utf-8"
                 )
+                (role_episode / "1 role and contribution/extracts.txt").write_text(
+                    "The screenshot identifies the beneficiary as the project lead.", encoding="utf-8"
+                )
+                (role_episode / "1 role and contribution/info.md").write_text(
+                    "Emphasize the beneficiary's operational responsibility.", encoding="utf-8"
+                )
+                (role_episode / "1 role and contribution/README.md").write_text(
+                    "Treat the org chart and project screenshot as one evidence set.", encoding="utf-8"
+                )
                 (role_episode / "2 distinguished reputation").mkdir()
                 (role_episode / "2 distinguished reputation/reputation.txt").write_text(
                     "reputation evidence", encoding="utf-8"
@@ -299,6 +465,9 @@ class CliSmokeTests(unittest.TestCase):
             index_text = (case_dir / "indexes/document_index.csv").read_text(encoding="utf-8-sig")
             self.assertIn(",organization_role,", index_text)
             self.assertIn(",high_salary,", index_text)
+            self.assertNotIn("extracts.txt", index_text)
+            self.assertNotIn("info.md", index_text)
+            self.assertNotIn("README.md", index_text)
             phase_units = [
                 unit
                 for unit in stage.units
@@ -310,6 +479,14 @@ class CliSmokeTests(unittest.TestCase):
                 }
             ]
             self.assertEqual(len(phase_units), 4)
+            documents_by_step = {
+                unit.step_id: {title for _document_id, title in unit.selected_documents}
+                for unit in phase_units
+            }
+            self.assertEqual(documents_by_step["o1b_criterion_iii_role"], {"role"})
+            self.assertEqual(documents_by_step["o1b_criterion_iii_reputation"], {"reputation"})
+            self.assertEqual(documents_by_step["o1b_criterion_vi_compensation"], {"pay"})
+            self.assertEqual(documents_by_step["o1b_criterion_vi_comparison"], {"wage"})
             self.assertEqual(
                 {unit.episode_id for unit in phase_units if "criterion_iii" in unit.step_id},
                 {"Studio_Alpha"},
@@ -352,6 +529,13 @@ class CliSmokeTests(unittest.TestCase):
             self.assertIn("task_type: `o1b_petition`", role_prompt)
             self.assertIn("role.txt", role_prompt)
             self.assertNotIn("reputation.txt", role_prompt)
+            self.assertIn("The screenshot identifies the beneficiary as the project lead", role_prompt)
+            self.assertIn("prompt-only folder sidecar (extracts.txt)", role_prompt)
+            self.assertIn("Emphasize the beneficiary's operational responsibility", role_prompt)
+            self.assertIn("prompt-only folder sidecar (info.md)", role_prompt)
+            self.assertIn("Treat the org chart and project screenshot as one evidence set", role_prompt)
+            self.assertIn("prompt-only folder sidecar (README.md)", role_prompt)
+            self.assertIn("do not add to document/exhibit indexes", role_prompt)
             self.assertIn("primary exhibit for this section is Exhibit 4", role_prompt)
             step_order = [str(step.get("step_id")) for step in loaded.workflow["steps"]]
             self.assertLess(
@@ -521,10 +705,12 @@ class CliSmokeTests(unittest.TestCase):
 
             self.assertTrue((case_dir / "source_documents" / "rfe" / "notice").is_dir())
             self.assertTrue((case_dir / "source_documents" / "initial_filing" / "memorandum").is_dir())
-            self.assertTrue((case_dir / "source_documents" / "rfe_response" / "new_documents" / "issues").is_dir())
+            self.assertTrue((case_dir / "source_documents" / "rfe_response" / "new_documents" / "originals").is_dir())
+            self.assertTrue((case_dir / "source_documents" / "rfe_response" / "new_documents" / "translations").is_dir())
+            self.assertTrue((case_dir / "case_strategy" / "units").is_dir())
             self.assertTrue((case_dir / "rfe_response_plan.md").exists())
             self.assertTrue(
-                (case_dir / "source_documents" / "rfe_response" / "new_documents" / "issues" / "1. Награды").is_dir()
+                (case_dir / "source_documents" / "rfe_response" / "new_documents" / "originals" / "1. Награды").is_dir()
             )
             config = (case_dir / "case_config.yaml").read_text(encoding="utf-8")
             self.assertIn("task_type: eb1a_rfe_response", config)
@@ -532,6 +718,8 @@ class CliSmokeTests(unittest.TestCase):
             self.assertIn("drafting_objective: Prepare EB-1A RFE response", config)
             self.assertNotIn("procedural_context: Initial EB-1A petition", config)
             self.assertIn("source_rfe_notice: source_documents/rfe/notice", config)
+            self.assertNotIn("source_initial_filing_originals:", config)
+            self.assertIn("strategy_manifest: case_strategy/strategy_manifest.json", config)
             self.assertIn("rfe_metadata:", config)
 
     def test_unimplemented_task_type_is_rejected_before_case_folder_is_created(self) -> None:
@@ -545,8 +733,37 @@ class CliSmokeTests(unittest.TestCase):
                 patch.object(cli_support, "CASE_TEMPLATE_ROOT", template_root),
             ):
                 with self.assertRaisesRegex(SystemExit, "not implemented yet"):
-                    cli_support.create_case_from_template("niw_001", "eb2niw_petition")
-            self.assertFalse((case_root / "niw_001").exists())
+                    cli_support.create_case_from_template("unsupported_001", "eb5_petition")
+            self.assertFalse((case_root / "unsupported_001").exists())
+
+    def test_eb2niw_case_creation_and_dynamic_workflow_are_enabled(self) -> None:
+        project_root = Path(__file__).resolve().parent.parent
+        with TemporaryDirectory() as temp:
+            case_root = Path(temp) / "case_workspace"
+            with (
+                patch.object(cli_support, "CASE_ROOT", case_root),
+                patch.object(cli_support, "CASE_TEMPLATE_ROOT", project_root / "case_workspace" / "_template"),
+                patch.object(cli_support, "PROJECT_ROOT", project_root),
+            ):
+                case_dir = cli_support.create_case_from_template("niw_001", "eb2niw_petition")
+
+            config = load_yaml_file(case_dir / "case_config.yaml")
+            workflow = load_yaml_file(project_root / "workflows" / "eb2niw_petition.yaml")
+            step_ids = {str(step.get("step_id", "")) for step in workflow.get("steps", [])}
+            self.assertEqual(config["task_type"], "eb2niw_petition")
+            self.assertEqual(config["workflow"], "workflows/eb2niw_petition.yaml")
+            self.assertEqual(config["eb2_basis"], "auto")
+            self.assertTrue((case_dir / "case_context").is_dir())
+            self.assertTrue(
+                (
+                    case_dir
+                    / "source_documents/originals/3. (2) Пронг - Хорошая подготовка/3. Прочие достижения/8.Рек письма США"
+                ).is_dir()
+            )
+            self.assertIn("eb2niw_prong1_national_importance_episode", step_ids)
+            self.assertIn("eb2niw_prong2_role_episode", step_ids)
+            self.assertIn("eb2niw_prong3_balance", step_ids)
+            self.assertIn("eb2niw_conclusion", step_ids)
 
     def test_progress_detects_final_evidence_bundle_path(self) -> None:
         with TemporaryDirectory() as temp:
@@ -623,6 +840,11 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(args.command, "build-index")
         self.assertEqual(args.case_id, "case_001")
 
+    def test_bundle_parser_accepts_refresh_indexes(self) -> None:
+        args = bundle.build_parser().parse_args(["refresh-indexes", "--case", "case_001"])
+        self.assertEqual(args.command, "refresh-indexes")
+        self.assertEqual(args.case_id, "case_001")
+
     def test_bundle_parser_accepts_separators(self) -> None:
         args = bundle.build_parser().parse_args(["separators", "--case", "case_001"])
         self.assertEqual(args.command, "separators")
@@ -690,14 +912,13 @@ class CliSmokeTests(unittest.TestCase):
 
     def test_machine_templates_are_parseable_for_working_memo_builder(self) -> None:
         eb1a = parse_machine_template(Path("templates/EB1A/EB1A_unified_template_LLM.docx"))
-        rfe = parse_machine_template(Path("templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.txt"))
+        rfe = Path("templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.yaml").read_text(encoding="utf-8")
         self.assertGreaterEqual(eb1a.placeholder_count, 10)
         self.assertGreaterEqual(eb1a.section_count, 20)
         self.assertIn("__BENEFICIARY_FULL_NAME__", eb1a.placeholders)
-        self.assertGreaterEqual(rfe.section_count, 10)
-        self.assertGreaterEqual(rfe.placeholder_count, 10)
-        self.assertIn("[CASE_NO]", rfe.placeholders)
-        self.assertTrue(any("COVER LETTER" in section.title for section in rfe.sections))
+        self.assertIn("visa_classification: EB-1A", rfe)
+        self.assertIn("cover_letter:", rfe)
+        self.assertIn("criterion_1_awards:", rfe)
 
     def test_apply_intake_and_build_working_memo_docx(self) -> None:
         with TemporaryDirectory() as temp:
@@ -811,8 +1032,19 @@ class CliSmokeTests(unittest.TestCase):
                     "case_001",
                     template_path="templates/EB1A/machine_template.txt",
                 )
+                (external_originals / "new-original.txt").write_text(
+                    "Updated original", encoding="utf-8"
+                )
+                refreshed = refresh_case_sources("case_001")
 
             self.assertGreaterEqual(intake.fields_updated, 4)
+            self.assertEqual(refreshed.source_files_copied, 1)
+            self.assertEqual(
+                (case_dir / "source_documents" / "originals" / "new-original.txt").read_text(
+                    encoding="utf-8"
+                ),
+                "Updated original",
+            )
             self.assertTrue(summary.docx_path.exists())
             self.assertTrue(summary.markdown_path.exists())
             self.assertTrue(summary.template_report_path.exists())
@@ -827,6 +1059,52 @@ class CliSmokeTests(unittest.TestCase):
             saved_config = (case_dir / "case_config.yaml").read_text(encoding="utf-8")
             self.assertIn("source_imports:", saved_config)
             self.assertIn(str(external_originals), saved_config)
+
+    def test_eb1a_migrator_template_variant_controls_stage2_and_memo(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            case_root = root / "case_workspace"
+
+            with (
+                patch.object(cli_support, "CASE_ROOT", case_root),
+                patch.object(web, "CASE_ROOT", case_root),
+            ):
+                case_dir = cli_support.create_case_from_template("migrator_test", "eb1a_petition")
+                apply_case_intake(
+                    "migrator_test",
+                    {
+                        "beneficiary_full_name": "Ivan Migrator",
+                        "preferred_reference": "Mr. Migrator",
+                        "gender": "male",
+                        "citizenship": "Serbia",
+                        "field": "Technology",
+                        "specialization": "AI product engineering",
+                        "eb1a_template_variant": "migrator",
+                    },
+                    claimed_criteria=["awards"],
+                )
+                stage = build_llm_stage("migrator_test")
+                summary = build_working_memo("migrator_test")
+                html = web.render_intake_panel("migrator_test", "eb1a_petition")
+                prompt_path = workflow_module.build_prompt("migrator_test", "template_review", [])
+
+            config_text = (case_dir / "case_config.yaml").read_text(encoding="utf-8")
+            self.assertIn("eb1a_template_variant: migrator", config_text)
+            self.assertIn(
+                "working_document_template: templates/EB1A/EB1A_migrator_working_document_structure.yaml",
+                config_text,
+            )
+            step_ids = {unit.step_id for unit in stage.units}
+            self.assertIn("industry_overview", step_ids)
+            self.assertIn("beneficiary_statement", step_ids)
+            self.assertNotIn("specialization_essay", step_ids)
+            self.assertIn(">Мигратор</option>", html)
+            self.assertIn("EB-1A MIGRATOR MEMORANDUM TEMPLATE", prompt_path.read_text(encoding="utf-8"))
+            with zipfile.ZipFile(summary.docx_path) as archive:
+                document_xml = archive.read("word/document.xml").decode("utf-8")
+            self.assertIn("OVERVIEW OF THE INDUSTRY", document_xml)
+            self.assertIn("BENEFICIARY WILL CONTINUE TO WORK IN CLAIMED AREA OF EXPERTISE", document_xml)
+            self.assertIn("Beneficiary Statement", document_xml)
 
     def test_eb1a_rfe_issue_prompt_includes_rfe_initial_and_new_docs(self) -> None:
         with TemporaryDirectory() as temp:
@@ -1049,6 +1327,21 @@ class CliSmokeTests(unittest.TestCase):
             self.assertIn("text_extracted", index_text)
             self.assertIn("image_or_photo", index_text)
 
+            readme_path = source_dir / "README.md"
+            readme_path.write_text("Folder-only prompt guidance.", encoding="utf-8")
+            with (indexes_dir / "document_index.csv").open(
+                "a", encoding="utf-8", newline=""
+            ) as handle:
+                csv.DictWriter(handle, fieldnames=evidence_module.INDEX_FIELDS).writerow(
+                    {
+                        "document_id": "DOC9999",
+                        "original_file_name": "README.md",
+                        "display_title": "README",
+                        "file_path": readme_path.relative_to(case_dir).as_posix(),
+                        "manual_edit_lock": "true",
+                    }
+                )
+
             manual_description.write_text(
                 "# Manual description for DOC0002\n\n"
                 "## Description for LLM\n\n"
@@ -1062,9 +1355,11 @@ class CliSmokeTests(unittest.TestCase):
                 second_summary = scan_documents("case_001")
 
             self.assertEqual(second_summary.extracted_texts, 2)
+            self.assertEqual(second_summary.removed_rows, 1)
             index_text = (indexes_dir / "document_index.csv").read_text(encoding="utf-8")
             self.assertIn("manual_description_available", index_text)
             self.assertIn("manual_descriptions/DOC0002.md", index_text)
+            self.assertNotIn("README.md", index_text)
 
     def test_repeatable_episode_prompt_import_and_insert(self) -> None:
         with TemporaryDirectory() as temp:
@@ -1432,6 +1727,72 @@ class CliSmokeTests(unittest.TestCase):
             self.assertNotIn(",DOC0001,", doc_two_row)
             self.assertIn(",DOC0001,", doc_three_row)
 
+    def test_save_bundle_display_titles_updates_episode_overrides_and_invalidates_preparation(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            case_root = root / "case_workspace"
+            case_dir = case_root / "case_001"
+            workflow_dir = root / "workflows"
+            indexes_dir = case_dir / "indexes"
+            indexes_dir.mkdir(parents=True)
+            workflow_dir.mkdir(parents=True)
+            (case_dir / "bundle").mkdir(parents=True)
+            (workflow_dir / "eb1a_petition.yaml").write_text(
+                "task_type: eb1a_petition\nsteps: []\n", encoding="utf-8"
+            )
+            (case_dir / "case_config.yaml").write_text(
+                "case_id: case_001\n"
+                "task_type: eb1a_petition\n"
+                "workflow: workflows/eb1a_petition.yaml\n"
+                "paths:\n"
+                "  document_index: indexes/document_index.csv\n"
+                "  exhibit_index: indexes/exhibit_index.csv\n"
+                "  bundle_root: bundle\n",
+                encoding="utf-8",
+            )
+            (indexes_dir / "document_index.csv").write_text(
+                "document_id,original_file_name,display_title,file_path,document_type,category,"
+                "task_type_relevance,memo_section_relevance,exhibit_number,parent_document_id,"
+                "translation_status,relationship_type,document_date,person_or_organization,"
+                "short_description,extraction_status,text_extraction_path,user_approval_status,"
+                "separator_title_type,final_bundle_order,source_fingerprint,last_scanned_at,"
+                "manual_edit_lock,notes\n"
+                "DOC0001,doc.pdf,Old Document Title,source_documents/originals/1. Awards/1. Кириллица/doc.pdf,"
+                "pdf,awards,,,1,,original,,,,,,,,,,,,,\n",
+                encoding="utf-8",
+            )
+            (indexes_dir / "exhibit_index.csv").write_text(
+                "exhibit_id,exhibit_number,parent_exhibit_id,display_title,evidentiary_thesis,task_type,"
+                "memo_section,separator_title_type,document_ids,original_translation_order,final_bundle_order,"
+                "user_approval_status,manual_edit_lock,notes\n"
+                "EXH001,1,,Old Exhibit Title,,eb1a_petition,,exhibit,DOC0001,original_then_translation,1,pending,false,\n",
+                encoding="utf-8",
+            )
+            preparation = case_dir / "bundle" / "preparation.json"
+            preparation.write_text("{}", encoding="utf-8")
+
+            with (
+                patch.object(cli_support, "CASE_ROOT", case_root),
+                patch.object(workflow_module, "PROJECT_ROOT", root),
+            ):
+                review = bundle_display_title_review("case_001")
+                self.assertEqual(review[0]["episodes"][0]["raw_title"], "1. Кириллица")
+                summary = save_bundle_display_titles(
+                    "case_001",
+                    exhibit_titles={"1": "New Exhibit Title"},
+                    episode_titles={"1. Кириллица": "English Episode Title"},
+                    document_titles={"DOC0001": "New Document Title"},
+                )
+                updated = bundle_display_title_review("case_001")
+
+            self.assertEqual(summary.exhibit_titles_updated, 1)
+            self.assertEqual(summary.episode_overrides_saved, 1)
+            self.assertEqual(summary.document_titles_updated, 1)
+            self.assertFalse(preparation.exists())
+            self.assertEqual(updated[0]["display_title"], "New Exhibit Title")
+            self.assertEqual(updated[0]["episodes"][0]["display_title"], "English Episode Title")
+            self.assertEqual(updated[0]["episodes"][0]["documents"][0]["display_title"], "New Document Title")
+
     def test_build_exhibit_index_orders_original_before_translation(self) -> None:
         with TemporaryDirectory() as temp:
             root = Path(temp)
@@ -1486,6 +1847,130 @@ class CliSmokeTests(unittest.TestCase):
             self.assertIn("DOC0001", document_text)
             self.assertIn("DOC0002", document_text)
 
+    def test_refresh_layout_indexes_uses_llm_narrative_document_order(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            case_root = root / "case_workspace"
+            case_dir = case_root / "case_001"
+            workflow_dir = root / "workflows"
+            indexes_dir = case_dir / "indexes"
+            source_dir = case_dir / "source_documents" / "originals" / "1. Awards"
+            validated_dir = case_dir / "validated_outputs"
+            indexes_dir.mkdir(parents=True)
+            workflow_dir.mkdir(parents=True)
+            source_dir.mkdir(parents=True)
+            validated_dir.mkdir(parents=True)
+            for name in ["technical-first.txt", "technical-second.txt", "technical-third.txt"]:
+                (source_dir / name).write_text(name, encoding="utf-8")
+            (case_dir / "case_config.yaml").write_text(
+                "case_id: case_001\n"
+                "task_type: eb1a_petition\n"
+                "workflow: workflows/eb1a_petition.yaml\n"
+                "paths:\n"
+                "  source_originals: source_documents/originals\n"
+                "  extracted_text: extracted_text\n"
+                "  document_index: indexes/document_index.csv\n"
+                "  exhibit_index: indexes/exhibit_index.csv\n"
+                "  generated_prompts: generated_prompts\n"
+                "  llm_outputs: llm_outputs\n"
+                "  validated_outputs: validated_outputs\n"
+                "  bundle_root: bundle\n"
+                "eb1a_folder_roles:\n"
+                "  awards: 1. Awards\n",
+                encoding="utf-8",
+            )
+            (workflow_dir / "eb1a_petition.yaml").write_text(
+                "task_type: eb1a_petition\n"
+                "steps:\n"
+                "  - step_id: criterion_awards_episode\n"
+                "    title: Awards\n"
+                "    evidence_folder_roles:\n"
+                "      - awards\n",
+                encoding="utf-8",
+            )
+            (indexes_dir / "document_index.csv").write_text(
+                "document_id,original_file_name,display_title,file_path,document_type,category,"
+                "task_type_relevance,memo_section_relevance,exhibit_number,parent_document_id,"
+                "translation_status,relationship_type,document_date,person_or_organization,"
+                "short_description,extraction_status,text_extraction_path,user_approval_status,"
+                "separator_title_type,final_bundle_order,source_fingerprint,last_scanned_at,"
+                "manual_edit_lock,notes\n"
+                "DOC0001,technical-first.txt,Technical First,source_documents/originals/1. Awards/technical-first.txt,text,awards,,awards,,,,,,,,text_extracted,,pending,document,,,,false,\n"
+                "DOC0002,technical-second.txt,Technical Second,source_documents/originals/1. Awards/technical-second.txt,text,awards,,awards,,,,,,,,text_extracted,,pending,document,,,,false,\n"
+                "DOC0003,technical-third.txt,Technical Third,source_documents/originals/1. Awards/technical-third.txt,text,awards,,awards,,,,,,,,text_extracted,,pending,document,,,,false,\n",
+                encoding="utf-8",
+            )
+            (indexes_dir / "exhibit_index.csv").write_text(
+                "exhibit_id,exhibit_number,parent_exhibit_id,display_title,evidentiary_thesis,"
+                "task_type,memo_section,separator_title_type,document_ids,original_translation_order,"
+                "final_bundle_order,user_approval_status,manual_edit_lock,notes\n",
+                encoding="utf-8",
+            )
+            (validated_dir / "criterion_awards_episode.json").write_text(
+                "{\n"
+                '  "case_id": "case_001",\n'
+                '  "task_type": "eb1a_petition",\n'
+                '  "step_id": "criterion_awards_episode",\n'
+                '  "draft_text": "Within the Exhibit, the following documents are attached:\\n\\n1. Third narrative document.\\n2. First narrative document.\\n3. Second narrative document.",\n'
+                '  "used_documents": [\n'
+                '    {"document_id": "DOC0001", "document_title": "First narrative document", "used_for": "award proof"},\n'
+                '    {"document_id": "DOC0002", "document_title": "Second narrative document", "used_for": "award proof"},\n'
+                '    {"document_id": "DOC0003", "document_title": "Third narrative document", "used_for": "award proof"}\n'
+                "  ],\n"
+                '  "unsupported_claims": [],\n'
+                '  "questions_for_user": [],\n'
+                '  "quality_flags": [],\n'
+                '  "revision_notes": []\n'
+                "}\n",
+                encoding="utf-8",
+            )
+
+            with (
+                patch.object(cli_support, "CASE_ROOT", case_root),
+                patch.object(workflow_module, "PROJECT_ROOT", root),
+            ):
+                loaded = workflow_module.load_case("case_001")
+                step = workflow_module.find_step(loaded.workflow, "criterion_awards_episode")
+                with self.assertRaisesRegex(SystemExit, "used_documents omits 1 document"):
+                    workflow_module.validate_llm_output(
+                        {
+                            "case_id": "case_001",
+                            "task_type": "eb1a_petition",
+                            "step_id": "criterion_awards_episode",
+                            "draft_text": "Complete awards response with enough substance for validation.",
+                            "used_documents": [
+                                {
+                                    "document_id": "DOC0001",
+                                    "document_title": "First narrative document",
+                                    "used_for": "award proof",
+                                },
+                                {
+                                    "document_id": "DOC0003",
+                                    "document_title": "Third narrative document",
+                                    "used_for": "award proof",
+                                },
+                            ],
+                            "unsupported_claims": [],
+                            "questions_for_user": [],
+                            "quality_flags": [],
+                            "revision_notes": [],
+                        },
+                        loaded,
+                        "criterion_awards_episode",
+                    )
+                summary = refresh_layout_indexes("case_001")
+
+            self.assertEqual(summary.documents_assigned, 3)
+            with (indexes_dir / "exhibit_index.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+                exhibit = next(csv.DictReader(handle))
+            self.assertEqual(exhibit["document_ids"], "DOC0003;DOC0001;DOC0002")
+            with (indexes_dir / "document_index.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+                rows = {row["document_id"]: row for row in csv.DictReader(handle)}
+            self.assertEqual(rows["DOC0003"]["final_bundle_order"], "1")
+            self.assertEqual(rows["DOC0001"]["final_bundle_order"], "2")
+            self.assertEqual(rows["DOC0002"]["final_bundle_order"], "3")
+            self.assertEqual(rows["DOC0003"]["display_title"], "Third narrative document")
+
     def test_generate_separator_pages_from_indexes(self) -> None:
         with TemporaryDirectory() as temp:
             root = Path(temp)
@@ -1535,13 +2020,42 @@ class CliSmokeTests(unittest.TestCase):
                 summary = generate_separator_pages("case_001")
 
             self.assertEqual(summary.exhibit_pages_written, 1)
-            self.assertEqual(summary.document_pages_written, 2)
+            self.assertEqual(summary.episode_pages_written, 1)
+            self.assertEqual(summary.document_pages_written, 1)
             exhibit_page = case_dir / "bundle" / "separators" / "generated" / "001_exhibit_E-1.md"
-            translation_page = case_dir / "bundle" / "separators" / "generated" / "001_002_DOC0002.md"
+            episode_page = case_dir / "bundle" / "separators" / "generated" / "001_001_000_episode_E-1.1.md"
+            document_page = case_dir / "bundle" / "separators" / "generated" / "001_001_001_DOC0001.md"
             self.assertTrue(exhibit_page.exists())
-            self.assertTrue(translation_page.exists())
-            self.assertIn("DOC0001 - Award Original", exhibit_page.read_text(encoding="utf-8"))
-            self.assertIn("translation of DOC0001", translation_page.read_text(encoding="utf-8"))
+            self.assertTrue(episode_page.exists())
+            self.assertTrue(document_page.exists())
+            exhibit_text = exhibit_page.read_text(encoding="utf-8")
+            self.assertIn("### E-1.1. episode", exhibit_text)
+            self.assertIn("Award Original; English translation", exhibit_text)
+            self.assertNotIn("DOC0001", exhibit_text)
+            episode_text = episode_page.read_text(encoding="utf-8")
+            self.assertIn("# E-1.1. episode", episode_text)
+            self.assertIn("E-1.1.1. Award Original; English translation", episode_text)
+            separator_text = document_page.read_text(encoding="utf-8")
+            self.assertIn("E-1.1.1. Award Original; English translation", separator_text)
+            self.assertIn("Award Original; English translation", separator_text)
+            self.assertNotIn("Document ID", separator_text)
+            self.assertNotIn("Source file", separator_text)
+
+            with (
+                patch.object(cli_support, "CASE_ROOT", case_root),
+                patch.object(workflow_module, "PROJECT_ROOT", root),
+            ):
+                selected = generate_separator_pages(
+                    "case_001", selection=BundleSelection(("E-1",), ("DOC0002",))
+                )
+
+            self.assertEqual(selected.document_pages_written, 1)
+            self.assertFalse(
+                (case_dir / "bundle" / "separators" / "generated" / "001_001_001_DOC0001.md").exists()
+            )
+            selected_exhibit = exhibit_page.read_text(encoding="utf-8")
+            self.assertNotIn("Award Original", selected_exhibit)
+            self.assertIn("Award Translation", selected_exhibit)
 
     def test_build_bundle_plan_reports_missing_separators_and_ready_source(self) -> None:
         with TemporaryDirectory() as temp:

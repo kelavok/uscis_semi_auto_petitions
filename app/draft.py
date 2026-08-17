@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from .cli_support import (
     add_case_argument,
@@ -10,6 +11,12 @@ from .cli_support import (
 )
 from .evidence import link_translations, scan_documents
 from .memo_builder import apply_case_intake, build_working_memo
+from .json_input import parse_llm_json_object
+from .rfe_strategy import (
+    apply_strategy_output,
+    build_strategy_bootstrap_prompt,
+    import_evidence_and_scan_inputs,
+)
 from .workflow import (
     build_prompt,
     build_status_report,
@@ -78,6 +85,7 @@ def build_parser() -> argparse.ArgumentParser:
     intake = commands.add_parser("apply-intake", help="Apply basic case intake fields and optionally copy a source folder")
     add_case_argument(intake)
     intake.add_argument("--case-info-file", default="", help="YAML/TXT file with key: value case information")
+    intake.add_argument("--case-context-file", default="", help="Free-form TXT/MD/DOCX case context used in LLM prompts")
     intake.add_argument("--source-folder", default="", help="Optional source folder to copy into the case workspace")
     intake.add_argument("--source-target-key", default="source_originals", help="Target paths key, e.g. source_originals")
     intake.add_argument("--beneficiary-full-name", default="")
@@ -92,10 +100,33 @@ def build_parser() -> argparse.ArgumentParser:
     intake.add_argument("--rfe-date", default="")
     intake.add_argument("--response-deadline", default="")
     intake.add_argument("--uscis-address", default="")
+    intake.add_argument("--eb2-basis", choices=["", "auto", "advanced_degree", "exceptional_ability", "both"], default="")
+    intake.add_argument("--intended-occupation", default="")
+    intake.add_argument("--proposed-endeavor-title", default="")
+    intake.add_argument("--proposed-endeavor-one-sentence", default="")
+    intake.add_argument("--proposed-endeavor-summary", default="")
+    intake.add_argument("--petition-date", default="")
+    intake.add_argument("--filing-uscis-address", default="")
+    intake.add_argument("--attorney-name", default="")
+    intake.add_argument("--law-firm", default="")
 
     working_memo = commands.add_parser("build-working-memo", help="Create final_memo/working_memo.md and .docx")
     add_case_argument(working_memo)
     working_memo.add_argument("--template", default="", help="Machine template path; defaults by task type")
+
+    rfe_bootstrap = commands.add_parser("rfe-bootstrap-prompt", help="Import strategy/RFE and build the strategy bootstrap prompt")
+    add_case_argument(rfe_bootstrap)
+    rfe_bootstrap.add_argument("--strategy", required=True, help="Human strategy DOCX/TXT/MD")
+    rfe_bootstrap.add_argument("--rfe", required=True, help="Full RFE PDF/DOCX/TXT")
+
+    rfe_strategy = commands.add_parser("rfe-import-strategy", help="Validate strategy JSON and build the RFE working template")
+    add_case_argument(rfe_strategy)
+    rfe_strategy.add_argument("--file", required=True, help="LLM strategy JSON file")
+
+    rfe_evidence = commands.add_parser("rfe-import-evidence", help="Import the initial filing and new RFE evidence")
+    add_case_argument(rfe_evidence)
+    rfe_evidence.add_argument("--initial-memo", required=True)
+    rfe_evidence.add_argument("--new-docs", required=True)
 
     return parser
 
@@ -124,6 +155,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Scanned files: {summary.scanned_files}")
         print(f"Added index rows: {summary.added_rows}")
         print(f"Updated index rows: {summary.updated_rows}")
+        print(f"Removed auxiliary index rows: {summary.removed_rows}")
         print(f"Locked rows skipped: {summary.locked_rows_skipped}")
         print(f"Extracted text files: {summary.extracted_texts}")
         print(f"Non-text / visual files: {summary.non_text_files}")
@@ -177,8 +209,18 @@ def main(argv: list[str] | None = None) -> int:
                 "rfe_date": args.rfe_date,
                 "response_deadline": args.response_deadline,
                 "uscis_address": args.uscis_address,
+                "eb2_basis": args.eb2_basis,
+                "intended_occupation": args.intended_occupation,
+                "proposed_endeavor_title": args.proposed_endeavor_title,
+                "proposed_endeavor_one_sentence": args.proposed_endeavor_one_sentence,
+                "proposed_endeavor_summary": args.proposed_endeavor_summary,
+                "petition_date": args.petition_date,
+                "filing_uscis_address": args.filing_uscis_address,
+                "attorney_name": args.attorney_name,
+                "law_firm": args.law_firm,
             },
             case_info_file=args.case_info_file,
+            case_context_file=args.case_context_file,
             source_folder_path=args.source_folder,
             source_target_key=args.source_target_key,
             claimed_criteria=[item.strip() for item in args.criteria.split(",") if item.strip()]
@@ -197,6 +239,33 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Template parse report: {summary.template_report_path}")
         print(f"Sections written: {summary.sections_written}")
         print(f"Placeholders seen: {summary.placeholders_seen}")
+        return 0
+    if args.command == "rfe-bootstrap-prompt":
+        summary = build_strategy_bootstrap_prompt(args.case_id, args.strategy, args.rfe)
+        print(f"Strategy prompt: {summary.prompt_path}")
+        return 0
+    if args.command == "rfe-import-strategy":
+        source = Path(args.file)
+        parsed = parse_llm_json_object(source.read_text(encoding="utf-8-sig"))
+        output = parsed.data
+        summary = apply_strategy_output(args.case_id, output)
+        memo = build_working_memo(args.case_id)
+        print(f"Strategy manifest: {summary.manifest_path}")
+        print(f"Drafting units: {summary.unit_count}")
+        print(f"Working memo: {memo.docx_path}")
+        if parsed.repaired:
+            print(f"Automatic JSON repair: {'; '.join(parsed.repair_notes)}")
+        return 0
+    if args.command == "rfe-import-evidence":
+        imported = import_evidence_and_scan_inputs(
+            args.case_id, args.initial_memo, args.new_docs
+        )
+        scanned = scan_documents(args.case_id)
+        linked = link_translations(args.case_id)
+        print(f"Imported files: {imported.copied_files}")
+        print(f"Scanned files: {scanned.scanned_files}")
+        print(f"Initial filing sections: {imported.initial_sections}")
+        print(f"Linked translations: {linked.linked_translations}")
         return 0
 
     details = {

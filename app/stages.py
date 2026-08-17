@@ -8,11 +8,13 @@ from .workflow import (
     _case_path_value,
     _normalize_path_list,
     _repeatable_episode_candidates,
+    _step_enabled_for_case,
     destination_for_step,
     determine_next_action,
     load_case,
     output_stem,
     PromptOptions,
+    selected_documents_for_step,
 )
 
 
@@ -28,6 +30,23 @@ CRITERION_LABELS = {
     "high_salary": "High salary",
     "commercial_success": "Commercial success",
     "employment_plan": "Employment plan",
+    "industry_overview": "Industry overview",
+    "beneficiary_statement": "Beneficiary statement",
+    "identity_context": "EB-2 NIW overview",
+    "basic_eligibility": "Basic EB-2 eligibility",
+    "advanced_degree": "Advanced Degree Professional",
+    "exceptional_ability": "Exceptional Ability",
+    "exceptional_academic_record": "Exceptional Ability: academic record",
+    "exceptional_ten_years": "Exceptional Ability: ten years of experience",
+    "exceptional_license": "Exceptional Ability: license or certification",
+    "exceptional_remuneration": "Exceptional Ability: remuneration",
+    "exceptional_membership": "Exceptional Ability: association membership",
+    "exceptional_recognition": "Exceptional Ability: recognition and contributions",
+    "exceptional_final_merits": "Exceptional Ability: final merits",
+    "prong1": "NIW Prong 1",
+    "prong2": "NIW Prong 2",
+    "prong3": "NIW Prong 3",
+    "summary": "EB-2 NIW response summary",
     "lead_starring_productions": "O-1B Criterion (i): lead/starring productions or events",
     "published_recognition": "O-1B Criterion (ii): published recognition",
     "organization_role": "O-1B Criterion (iii): organizational role",
@@ -54,6 +73,7 @@ class LLMUnit:
     latest_prompt: str
     output_file: str
     validated_file: str
+    selected_documents: tuple[tuple[str, str], ...]
 
     @property
     def key(self) -> str:
@@ -92,6 +112,8 @@ def build_llm_stage(case_id: str) -> LLMStage:
         execution = str(step.get("execution", ""))
         if not step_id or execution.startswith("deterministic") or step_id in disabled_steps:
             continue
+        if not _step_enabled_for_case(loaded.config, step, loaded.case_dir):
+            continue
         criterion = _criterion_for_step(step_id, step)
         if (
             str(loaded.config.get("task_type", "")) == "o1b_petition"
@@ -99,7 +121,7 @@ def build_llm_stage(case_id: str) -> LLMStage:
             and criterion == "comparable_evidence"
         ):
             continue
-        if criterion and criterion != "employment_plan" and claimed and criterion not in claimed:
+        if criterion and criterion not in {"employment_plan", "industry_overview", "beneficiary_statement"} and claimed and criterion not in claimed:
             continue
         if "repeatable" in execution:
             if enabled_steps and step_id not in enabled_steps:
@@ -147,6 +169,20 @@ def _build_unit(
     action: Any,
 ) -> LLMUnit:
     step_id = str(step.get("step_id", ""))
+    unit_title = str(step.get("title", step_id))
+    unit_objective = str(step.get("objective", "")).strip()
+    if step.get("rfe_strategy_units") and episode_id:
+        from .rfe_strategy import get_strategy_unit
+
+        strategy_unit = get_strategy_unit(case_dir, episode_id, config)
+        if strategy_unit:
+            unit_title = str(strategy_unit.get("title", unit_title))
+            criterion = str(strategy_unit.get("criterion_role", criterion))
+            strategy = str(strategy_unit.get("strategy", "")).strip()
+            unit_objective = (
+                f"Draft {strategy_unit.get('section_type', 'RFE')} unit '{unit_title}'."
+                + (f" Controlling unit strategy: {strategy}" if strategy else "")
+            )
     options = PromptOptions(episode_id=episode_id, episode_folder=episode_folder)
     destination = destination_for_step(step, options)
     destination_path = case_dir / destination if destination else Path("__missing__")
@@ -177,10 +213,15 @@ def _build_unit(
     else:
         status = "pending"
     current = action.step_id == step_id and (action.episode_id or "") == episode_id
+    loaded = load_case(str(config.get("case_id", case_dir.name)))
+    selected_documents = tuple(
+        (row["document_id"], row["title"])
+        for row in selected_documents_for_step(loaded, step, options)
+    )
     return LLMUnit(
         step_id=step_id,
-        title=str(step.get("title", step_id)),
-        objective=str(step.get("objective", "")).strip(),
+        title=unit_title,
+        objective=unit_objective,
         episode_id=episode_id,
         episode_folder=episode_folder,
         criterion=criterion,
@@ -193,11 +234,20 @@ def _build_unit(
         latest_prompt=latest_prompt_path.name if latest_prompt_path.exists() else "",
         output_file=output_path.name if output_path.exists() else "",
         validated_file=validated_path.name if validated_path.exists() else "",
+        selected_documents=selected_documents,
     )
 
 
 def _criterion_for_step(step_id: str, step: dict[str, Any]) -> str:
     mapping = (
+        ("eb2niw_advanced_degree", "advanced_degree"),
+        ("eb2niw_exceptional", "exceptional_ability"),
+        ("eb2niw_prong1", "prong1"),
+        ("eb2niw_proposed_endeavor", "prong1"),
+        ("eb2niw_prong2", "prong2"),
+        ("eb2niw_prong3", "prong3"),
+        ("eb2niw_overview", "identity_context"),
+        ("eb2niw_basic", "basic_eligibility"),
         ("o1b_criterion_vi", "high_salary"),
         ("o1b_criterion_iii", "organization_role"),
         ("o1b_criterion_iv", "commercial_critical_success"),
@@ -216,6 +266,8 @@ def _criterion_for_step(step_id: str, step: dict[str, Any]) -> str:
         ("criterion_media", "media"),
         ("criterion_judging", "judging"),
         ("employment_plan", "employment_plan"),
+        ("industry_overview", "industry_overview"),
+        ("beneficiary_statement", "beneficiary_statement"),
     )
     for prefix, criterion in mapping:
         if step_id.startswith(prefix):

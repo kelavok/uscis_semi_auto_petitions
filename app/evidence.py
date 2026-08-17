@@ -4,6 +4,7 @@ import csv
 import hashlib
 import logging
 import re
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
@@ -16,6 +17,7 @@ from .workflow import (
     extract_docx_text,
     load_case,
 )
+from .file_rules import is_office_temporary_file, is_prompt_sidecar
 
 
 INDEX_FIELDS = [
@@ -28,6 +30,7 @@ INDEX_FIELDS = [
     "task_type_relevance",
     "memo_section_relevance",
     "exhibit_number",
+    "episode_title",
     "parent_document_id",
     "translation_status",
     "relationship_type",
@@ -50,8 +53,7 @@ DOCX_EXTENSIONS = {".docx"}
 PDF_EXTENSIONS = {".pdf"}
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp", ".heic"}
 MANUAL_DESCRIPTION_PLACEHOLDER = "[Write factual manual description here. Replace this line.]"
-PDF_MAX_PAGES = 20
-PDF_MAX_CHARACTERS = 200_000
+EXTRACTION_PIPELINE_VERSION = "full-evidence-text-v2"
 
 
 @dataclass(frozen=True)
@@ -60,6 +62,7 @@ class ScanSummary:
     scanned_files: int
     added_rows: int
     updated_rows: int
+    removed_rows: int
     locked_rows_skipped: int
     extracted_texts: int
     non_text_files: int
@@ -100,7 +103,14 @@ class ManualTranslationLinkSummary:
 def scan_documents(case_id: str) -> ScanSummary:
     loaded = load_case(case_id)
     index_path = loaded.case_dir / _case_path_value(loaded.config, "document_index")
-    rows = _read_index(index_path)
+    rows: list[dict[str, str]] = []
+    removed_rows = 0
+    for row in _read_index(index_path):
+        indexed_path = loaded.case_dir / _normalize_slashes(row.get("file_path", ""))
+        if is_prompt_sidecar(indexed_path) or is_office_temporary_file(indexed_path):
+            removed_rows += 1
+            continue
+        rows.append(row)
     by_path = {_normalize_slashes(row.get("file_path", "")): row for row in rows if row.get("file_path")}
     next_number = _next_document_number(rows)
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -112,10 +122,12 @@ def scan_documents(case_id: str) -> ScanSummary:
     extracted_texts = 0
     non_text_files = 0
     manual_description_files = 0
+    seen_paths: set[str] = set()
 
     for file_path, source_kind in _iter_source_files(loaded):
         scanned_files += 1
         rel_path = _normalize_slashes(file_path.relative_to(loaded.case_dir).as_posix())
+        seen_paths.add(rel_path)
         existing = by_path.get(rel_path)
         if existing and _truthy(existing.get("manual_edit_lock", "")):
             locked_rows_skipped += 1
@@ -161,7 +173,16 @@ def scan_documents(case_id: str) -> ScanSummary:
         row["text_extraction_path"] = extraction.relative_text_path
         row["source_fingerprint"] = fingerprint
         row["last_scanned_at"] = now
-        row["notes"] = _merge_notes(row.get("notes", ""), extraction.note)
+        row["notes"] = _merge_notes(_without_obsolete_extraction_notes(row.get("notes", "")), extraction.note)
+
+    retained_rows: list[dict[str, str]] = []
+    for row in rows:
+        rel_path = _normalize_slashes(row.get("file_path", ""))
+        if not rel_path or rel_path in seen_paths or _truthy(row.get("manual_edit_lock", "")):
+            retained_rows.append(row)
+            continue
+        removed_rows += 1
+    rows = retained_rows
 
     index_path.parent.mkdir(parents=True, exist_ok=True)
     _write_index(index_path, rows)
@@ -170,6 +191,7 @@ def scan_documents(case_id: str) -> ScanSummary:
         scanned_files=scanned_files,
         added_rows=added_rows,
         updated_rows=updated_rows,
+        removed_rows=removed_rows,
         locked_rows_skipped=locked_rows_skipped,
         extracted_texts=extracted_texts,
         non_text_files=non_text_files,
@@ -224,7 +246,7 @@ def link_translations(case_id: str, *, auto_match: bool = True) -> LinkSummary:
             translation["relationship_type"] = "translation"
             translation["translation_status"] = "translation"
             translation["notes"] = _merge_notes(
-                translation.get("notes", ""),
+                _without_translation_link_failure_notes(translation.get("notes", "")),
                 f"Linked as translation of {original.get('document_id', '')} by {decision.method} "
                 f"(confidence {decision.score:.3f}). Bundle order: original_then_translation.",
             )
@@ -373,7 +395,7 @@ def manual_link_translation(
     translation["relationship_type"] = "translation"
     translation["translation_status"] = "translation"
     translation["notes"] = _merge_notes(
-        translation.get("notes", ""),
+        _without_translation_link_failure_notes(translation.get("notes", "")),
         f"Manually confirmed as translation of {original_id}. Bundle order: original_then_translation.",
     )
     original["relationship_type"] = original.get("relationship_type") or "original"
@@ -511,8 +533,16 @@ def _extract_text(file_path: Path, loaded: LoadedCase, doc_id: str) -> Extractio
         text = file_path.read_text(encoding="utf-8-sig", errors="replace")
         status = "text_extracted"
     elif suffix in DOCX_EXTENSIONS:
-        text = extract_docx_text(file_path)
-        status = "text_extracted" if text.strip() else "docx_no_extractable_text"
+        try:
+            text = extract_docx_text(file_path)
+            status = "text_extracted" if text.strip() else "docx_no_extractable_text"
+        except (OSError, KeyError, ValueError, zipfile.BadZipFile) as exc:
+            text = ""
+            status = "docx_invalid_or_corrupt"
+            note = (
+                "The file has a .docx extension but is not a readable Word ZIP package. "
+                f"Scanner continued without text extraction: {exc}"
+            )
     elif suffix in PDF_EXTENSIONS:
         text, status, note = _extract_pdf_text(file_path)
     elif suffix in IMAGE_EXTENSIONS:
@@ -622,19 +652,13 @@ def _extract_pdf_text(file_path: Path) -> tuple[str, str, str]:
             logging.getLogger("pypdf").setLevel(logging.ERROR)
             reader = PdfReader(str(file_path))
             pages = []
-            total_characters = 0
             for page_number, page in enumerate(reader.pages):
-                if page_number >= PDF_MAX_PAGES or total_characters >= PDF_MAX_CHARACTERS:
-                    break
                 page_text = (page.extract_text() or "").strip()
                 if page_text:
                     pages.append(page_text)
-                    total_characters += len(page_text)
             text = "\n\n".join(page for page in pages if page)
             if text.strip():
-                truncated = len(reader.pages) > PDF_MAX_PAGES or len(text) >= PDF_MAX_CHARACTERS
-                note = f"PDF extraction limited to first {PDF_MAX_PAGES} pages / {PDF_MAX_CHARACTERS} characters." if truncated else ""
-                return text[:PDF_MAX_CHARACTERS], "text_extracted", note
+                return text, "text_extracted", ""
             return "", "pdf_no_extractable_text", "PDF appears scanned or image-only; OCR/manual description needed."
         except Exception as exc:  # noqa: BLE001
             pypdf_error = exc
@@ -652,12 +676,10 @@ def _extract_pdf_text(file_path: Path) -> tuple[str, str, str]:
 
     try:
         with pdfplumber.open(file_path) as pdf:
-            pages = [(page.extract_text() or "").strip() for page in pdf.pages[:PDF_MAX_PAGES]]
+            pages = [(page.extract_text() or "").strip() for page in pdf.pages]
         text = "\n\n".join(page for page in pages if page)
         if text.strip():
-            truncated = len(pdf.pages) > PDF_MAX_PAGES or len(text) >= PDF_MAX_CHARACTERS
-            note = f"PDF extraction limited to first {PDF_MAX_PAGES} pages / {PDF_MAX_CHARACTERS} characters." if truncated else ""
-            return text[:PDF_MAX_CHARACTERS], "text_extracted", note
+            return text, "text_extracted", ""
         return "", "pdf_no_extractable_text", "PDF appears scanned or image-only; OCR/manual description needed."
     except Exception as exc:  # noqa: BLE001
         note = f"pypdf failed: {pypdf_error}; " if pypdf_error else ""
@@ -672,12 +694,28 @@ def _iter_source_files(loaded: LoadedCase) -> list[tuple[Path, str]]:
         if not root.exists():
             continue
         for path in sorted(root.rglob("*")):
-            if path.is_file() and path.name != ".gitkeep":
+            if (
+                path.is_file()
+                and path.name != ".gitkeep"
+                and not is_prompt_sidecar(path)
+                and not is_office_temporary_file(path)
+            ):
                 files.append((path, source_kind))
     return files
 
 
 def _configured_source_paths(loaded: LoadedCase) -> list[tuple[str, str]]:
+    if str(loaded.config.get("task_type", "")) in {"eb1a_rfe_response", "eb2niw_rfe_response"}:
+        rfe_paths = [
+            ("source_rfe_new_originals", "original"),
+            ("source_rfe_new_translations", "translation"),
+            ("source_initial_filing_memo", "initial_filing_memo"),
+            ("source_rfe_notice", "rfe_notice"),
+            ("source_rfe_strategy", "rfe_strategy"),
+        ]
+        paths = loaded.config.get("paths", {})
+        if isinstance(paths, dict):
+            return [(key, kind) for key, kind in rfe_paths if key in paths]
     defaults = [
         ("source_originals", "original"),
         ("source_translations", "translation"),
@@ -753,24 +791,47 @@ def _document_type(path: Path) -> str:
 
 
 def _infer_category(loaded: LoadedCase, file_path: Path, source_kind: str) -> str:
-    source_key = _source_key_for_kind(loaded, source_kind)
-    if not source_key:
-        return source_kind
-    source_root = loaded.case_dir / _case_path_value(loaded.config, source_key)
-    try:
-        relative_parts = file_path.relative_to(source_root).parts
-    except ValueError:
-        return source_kind
+    relative_parts: tuple[str, ...] = ()
+    matches: list[tuple[int, tuple[str, ...]]] = []
+    paths = loaded.config.get("paths", {})
+    if isinstance(paths, dict):
+        for path_value in paths.values():
+            source_root = loaded.case_dir / Path(str(path_value))
+            try:
+                candidate_parts = file_path.relative_to(source_root).parts
+            except ValueError:
+                continue
+            matches.append((len(source_root.parts), candidate_parts))
+    if matches:
+        relative_parts = max(matches, key=lambda item: item[0])[1]
     if not relative_parts:
         return source_kind
     top_folder = relative_parts[0]
-    for roles_key in ("o1b_folder_roles", "eb1a_folder_roles", "rfe_folder_roles"):
+    normalized_relative = tuple(part.casefold() for part in relative_parts)
+    best_role = ""
+    best_depth = 0
+    for roles_key in (
+        "eb2niw_folder_roles",
+        "o1b_folder_roles",
+        "eb1a_folder_roles",
+        "rfe_folder_roles",
+    ):
         roles = loaded.config.get(roles_key, {})
         if isinstance(roles, dict):
             for role, folder in roles.items():
-                if str(folder) == top_folder:
-                    return str(role)
-    return top_folder
+                folder_parts = tuple(
+                    part.casefold()
+                    for part in PurePosixPath(str(folder).replace("\\", "/")).parts
+                )
+                if (
+                    folder_parts
+                    and len(folder_parts) <= len(normalized_relative)
+                    and normalized_relative[: len(folder_parts)] == folder_parts
+                    and len(folder_parts) > best_depth
+                ):
+                    best_role = str(role)
+                    best_depth = len(folder_parts)
+    return best_role or top_folder
 
 
 def _source_key_for_kind(loaded: LoadedCase, source_kind: str) -> str:
@@ -790,10 +851,34 @@ def _source_key_for_kind(loaded: LoadedCase, source_kind: str) -> str:
 
 def _fingerprint(path: Path) -> str:
     digest = hashlib.sha256()
+    digest.update((EXTRACTION_PIPELINE_VERSION + "\0").encode("utf-8"))
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return "sha256:" + digest.hexdigest()
+
+
+def _without_obsolete_extraction_notes(notes: str) -> str:
+    obsolete_prefixes = (
+        "PDF extraction limited to first ",
+    )
+    return " | ".join(
+        part
+        for part in (item.strip() for item in (notes or "").split("|"))
+        if part and not any(part.startswith(prefix) for prefix in obsolete_prefixes)
+    )
+
+
+def _without_translation_link_failure_notes(notes: str) -> str:
+    obsolete_prefixes = (
+        "No matching original found.",
+        "Translation link ambiguous.",
+    )
+    return " | ".join(
+        part
+        for part in (item.strip() for item in (notes or "").split("|"))
+        if part and not any(part.startswith(prefix) for prefix in obsolete_prefixes)
+    )
 
 
 def _merge_notes(existing: str, new: str) -> str:
@@ -820,11 +905,10 @@ def _translation_match_decision(
     if not scoped:
         return TranslationMatchDecision(None, "no_originals_in_category", 0.0, [])
 
-    exact_path = "source_documents/originals/" + translation_under_source
     exact_matches = [
         original
         for original in scoped
-        if _normalize_slashes(original.get("file_path", "")) == exact_path
+        if _path_under_source(original.get("file_path", ""), "source_documents/originals") == translation_under_source
     ]
     if len(exact_matches) == 1:
         return TranslationMatchDecision(exact_matches[0], "exact_relative_path", 1.0, [(exact_matches[0], 1.0)])
@@ -844,6 +928,7 @@ def _translation_match_decision(
         original_stem = _normalized_match_stem(PurePosixPath(original_under_source).stem)
         if original_stem == translation_stem:
             same_parent_matches.append(original)
+    same_parent_matches = _prefer_primary_originals(same_parent_matches)
     if len(same_parent_matches) == 1:
         return TranslationMatchDecision(
             same_parent_matches[0], "same_folder_normalized_name", 0.995, [(same_parent_matches[0], 0.995)]
@@ -854,6 +939,7 @@ def _translation_match_decision(
         original_under_source = _path_under_source(original.get("file_path", ""), "source_documents/originals")
         if original_under_source and _normalized_match_stem(PurePosixPath(original_under_source).stem) == translation_stem:
             category_name_matches.append(original)
+    category_name_matches = _prefer_primary_originals(category_name_matches)
     if len(category_name_matches) == 1:
         return TranslationMatchDecision(
             category_name_matches[0],
@@ -877,6 +963,7 @@ def _translation_match_decision(
         )
         directory_score = _directory_similarity(translation_under_source, original_under_source)
         combined = (0.74 * file_score) + (0.20 * episode_score) + (0.06 * directory_score)
+        combined -= _translation_name_penalty(original.get("file_path", ""))
         ranked.append((original, round(combined, 4)))
     ranked.sort(key=lambda item: item[1], reverse=True)
     alternatives = ranked[:3]
@@ -948,6 +1035,26 @@ def _directory_similarity(translation_path: str, original_path: str) -> float:
         for translation_part in translation_parts
         for original_part in original_parts
     )
+
+
+def _prefer_primary_originals(originals: list[dict[str, str]]) -> list[dict[str, str]]:
+    if len(originals) <= 1:
+        return originals
+    primary = [original for original in originals if not _translation_name_penalty(original.get("file_path", ""))]
+    return primary if primary else originals
+
+
+def _translation_name_penalty(file_path: str) -> float:
+    stem = PurePosixPath(_normalize_slashes(file_path)).stem
+    normalized = _transliterate_cyrillic(stem.casefold())
+    tokens = {
+        token
+        for token in re.split(r"[^a-z0-9]+", normalized)
+        if token
+    }
+    if tokens & {"translation", "translated", "english", "eng", "en", "perevod", "angl", "angliiskii"}:
+        return 0.08
+    return 0.0
 
 
 def _match_similarity(left: str, right: str, *, allow_acronym: bool = False) -> float:
@@ -1069,10 +1176,26 @@ def _write_translation_report(path: Path, rows: list[dict[str, str]]) -> None:
 
 def _path_under_source(file_path: str, source_prefix: str) -> str:
     normalized = _normalize_slashes(file_path)
-    prefix = source_prefix.rstrip("/") + "/"
-    if not normalized.startswith(prefix):
-        return ""
-    return normalized[len(prefix) :]
+    for prefix_value in _equivalent_source_prefixes(source_prefix):
+        prefix = prefix_value.rstrip("/") + "/"
+        if normalized.startswith(prefix):
+            return normalized[len(prefix) :]
+    return ""
+
+
+def _equivalent_source_prefixes(source_prefix: str) -> tuple[str, ...]:
+    normalized = _normalize_slashes(source_prefix).rstrip("/")
+    equivalents = {
+        "source_documents/originals": (
+            "source_documents/originals",
+            "source_documents/rfe_response/new_documents/originals",
+        ),
+        "source_documents/translations": (
+            "source_documents/translations",
+            "source_documents/rfe_response/new_documents/translations",
+        ),
+    }
+    return equivalents.get(normalized, (normalized,))
 
 
 def _normalized_match_stem(stem: str) -> str:

@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rfe_strategy_output.schema.json",
+  "title": "EB-1A RFE strategy bootstrap output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "case_id",
+    "task_type",
+    "case_metadata",
+    "global_strategy",
+    "rfe_issues",
+    "sections",
+    "template_decisions",
+    "open_questions"
+  ],
+  "properties": {
+    "case_id": {"type": "string", "minLength": 1},
+    "task_type": {"const": "eb1a_rfe_response"},
+    "case_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "beneficiary_full_name", "preferred_reference", "field", "specialization",
+        "case_number", "receipt_date", "rfe_date", "response_deadline", "uscis_address",
+        "rfe_response_date", "uscis_office_or_service_center", "officer_name",
+        "office_chief_name", "salutation", "submitter_name", "submitter_title"
+      ],
+      "properties": {
+        "beneficiary_full_name": {"type": "string", "minLength": 1},
+        "preferred_reference": {"type": "string", "minLength": 1},
+        "field": {"type": "string", "minLength": 1},
+        "specialization": {"type": "string", "minLength": 1},
+        "case_number": {"type": "string", "minLength": 1},
+        "receipt_date": {"type": "string", "minLength": 1},
+        "rfe_date": {"type": "string", "minLength": 1},
+        "response_deadline": {"type": "string", "minLength": 1},
+        "uscis_address": {"type": "string", "minLength": 1},
+        "rfe_response_date": {"type": "string"},
+        "uscis_office_or_service_center": {"type": "string"},
+        "officer_name": {"type": "string"},
+        "office_chief_name": {"type": "string"},
+        "salutation": {"type": "string", "minLength": 1},
+        "submitter_name": {"type": "string"},
+        "submitter_title": {"type": "string"},
+        "petition_type": {"type": "string"}
+      }
+    },
+    "global_strategy": {"type": "string", "minLength": 1},
+    "accepted_criteria": {"type": "array", "items": {"type": "string"}},
+    "challenged_criteria": {"type": "array", "items": {"type": "string"}},
+    "rfe_issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["issue_id", "topic", "issue_type", "status", "exact_rfe_quote", "defect", "response_strategy", "elements_not_disputed_do_not_discuss"],
+        "properties": {
+          "issue_id": {"type": "string", "minLength": 1},
+          "topic": {"type": "string", "minLength": 1},
+          "issue_type": {"enum": ["general", "continued_work", "substantial_benefit", "criterion", "final_merits", "procedural", "other"]},
+          "status": {"enum": ["accepted", "not_accepted", "unclear", "overlooked", "general_concern", "not_applicable"]},
+          "criterion_role": {"type": "string"},
+          "exact_rfe_quote": {"type": "string", "minLength": 1},
+          "quote_source_pages": {"type": "array", "items": {"type": "integer", "minimum": 1}},
+          "defect": {"type": "string", "minLength": 1},
+          "response_strategy": {"type": "string", "minLength": 1},
+          "elements_not_disputed_do_not_discuss": {"type": "array", "items": {"type": "string"}},
+          "evidence_actions": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "sections": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["section_id", "order", "title", "section_type", "required", "strategy", "rfe_issue_ids", "starter_text", "episodes"],
+        "properties": {
+          "section_id": {"type": "string", "minLength": 1},
+          "order": {"type": "integer", "minimum": 1},
+          "title": {"type": "string", "minLength": 1},
+          "section_type": {"enum": ["cover_letter", "general", "employment", "criterion", "final_merits", "conclusion", "attachments", "other"]},
+          "criterion_role": {"type": "string"},
+          "required": {"type": "boolean"},
+          "strategy": {"type": "string"},
+          "rfe_issue_ids": {"type": "array", "items": {"type": "string"}},
+          "starter_text": {"type": "string"},
+          "source_folder": {"type": "string"},
+          "initial_filing_heading_hints": {"type": "array", "items": {"type": "string"}},
+          "episodes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["episode_id", "title", "source_folder", "strategy", "rfe_issue_ids", "planned_subheadings"],
+              "properties": {
+                "episode_id": {"type": "string", "minLength": 1},
+                "title": {"type": "string", "minLength": 1},
+                "source_folder": {"type": "string"},
+                "strategy": {"type": "string"},
+                "rfe_issue_ids": {"type": "array", "items": {"type": "string"}},
+                "planned_subheadings": {"type": "array", "items": {"type": "string"}},
+                "initial_filing_heading_hints": {"type": "array", "items": {"type": "string"}}
+              }
+            }
+          }
+        }
+      }
+    },
+    "template_decisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["structure_rationale", "include_general_response", "include_employment_section", "include_final_merits", "attachment_label"],
+      "properties": {
+        "structure_rationale": {"type": "string", "minLength": 1},
+        "include_general_response": {"type": "boolean"},
+        "include_employment_section": {"type": "boolean"},
+        "include_final_merits": {"type": "boolean"},
+        "attachment_label": {"type": "string", "minLength": 1}
+      }
+    },
+    "open_questions": {"type": "array", "items": {"type": "string"}}
+  }
+}

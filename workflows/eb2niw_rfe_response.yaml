@@ -1,0 +1,47 @@
+schema_version: 0.2-draft
+task_type: eb2niw_rfe_response
+status: active_draft
+
+purpose: >
+  Strategy-driven EB-2 NIW RFE response workflow. Stage 1 converts the human
+  strategy and full RFE into an ordered issue manifest. Stage 2 drafts those
+  exact units with the full strategy, full RFE, initial filing memorandum, and
+  the mapped new evidence. Stage 3 uses the shared exhibit and bundle pipeline.
+
+instruction_sources:
+  universal:
+    - instructions/universal/writing_rules.md
+    - instructions/universal/evidence_rules.md
+    - instructions/universal/citation_rules.md
+    - instructions/universal/quality_control.md
+  visa_or_rfe_specific:
+    - templates/RFE/EB2NIW/EB2_NIW_RFE_response_unified_LLM_template.yaml
+  task_type:
+    - instructions/task_types/eb2niw_rfe_response/task_rules.md
+  case_specific: user_case_instructions.md
+
+manual_provider:
+  mode: prompt_file_then_manual_import
+  prompt_dir: generated_prompts
+  output_dir: llm_outputs
+  validated_dir: validated_outputs
+  required_output_schema: schemas/llm_section_output.schema.json
+
+steps:
+  - step_id: rfe_dynamic_section
+    execution: llm_manual_repeatable
+    repeat_unit: one_strategy_manifest_unit
+    rfe_strategy_units: true
+    title: Strategy-controlled EB-2 NIW RFE response section
+    objective: >
+      Draft exactly one issue block declared by the accepted strategy manifest.
+      Answer only its mapped RFE findings and preserve the distinction between
+      Basic Eligibility, Prong 1, Prong 2, and Prong 3. Use all mapped new
+      evidence and the initial filing only as context or prior-record support.
+    section_instructions: instructions/task_types/eb2niw_rfe_response/sections/rfe_issue_response.md
+    destination_pattern: draft_sections/rfe/sections/{episode_id}.md
+
+notes:
+  - case_strategy/strategy_manifest.json is the source of truth for drafting units and order.
+  - Accepted findings are not re-argued unless needed for context or to answer an interconnected RFE issue.
+  - New evidence is grouped into Exhibit 1 (Basic Eligibility), Exhibit 2 (Prong 1), Exhibit 3 (Prong 2), and Exhibit 4 (Prong 3).

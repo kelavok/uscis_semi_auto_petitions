@@ -1,28 +1,58 @@
 from __future__ import annotations
 
 import html
+import filecmp
+import csv
 import re
 import shutil
 import zipfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .cli_support import PROJECT_ROOT, case_path
-from .workflow import extract_docx_text, folder_role_map, load_case, load_yaml_file, safe_path_component
+from .workflow import (
+    DOCX_EXTENSIONS,
+    TEXT_EXTENSIONS,
+    PromptOptions,
+    _repeatable_episode_candidates,
+    destination_for_step,
+    extract_docx_text,
+    find_step,
+    folder_role_map,
+    load_case,
+    load_yaml_file,
+    safe_path_component,
+)
+from .template_variants import (
+    apply_eb1a_template_variant,
+    eb1a_machine_template_file,
+    eb1a_template_variant,
+)
 
 
 DEFAULT_TEMPLATE_BY_TASK_TYPE = {
     "eb1a_petition": "templates/EB1A/EB1A_unified_template_LLM.docx",
-    "eb1a_rfe_response": "templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.txt",
+    "eb1a_rfe_response": "templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.yaml",
+    "eb2niw_rfe_response": "templates/RFE/EB2NIW/EB2_NIW_RFE_response_unified_LLM_template.yaml",
     "o1b_petition": "templates/O1B/MEMO O-1В_ver.1.0.docx",
+    "eb2niw_petition": "templates/EB2NIW/EB2_NIW_general_memo_template.md",
 }
 
 DEFAULT_WORKING_STRUCTURE_BY_TASK_TYPE = {
     "eb1a_petition": "templates/EB1A/EB1A_working_document_structure.yaml",
     "o1b_petition": "templates/O1B/O1B_working_document_structure.yaml",
+    "eb2niw_petition": "templates/EB2NIW/EB2_NIW_working_document_structure.yaml",
 }
+
+TECHNICAL_MEMO_PREFIXES = (
+    "Drafting direction (internal):",
+    "[DRAFTING PLACEHOLDER:",
+    "[SCRIPT PLACEHOLDER:",
+    "[LLM SECTION PLACEHOLDER:",
+    "[SCRIPT-CONTROLLED CONTENT:",
+)
 
 # Regulatory criteria only. Employment-plan components are assembled through
 # their dedicated workflow destination and _draft_step_xml() path below.
@@ -47,6 +77,62 @@ O1B_CRITERION_STEP_BY_ROLE = {
     "significant_recognition": ("o1b_criterion_v_episode", "Significant recognition"),
     "high_salary": ("o1b_criterion_vi_compensation", "High salary or substantial remuneration"),
     "comparable_evidence": ("o1b_comparable_evidence_episode", "Comparable evidence (Arts only)"),
+}
+
+RFE_CRITERION_TEMPLATE_KEY_BY_ROLE = {
+    "awards": "criterion_1_awards",
+    "memberships": "criterion_2_memberships",
+    "media": "criterion_3_published_material",
+    "judging": "criterion_4_judging",
+    "original_contribution": "criterion_5_original_contributions",
+    "scholarly_articles": "criterion_6_scholarly_articles",
+    "exhibitions": "criterion_7_display",
+    "leading_critical_role": "criterion_8_leading_or_critical_role",
+    "high_salary": "criterion_9_high_salary",
+    "commercial_success": "criterion_10_commercial_success_performing_arts",
+}
+
+RFE_CRITERION_ROMAN_BY_ROLE = {
+    "awards": "i",
+    "memberships": "ii",
+    "media": "iii",
+    "judging": "iv",
+    "original_contribution": "v",
+    "scholarly_articles": "vi",
+    "exhibitions": "vii",
+    "leading_critical_role": "viii",
+    "high_salary": "ix",
+    "commercial_success": "x",
+}
+
+RFE_CRITERION_HEADING_BY_ROLE = {
+    "awards": "Criterion 1. Evidence of receipt of lesser nationally or internationally recognized prizes or awards for excellence",
+    "memberships": "Criterion 2. Evidence of petitioner's membership in associations in the field for which classification is sought that require outstanding achievement of their members, as judged by recognized national or international experts in their disciplines or fields.",
+    "media": "Criterion 3. Published material about the petitioner in professional or major trade publications or other major media. The materials must relate to the petitioner's work in the field for which classification is sought.",
+    "judging": "Criterion 4. Evidence of the petitioner's participation on a panel, or individually, as a judge of the work of others in the same or in an allied field of specialization for which classification is sought.",
+    "original_contribution": "Criterion 5. Evidence of the petitioner's original scientific, scholarly, or business-related contributions of major significance in the field.",
+    "scholarly_articles": "Criterion 6. The person's authorship of scholarly articles in the field, in professional or major trade publications or other major media.",
+    "exhibitions": "Criterion 7. Display of the person's work in the field at artistic exhibitions or showcases.",
+    "leading_critical_role": "Criterion 8. The person has performed in a leading or critical role for organizations or establishments that have a distinguished reputation.",
+    "high_salary": "Criterion 9. The person has commanded a high salary, or other significantly high remuneration for services, in relation to others in the field.",
+    "commercial_success": "Criterion 10. Commercial successes in the performing arts, as shown by box office receipts or record, cassette, compact disk, or video sales.",
+}
+
+EB2NIW_RFE_HEADING_BY_ROLE = {
+    "basic_eligibility": "Basic Eligibility for EB-2",
+    "advanced_degree": "Advanced Degree Professional",
+    "exceptional_ability": "Exceptional Ability",
+    "exceptional_academic_record": "Exceptional Ability Criterion R1: Academic Record",
+    "exceptional_ten_years": "Exceptional Ability Criterion R2: Ten Years of Full-Time Experience",
+    "exceptional_license": "Exceptional Ability Criterion R3: License or Certification",
+    "exceptional_remuneration": "Exceptional Ability Criterion R4: Salary or Remuneration",
+    "exceptional_membership": "Exceptional Ability Criterion R5: Professional Association Membership",
+    "exceptional_recognition": "Exceptional Ability Criterion R6: Recognition for Achievements and Significant Contributions",
+    "exceptional_final_merits": "Exceptional Ability Final Merits Determination",
+    "prong1": "First Prong: The Proposed Endeavor Has Both Substantial Merit and National Importance",
+    "prong2": "Second Prong: The Petitioner Is Well Positioned to Advance the Proposed Endeavor",
+    "prong3": "Third Prong: On Balance, It Would Be Beneficial to Waive the Job Offer and Labor Certification Requirements",
+    "summary": "Summary and Request for Favorable Adjudication",
 }
 
 # Backward-compatible alias for EB-1A-specific callers and tests.
@@ -88,11 +174,51 @@ class IntakeSummary:
     source_files_skipped: int
 
 
+def refresh_case_sources(case_id: str) -> IntakeSummary:
+    """Refresh remembered external source folders without changing intake data."""
+    loaded = load_case(case_id)
+    config = dict(loaded.config)
+    source_imports = config.get("source_imports", {})
+    if not isinstance(source_imports, dict):
+        source_imports = {}
+    copied = 0
+    skipped = 0
+    for key in ("source_originals", "source_translations", "source_other"):
+        raw_path = str(source_imports.get(key, "")).strip()
+        if not raw_path:
+            continue
+        refreshed, unchanged = _copy_source_folder(
+            Path(_clean_user_path(raw_path)),
+            loaded.case_dir / _path_from_config(config, key),
+            refresh_existing=True,
+        )
+        copied += refreshed
+        skipped += unchanged
+    context_source = str(source_imports.get("case_context_file", "")).strip()
+    if context_source:
+        context_path = Path(_clean_user_path(context_source))
+        if context_path.exists() and context_path.is_file():
+            target = _case_context_target(loaded.case_dir, context_path)
+            if target.exists() and filecmp.cmp(context_path, target, shallow=False):
+                skipped += 1
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(context_path, target)
+                copied += 1
+    return IntakeSummary(
+        config_path=loaded.case_dir / "case_config.yaml",
+        fields_updated=0,
+        source_files_copied=copied,
+        source_files_skipped=skipped,
+    )
+
+
 def apply_case_intake(
     case_id: str,
     fields: dict[str, str],
     *,
     case_info_file: str = "",
+    case_context_file: str = "",
     source_folder_path: str = "",
     source_target_key: str = "source_originals",
     source_folder_paths: dict[str, str] | None = None,
@@ -105,6 +231,8 @@ def apply_case_intake(
     updates = _normalize_intake_fields(merged)
     fields_updated = _apply_updates(config, updates)
     fields_updated += _apply_gender_defaults(config)
+    if "eb1a_template_variant" in merged:
+        fields_updated += apply_eb1a_template_variant(config, merged.get("eb1a_template_variant", "base"))
     if case_info_file.strip():
         intake_sources = config.get("intake_sources")
         if not isinstance(intake_sources, dict):
@@ -113,6 +241,27 @@ def apply_case_intake(
         remembered_case_info = _clean_user_path(case_info_file)
         if intake_sources.get("case_info_file") != remembered_case_info:
             intake_sources["case_info_file"] = remembered_case_info
+            fields_updated += 1
+    if case_context_file.strip():
+        context_source = Path(_clean_user_path(case_context_file))
+        if not context_source.exists() or not context_source.is_file():
+            raise SystemExit(f"Case context file not found: {context_source}")
+        if context_source.suffix.lower() not in TEXT_EXTENSIONS | DOCX_EXTENSIONS:
+            raise SystemExit("Case context file must be TXT, MD, YAML, JSON, CSV, or DOCX.")
+        target = _case_context_target(loaded.case_dir, context_source)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(context_source, target)
+        relative_target = target.relative_to(loaded.case_dir).as_posix()
+        if config.get("case_context_file") != relative_target:
+            config["case_context_file"] = relative_target
+            fields_updated += 1
+        source_imports = config.get("source_imports")
+        if not isinstance(source_imports, dict):
+            source_imports = {}
+            config["source_imports"] = source_imports
+        remembered = str(context_source)
+        if source_imports.get("case_context_file") != remembered:
+            source_imports["case_context_file"] = remembered
             fields_updated += 1
     if claimed_criteria is not None:
         criterion_map = _criterion_step_map(config)
@@ -160,6 +309,11 @@ def apply_case_intake(
         source_files_copied=source_files_copied,
         source_files_skipped=source_files_skipped,
     )
+
+
+def _case_context_target(case_dir: Path, source: Path) -> Path:
+    suffix = source.suffix.lower() or ".txt"
+    return case_dir / "case_context" / f"client_context{suffix}"
 
 
 def _clean_user_path(value: str) -> str:
@@ -216,10 +370,12 @@ def build_memo_skeleton(
     config: dict[str, Any], report: TemplateParseReport, case_dir: Path
 ) -> list[dict[str, Any]]:
     task_type = str(config.get("task_type", ""))
-    if task_type == "eb1a_rfe_response":
+    if task_type in {"eb1a_rfe_response", "eb2niw_rfe_response"}:
         return _rfe_skeleton(config, case_dir, report)
     if task_type == "o1b_petition":
         return _o1b_skeleton(config, case_dir, report)
+    if task_type == "eb2niw_petition":
+        return _eb2niw_skeleton(config, case_dir, report)
     return _eb1a_skeleton(config, case_dir, report)
 
 
@@ -275,16 +431,28 @@ def render_markdown_skeleton(
 
 def write_docx(path: Path, case_id: str, config: dict[str, Any], skeleton: list[dict[str, Any]]) -> None:
     task_type = str(config.get("task_type", ""))
+    if task_type in {"eb1a_rfe_response", "eb2niw_rfe_response"}:
+        _write_rfe_company_docx(path, config, path.parent.parent)
+        return
     if task_type == "eb1a_petition":
         document_xml = _eb1a_document_xml(config, path.parent.parent)
     elif task_type == "o1b_petition":
         document_xml = _o1b_document_xml(config, path.parent.parent)
+    elif task_type == "eb2niw_petition":
+        document_xml = _eb2niw_document_xml(config, path.parent.parent)
     else:
         document_xml = _document_xml(case_id, config, skeleton)
-    styles_xml = _o1b_styles_xml() if task_type == "o1b_petition" else _styles_xml()
-    content_types = _content_types_xml(include_footer=task_type == "o1b_petition")
+    memo_font = _memo_font_family(config)
+    if task_type == "o1b_petition":
+        styles_xml = _o1b_styles_xml(memo_font)
+    elif task_type == "eb2niw_petition":
+        styles_xml = _eb2niw_styles_xml(memo_font)
+    else:
+        styles_xml = _styles_xml(memo_font)
+    include_footer = task_type in {"o1b_petition", "eb2niw_petition"}
+    content_types = _content_types_xml(include_footer=include_footer)
     rels = _rels_xml()
-    doc_rels = _document_rels_xml(include_footer=task_type == "o1b_petition")
+    doc_rels = _document_rels_xml(include_footer=include_footer)
     app_xml = _app_xml()
     core_xml = _core_xml(case_id)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -297,8 +465,369 @@ def write_docx(path: Path, case_id: str, config: dict[str, Any], skeleton: list[
         archive.writestr("word/document.xml", document_xml)
         archive.writestr("word/styles.xml", styles_xml)
         archive.writestr("word/numbering.xml", _numbering_xml())
-        if task_type == "o1b_petition":
+        if include_footer:
             archive.writestr("word/footer1.xml", _o1b_footer_xml())
+
+
+def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) -> None:
+    """Build the RFE working file inside the company DOCX's native style system."""
+    try:
+        from docx import Document  # type: ignore
+        from docx.enum.style import WD_STYLE_TYPE  # type: ignore
+        from docx.enum.text import WD_ALIGN_PARAGRAPH  # type: ignore
+        from docx.oxml.ns import qn  # type: ignore
+        from docx.shared import Inches, Pt, RGBColor  # type: ignore
+    except ModuleNotFoundError as exc:
+        raise SystemExit(
+            "python-docx is required to build the company-formatted RFE working memorandum."
+        ) from exc
+
+    from .rfe_strategy import effective_strategy_units, load_strategy_manifest
+
+    response_config = config.get("rfe_response", {})
+    if not isinstance(response_config, dict):
+        response_config = {}
+    human_template_value = str(
+        response_config.get(
+            "human_template_file", "templates/RFE/EB1/rfe draft template.docx"
+        )
+    )
+    human_template = _resolve_project_or_case_template(case_dir, human_template_value)
+    if not human_template.exists():
+        raise SystemExit(f"RFE company Word template not found: {human_template}")
+    yaml_value = str(
+        response_config.get(
+            "template_file",
+            "templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.yaml",
+        )
+    )
+    yaml_path = _resolve_project_or_case_template(case_dir, yaml_value)
+    yaml_template = load_yaml_file(yaml_path) if yaml_path.exists() else {}
+    manifest = load_strategy_manifest(case_dir)
+    manifest["units"] = effective_strategy_units(case_dir, config)
+    task_type = str(config.get("task_type", ""))
+    is_eb2niw = task_type == "eb2niw_rfe_response"
+
+    document = Document(str(human_template))
+    body = document._element.body
+    for child in list(body):
+        if child.tag != qn("w:sectPr"):
+            body.remove(child)
+
+    memo_font = _memo_font_family(config)
+
+    def apply_font(target: object) -> None:
+        target.font.name = memo_font  # type: ignore[attr-defined]
+        target._element.rPr.rFonts.set(qn("w:ascii"), memo_font)  # type: ignore[attr-defined]
+        target._element.rPr.rFonts.set(qn("w:hAnsi"), memo_font)  # type: ignore[attr-defined]
+        target._element.rPr.rFonts.set(qn("w:eastAsia"), memo_font)  # type: ignore[attr-defined]
+
+    def apply_run_font(run: object) -> None:
+        run.font.name = memo_font  # type: ignore[attr-defined]
+        r_fonts = run._element.get_or_add_rPr().rFonts  # type: ignore[attr-defined]
+        r_fonts.set(qn("w:ascii"), memo_font)
+        r_fonts.set(qn("w:hAnsi"), memo_font)
+        r_fonts.set(qn("w:eastAsia"), memo_font)
+
+    normal = document.styles["Normal"]
+    apply_font(normal)
+    normal.font.size = Pt(12)
+    normal.paragraph_format.line_spacing = 1.5
+    normal.paragraph_format.space_after = Pt(10)
+    normal.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    for heading_name, size in (("Heading 1", 16), ("Heading 2", 14), ("Heading 3", 12)):
+        style = document.styles[heading_name]
+        apply_font(style)
+        style.font.size = Pt(size)
+        style.font.bold = True
+        style.paragraph_format.keep_with_next = True
+        style.paragraph_format.space_before = Pt(12)
+        style.paragraph_format.space_after = Pt(8)
+        style.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+    def ensure_style(name: str, *, italic: bool = False, gray: bool = False, indent: float = 0.0):
+        if name in [style.name for style in document.styles]:
+            style = document.styles[name]
+        else:
+            style = document.styles.add_style(name, WD_STYLE_TYPE.PARAGRAPH)
+            style.base_style = normal
+        apply_font(style)
+        style.font.size = Pt(12)
+        style.font.italic = italic
+        if gray:
+            style.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+        style.paragraph_format.left_indent = Inches(indent)
+        style.paragraph_format.line_spacing = 1.5
+        style.paragraph_format.space_after = Pt(8)
+        return style
+
+    ensure_style("RFE Quote", italic=True, indent=0.25)
+    ensure_style("Drafting Note", italic=True, gray=True)
+    ensure_style("Script Placeholder", gray=True)
+    ensure_style("Evidence Index Item", indent=0.25)
+
+    metadata = manifest.get("case_metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+    full_name = str(metadata.get("beneficiary_full_name") or _get(config, "beneficiary.full_name"))
+    preferred = str(metadata.get("preferred_reference") or _get(config, "beneficiary.preferred_reference"))
+    field = str(metadata.get("field") or config.get("field", ""))
+    specialization = str(metadata.get("specialization") or config.get("specialization", ""))
+    case_number = str(metadata.get("case_number") or _get(config, "rfe_metadata.case_number"))
+
+    def add_text(text: str = "", *, style: str = "Normal", bold: bool = False, italic: bool = False, align=None):
+        paragraph = document.add_paragraph(style=style)
+        if align is not None:
+            paragraph.alignment = align
+        run = paragraph.add_run(text)
+        run.bold = bold
+        run.italic = italic
+        apply_run_font(run)
+        return paragraph
+
+    def add_label_value(label: str, value: str):
+        paragraph = document.add_paragraph(style="Normal")
+        label_run = paragraph.add_run(label)
+        label_run.bold = True
+        apply_run_font(label_run)
+        value_run = paragraph.add_run(value)
+        apply_run_font(value_run)
+        return paragraph
+
+    def add_criterion_line(role: str):
+        if is_eb2niw:
+            paragraph = document.add_paragraph(style="Normal")
+            run = paragraph.add_run(
+                EB2NIW_RFE_HEADING_BY_ROLE.get(role, role.replace("_", " ").title())
+            )
+            run.bold = True
+            apply_run_font(run)
+            return paragraph
+        roman = RFE_CRITERION_ROMAN_BY_ROLE.get(role, "")
+        title = _rfe_criterion_heading(yaml_template, role)
+        description = re.sub(r"^Criterion\s+\d+\.\s*", "", title).strip()
+        paragraph = document.add_paragraph(style="Normal")
+        prefix = paragraph.add_run(f"Criterion ({roman}).")
+        prefix.bold = True
+        paragraph.add_run(f" {description}")
+        return paragraph
+
+    if is_eb2niw:
+        add_text("INDEX", style="Heading 1")
+        evidence_entries = _evidence_index_entries(case_dir, config)
+        if evidence_entries:
+            for exhibit_heading, evidence_items in evidence_entries:
+                add_text(exhibit_heading, style="Heading 2")
+                for item_kind, item_title in evidence_items:
+                    add_text(
+                        item_title,
+                        style="Heading 3" if item_kind == "episode" else "Evidence Index Item",
+                    )
+        else:
+            add_text(
+                "[SCRIPT PLACEHOLDER: generated from the exhibit and document indexes after LLM drafting]",
+                style="Script Placeholder",
+            )
+        document.add_page_break()
+
+    response_date = str(metadata.get("rfe_response_date", "")).strip()
+    add_text(response_date or "[RFE RESPONSE DATE TO BE CONFIRMED]")
+    add_text("TO USCIS", bold=True)
+    re_line = (
+        f"Response to Request for Evidence Regarding Form I-140 Petition under EB-2 National Interest Waiver in {field or '[FIELD]'} - {specialization or '[SPECIALIZATION]'}"
+        if is_eb2niw
+        else f"I-140 Petition for Alien of Extraordinary Ability in {field or '[FIELD]'} (EB-1A) - {specialization or '[SPECIALIZATION]'}"
+    )
+    add_label_value("RE: ", re_line).paragraph_format.space_before = Pt(10)
+    add_label_value(
+        "Petitioner/Beneficiary: " if is_eb2niw else "Petitioner: ",
+        full_name or "[BENEFICIARY NAME]",
+    )
+    add_label_value("Case No.: ", case_number or "[CASE NUMBER]")
+    office = str(metadata.get("uscis_office_or_service_center", "")).strip()
+    if office:
+        add_label_value("USCIS Office: ", office)
+    rfe_date = str(metadata.get("rfe_date", "")).strip()
+    if rfe_date:
+        add_label_value("RFE Date: ", rfe_date)
+    deadline = str(metadata.get("response_deadline", "")).strip()
+    if deadline:
+        add_label_value("Response Deadline: ", deadline)
+    add_text(str(metadata.get("salutation", "")).strip() or "Dear Officer:")
+    add_text(
+        (
+            f"Please accept this response to the Request for Evidence regarding the Form I-140 petition filed on behalf of {full_name or '[BENEFICIARY NAME]'} under INA § 203(b)(2)(B)(i), seeking EB-2 classification and a National Interest Waiver in the field of {field or '[FIELD]'}, with particular specialization in {specialization or '[SPECIALIZATION]'}."
+            if is_eb2niw
+            else f"Please accept this response to the Request for Evidence regarding the Form I-140 petition filed on behalf of {full_name or '[BENEFICIARY NAME]'} under INA § 203(b)(1)(A), who is a specialist in the field of {field or '[FIELD]'}, and especially in {specialization or '[SPECIALIZATION]'}."
+        )
+    )
+    add_text(
+        (
+            "We respectfully submit the enclosed additional evidence and explanations in response to the issues raised in the Request for Evidence. This response addresses only the disputed EB-2 NIW requirements identified by USCIS, namely:"
+            if is_eb2niw
+            else "We respectfully submit the enclosed additional evidence and explanations in response to the issues raised in the Request for Evidence. This response provides additional documentary evidence and legal explanation in support of the remaining criteria addressed in the RFE, namely:"
+        )
+    )
+    addressed_roles = list(
+        dict.fromkeys(
+            str(unit.get("criterion_role", ""))
+            for unit in manifest.get("units", [])
+            if unit.get("criterion_role")
+        )
+    )
+    for role in addressed_roles:
+        add_criterion_line(role)
+    accepted = [
+        str(role)
+        for role in manifest.get("accepted_criteria", [])
+        if is_eb2niw or str(role) in RFE_CRITERION_ROMAN_BY_ROLE
+    ]
+    if accepted:
+        paragraph = add_text(
+            (
+                f"USCIS made the following favorable findings regarding {preferred or full_name or '[BENEFICIARY]'}:"
+                if is_eb2niw
+                else f"USCIS recognized that {preferred or full_name or '[BENEFICIARY]'} satisfies the following criteria:"
+            ),
+            bold=True,
+        )
+        paragraph.paragraph_format.space_before = Pt(12)
+        paragraph.paragraph_format.space_after = Pt(12)
+        for role in accepted:
+            add_criterion_line(role)
+    add_text(
+        "For the convenience of the adjudicating officer, this response also cites and references evidence previously submitted with the original petition where relevant. Many supporting documents referenced throughout this response were already included in the initial filing and are therefore not duplicated herein in order to avoid making the present response unnecessarily voluminous and duplicative."
+    )
+    add_text(
+        "Accordingly, we respectfully request that USCIS consider this response together with the evidence, exhibits, and legal arguments submitted in the original petition as part of the total evidentiary record."
+    )
+    closing = add_text("Respectfully submitted,")
+    closing.paragraph_format.space_before = Pt(12)
+    submitter = str(metadata.get("submitter_name", "")).strip() or full_name or "[SUBMITTER NAME]"
+    title = str(metadata.get("submitter_title", "")).strip()
+    add_text(submitter, bold=True)
+    if title:
+        add_text(title, bold=True)
+
+    units = [unit for unit in manifest.get("units", []) if isinstance(unit, dict)]
+    body_units = [
+        unit
+        for unit in units
+        if str(unit.get("section_type", "")) not in {"cover_letter", "attachments"}
+    ]
+    grouped: list[tuple[str, list[dict[str, Any]]]] = []
+    group_index: dict[str, int] = {}
+    for unit in body_units:
+        role = str(unit.get("criterion_role", ""))
+        key = f"criterion:{role}" if role else f"section:{unit.get('section_id') or unit.get('unit_id')}"
+        if key not in group_index:
+            group_index[key] = len(grouped)
+            grouped.append((key, []))
+        grouped[group_index[key]][1].append(unit)
+
+    for key, group in grouped:
+        document.add_page_break()
+        first = group[0]
+        role = str(first.get("criterion_role", ""))
+        heading = (
+            EB2NIW_RFE_HEADING_BY_ROLE.get(
+                role,
+                str(first.get("section_title") or first.get("title") or "RFE Response Section"),
+            )
+            if is_eb2niw and role
+            else _rfe_criterion_heading(yaml_template, role)
+            if role
+            else str(first.get("section_title") or first.get("title") or "RFE Response Section")
+        )
+        add_text(heading, style="Heading 1")
+        if role:
+            add_text(
+                "Exhibits from XX to XX, Pages from XX to XX.",
+                align=WD_ALIGN_PARAGRAPH.CENTER,
+            )
+
+        issues: list[dict[str, Any]] = []
+        seen_issues: set[str] = set()
+        for unit in group:
+            for issue in unit.get("rfe_issues", []):
+                issue_id = str(issue.get("issue_id", ""))
+                if issue_id and issue_id not in seen_issues:
+                    issues.append(issue)
+                    seen_issues.add(issue_id)
+        if issues:
+            label = add_text("In the RFE, the officer states:", bold=True)
+            label.paragraph_format.space_before = Pt(12)
+            label.paragraph_format.space_after = Pt(6)
+            for issue in issues:
+                quote = str(issue.get("exact_rfe_quote", "")).strip()
+                if quote:
+                    cleaned_quote = quote.strip("“”\"")
+                    add_text(f"“{cleaned_quote}”", style="RFE Quote")
+            answer = add_text("Answer:", bold=True)
+            answer.paragraph_format.line_spacing = 1.15
+
+        for unit in group:
+            unit_id = str(unit.get("unit_id", ""))
+            draft_path = case_dir / "draft_sections/rfe/sections" / f"{unit_id}.md"
+            if not draft_path.exists():
+                continue
+            title_text = str(unit.get("title", "")).strip()
+            if len(group) > 1 or role or title_text != heading:
+                add_text(title_text or str(unit.get("unit_id", "")), style="Heading 2")
+            draft_text = draft_path.read_text(encoding="utf-8-sig", errors="replace")
+            draft_paragraphs = _clean_memo_paragraphs(draft_text)
+            if draft_paragraphs and _normalized_heading(draft_paragraphs[0]) in {
+                _normalized_heading(title_text),
+                _normalized_heading(heading),
+            }:
+                draft_paragraphs = draft_paragraphs[1:]
+            for paragraph_text in draft_paragraphs:
+                add_text(paragraph_text)
+
+    if not is_eb2niw:
+        document.add_page_break()
+        add_text("Attachments / Evidence Index", style="Heading 1")
+        evidence_entries = _evidence_index_entries(case_dir, config)
+        for exhibit_heading, evidence_items in evidence_entries:
+            add_text(exhibit_heading, style="Heading 2")
+            for item_kind, item_title in evidence_items:
+                if item_kind == "episode":
+                    add_text(item_title, style="Heading 3")
+                else:
+                    add_text(item_title, style="Evidence Index Item")
+
+    for section in document.sections:
+        section.top_margin = Inches(1)
+        section.right_margin = Inches(1)
+        section.bottom_margin = Inches(1)
+        section.left_margin = Inches(1)
+        section.header_distance = Inches(0.5)
+        section.footer_distance = Inches(0.5)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    document.save(str(path))
+
+
+def _resolve_project_or_case_template(case_dir: Path, value: str) -> Path:
+    candidate = Path(value)
+    if candidate.is_absolute():
+        return candidate
+    project_candidate = PROJECT_ROOT / candidate
+    if project_candidate.exists():
+        return project_candidate
+    return case_dir / candidate
+
+
+def _rfe_criterion_heading(yaml_template: dict[str, Any], role: str) -> str:
+    key = RFE_CRITERION_TEMPLATE_KEY_BY_ROLE.get(role, "")
+    sections = yaml_template.get("sections", {}) if isinstance(yaml_template, dict) else {}
+    criteria = sections.get("criteria", {}) if isinstance(sections, dict) else {}
+    data = criteria.get(key, {}) if isinstance(criteria, dict) else {}
+    if isinstance(data, dict) and data.get("heading"):
+        return str(data["heading"])
+    if role in RFE_CRITERION_HEADING_BY_ROLE:
+        return RFE_CRITERION_HEADING_BY_ROLE[role]
+    fallback = EB1A_CRITERION_STEP_BY_ROLE.get(role, ("", role.replace("_", " ").title()))[1]
+    return fallback
 
 
 def _read_template_text(path: Path) -> str:
@@ -347,6 +876,8 @@ def _section_level(line: str, previous_was_rule: bool) -> int:
 def _eb1a_skeleton(
     config: dict[str, Any], case_dir: Path, report: TemplateParseReport
 ) -> list[dict[str, Any]]:
+    if eb1a_template_variant(config) == "migrator":
+        return _eb1a_migrator_skeleton(config, case_dir, report)
     structure = _load_working_structure(config)
     skeleton: list[dict[str, Any]] = [
         {
@@ -400,6 +931,65 @@ def _eb1a_skeleton(
                 "level": 1,
                 "title": "Exhibit List",
                 "paragraphs": ["[SCRIPT PLACEHOLDER: generated from indexes/exhibit_index.csv]"],
+            },
+        ]
+    )
+    if not any(item.get("inferred") for item in skeleton):
+        skeleton.extend(_template_fallback_sections(report, prefix="[TEMPLATE STRUCTURE PLACEHOLDER]"))
+    return skeleton
+
+
+def _eb1a_migrator_skeleton(
+    config: dict[str, Any], case_dir: Path, report: TemplateParseReport
+) -> list[dict[str, Any]]:
+    structure = _load_working_structure(config)
+    skeleton: list[dict[str, Any]] = [
+        {
+            "level": 1,
+            "title": "INDEX",
+            "paragraphs": ["[SCRIPT-CONTROLLED CONTENT: generated from the document and exhibit indexes.]"],
+        },
+        {
+            "level": 1,
+            "title": "Attorney Cover Letter",
+            "paragraphs": [
+                "[SCRIPT-CONTROLLED CONTENT: attorney-style filing text with beneficiary, citizenship, specialization, and claimed criteria substituted.]",
+            ],
+        },
+        {
+            "level": 1,
+            "title": "OVERVIEW OF THE BENEFICIARY'S QUALIFICATIONS AND ACHIEVEMENTS",
+            "paragraphs": [
+                "[LLM SECTION PLACEHOLDER: final_overview]",
+                "[LLM SECTION PLACEHOLDER: professional_biography]",
+                "[LLM SECTION PLACEHOLDER: recommendation_letters_roster]",
+                "[LLM SECTION PLACEHOLDER: recommendation_letters_quotes]",
+            ],
+        },
+        {
+            "level": 1,
+            "title": "OVERVIEW OF THE INDUSTRY",
+            "paragraphs": ["[LLM SECTION PLACEHOLDER: industry_overview]"],
+        },
+        {"level": 1, "title": "EVIDENTIAL CRITERIA OF ELIGIBILITY", "paragraphs": []},
+    ]
+    skeleton.extend(_eb1a_criteria_from_config_and_folders(config, case_dir, structure))
+    skeleton.extend(
+        [
+            {
+                "level": 1,
+                "title": "BENEFICIARY WILL CONTINUE TO WORK IN CLAIMED AREA OF EXPERTISE. FINAL MERIT DETERMINATION.",
+                "paragraphs": ["[LLM SECTION PLACEHOLDER: employment_plan]"],
+            },
+            {
+                "level": 1,
+                "title": "Conclusions",
+                "paragraphs": ["[LLM SECTION PLACEHOLDER: final_overview]"],
+            },
+            {
+                "level": 1,
+                "title": "Beneficiary Statement",
+                "paragraphs": ["[LLM SECTION PLACEHOLDER: beneficiary_statement]"],
             },
         ]
     )
@@ -469,33 +1059,51 @@ def _o1b_skeleton(
     return skeleton
 
 
-def _rfe_skeleton(
+def _eb2niw_skeleton(
     config: dict[str, Any], case_dir: Path, report: TemplateParseReport
 ) -> list[dict[str, Any]]:
+    advanced, exceptional = _eb2niw_basis_flags(config, case_dir)
     skeleton: list[dict[str, Any]] = [
         {
             "level": 1,
-            "title": "RFE Response",
-            "paragraphs": [
-                _substitute("Case No. __CASE_NO__", config),
-                _substitute("Accepted for review on __RECEIPT_DATE__", config),
-                _substitute("Beneficiary: __BENEFICIARY_FULL_NAME__", config),
-                _substitute("Area: __FIELD__", config),
-                _substitute("Specialization: __SPECIALIZATION__", config),
-            ],
+            "title": "INDEX",
+            "paragraphs": ["[SCRIPT-CONTROLLED CONTENT: generated from document and exhibit indexes.]"],
         },
         {
             "level": 1,
-            "title": "Cover Letter / Procedural Introduction",
-            "paragraphs": ["[LLM SECTION PLACEHOLDER: rfe_cover_letter]"],
+            "title": "EB-2 National Interest Waiver Cover Letter",
+            "paragraphs": ["[SCRIPT-CONTROLLED CONTENT: case facts, EB-2 basis, and Dhanasar prongs.]"],
+        },
+        {
+            "level": 1,
+            "title": "Overview",
+            "paragraphs": ["[LLM SECTION PLACEHOLDER: eb2niw_overview]"],
+        },
+        {
+            "level": 1,
+            "title": "A. Basic Eligibility for EB-2",
+            "paragraphs": ["[LLM SECTION PLACEHOLDER: eb2niw_basic_eligibility_intro]"],
         },
     ]
-    for issue in _rfe_issues_from_folders(case_dir):
+    if advanced:
         skeleton.append(
             {
-                "level": 1,
-                "title": f"RFE Issue: {issue}",
-                "paragraphs": [f"[LLM SECTION PLACEHOLDER: rfe_issue_response / episode_id={safe_path_component(issue)}]"],
+                "level": 2,
+                "title": "A.1. Advanced Degree Professional",
+                "paragraphs": ["[LLM SECTION PLACEHOLDER: eb2niw_advanced_degree]"],
+                "inferred": True,
+            }
+        )
+    if exceptional:
+        skeleton.append(
+            {
+                "level": 2,
+                "title": "A.2. Person of Exceptional Ability",
+                "paragraphs": [
+                    "[LLM SECTION PLACEHOLDER: eb2niw_exceptional_ability_intro]",
+                    "[LLM SECTION PLACEHOLDER: applicable exceptional-ability criteria]",
+                    "[LLM SECTION PLACEHOLDER: eb2niw_exceptional_final_merits]",
+                ],
                 "inferred": True,
             }
         )
@@ -503,23 +1111,144 @@ def _rfe_skeleton(
         [
             {
                 "level": 1,
-                "title": "Final Merits Determination",
-                "paragraphs": ["[LLM SECTION PLACEHOLDER: rfe_final_merits]"],
+                "title": "B. National Interest Waiver",
+                "paragraphs": [],
+            },
+            {
+                "level": 2,
+                "title": "B.0. Proposed Endeavor",
+                "paragraphs": ["[LLM SECTION PLACEHOLDER: eb2niw_proposed_endeavor]"],
+            },
+            {
+                "level": 2,
+                "title": "B.1. Prong 1: Substantial Merit and National Importance",
+                "paragraphs": [
+                    "[LLM SECTION PLACEHOLDER: eb2niw_prong1_substantial_merit]",
+                    "[LLM REPEATABLE PLACEHOLDER: eb2niw_prong1_national_importance_episode]",
+                    "[LLM SECTION PLACEHOLDER: eb2niw_prong1_totality]",
+                ],
+            },
+            {
+                "level": 2,
+                "title": "B.2. Prong 2: Well Positioned to Advance the Proposed Endeavor",
+                "paragraphs": [
+                    "[LLM SECTION PLACEHOLDER: eb2niw_prong2_intro]",
+                    "[LLM SECTION/REPEATABLE PLACEHOLDERS: folder-driven Prong 2 blocks]",
+                    "[LLM SECTION PLACEHOLDER: eb2niw_prong2_totality]",
+                ],
+            },
+            {
+                "level": 2,
+                "title": "B.3. Prong 3: On Balance, Waiver Is Beneficial to the United States",
+                "paragraphs": ["[LLM SECTION PLACEHOLDER: eb2niw_prong3_balance]"],
             },
             {
                 "level": 1,
                 "title": "Conclusion",
-                "paragraphs": ["[LLM SECTION PLACEHOLDER: rfe_conclusion]"],
-            },
-            {
-                "level": 1,
-                "title": "Attachments / Evidence Index",
-                "paragraphs": ["[SCRIPT PLACEHOLDER: generated from indexes/exhibit_index.csv]"],
+                "paragraphs": ["[LLM SECTION PLACEHOLDER: eb2niw_conclusion]"],
             },
         ]
     )
-    if not any(item.get("inferred") for item in skeleton):
+    if len(skeleton) <= 8:
         skeleton.extend(_template_fallback_sections(report, prefix="[TEMPLATE STRUCTURE PLACEHOLDER]"))
+    return skeleton
+
+
+def _eb2niw_basis_flags(config: dict[str, Any], case_dir: Path) -> tuple[bool, bool]:
+    basis = str(config.get("eb2_basis", "auto")).strip().casefold()
+    explicit_advanced = basis in {"advanced_degree", "advanced degree", "advanced degree professional", "both"}
+    explicit_exceptional = basis in {"exceptional_ability", "exceptional ability", "both"}
+    roles = folder_role_map(config)
+    source_root = case_dir / _path_from_config(config, "source_originals")
+    advanced = explicit_advanced or any(
+        _folder_has_documents(source_root / str(roles.get(role, role)))
+        for role in ("advanced_degree_master", "advanced_degree_bachelor")
+    )
+    exceptional = explicit_exceptional or _folder_has_documents(
+        source_root / str(roles.get("exceptional_ability", "exceptional_ability"))
+    )
+    if basis not in {"auto", ""}:
+        return explicit_advanced, explicit_exceptional
+    return advanced, exceptional
+
+
+def _rfe_skeleton(
+    config: dict[str, Any], case_dir: Path, report: TemplateParseReport
+) -> list[dict[str, Any]]:
+    is_eb2niw = str(config.get("task_type", "")) == "eb2niw_rfe_response"
+    skeleton: list[dict[str, Any]] = []
+    if is_eb2niw:
+        skeleton.append(
+            {
+                "level": 1,
+                "title": "INDEX",
+                "paragraphs": [
+                    "[SCRIPT-CONTROLLED CONTENT: generated from the exhibit and document indexes.]"
+                ],
+            }
+        )
+    skeleton.append(
+        {
+            "level": 1,
+            "title": "EB-2 NIW RFE Response" if is_eb2niw else "RFE Response",
+            "paragraphs": [
+                _substitute("Case No. __CASE_NO__", config),
+                _substitute("Accepted for review on __RECEIPT_DATE__", config),
+                _substitute("Beneficiary: __BENEFICIARY_FULL_NAME__", config),
+                _substitute("Area: __FIELD__", config),
+                _substitute("Specialization: __SPECIALIZATION__", config),
+            ],
+        }
+    )
+    from .rfe_strategy import effective_strategy_units
+
+    units = effective_strategy_units(case_dir, config)
+    for unit in units:
+        if str(unit.get("section_type", "")) in {"cover_letter", "attachments"}:
+            continue
+        unit_id = str(unit.get("unit_id", ""))
+        draft_path = case_dir / "draft_sections" / "rfe" / "sections" / f"{unit_id}.md"
+        if not draft_path.exists():
+            continue
+        draft_text = draft_path.read_text(encoding="utf-8-sig", errors="replace")
+        paragraphs = _clean_memo_paragraphs(draft_text)
+        unit_title = str(unit.get("title", unit_id))
+        if paragraphs and _normalized_heading(paragraphs[0]) == _normalized_heading(unit_title):
+            paragraphs = paragraphs[1:]
+        skeleton.append(
+            {
+                "level": 1 if not unit.get("criterion_role") else 2,
+                "title": unit_title,
+                "paragraphs": paragraphs,
+                "inferred": True,
+                "unit_id": unit_id,
+                "criterion_role": str(unit.get("criterion_role", "")),
+            }
+        )
+    if not is_eb2niw:
+        skeleton.append({"level": 1, "title": "Attachments / Evidence Index", "paragraphs": []})
+        for exhibit_heading, evidence_items in _evidence_index_entries(case_dir, config):
+            skeleton.append(
+                {
+                    "level": 2,
+                    "title": exhibit_heading,
+                    "paragraphs": [],
+                    "bullets": [
+                        title if kind != "episode" else f"Episode: {title}"
+                        for kind, title in evidence_items
+                    ],
+                }
+            )
+    if not any(item.get("inferred") for item in skeleton):
+        skeleton.append(
+            {
+                "level": 1,
+                "title": "Strategy bootstrap required",
+                "paragraphs": [
+                    "[SCRIPT PLACEHOLDER: accept the RFE strategy JSON to generate the case-specific structure]"
+                ],
+            }
+        )
     return skeleton
 
 
@@ -681,14 +1410,24 @@ def _template_fallback_sections(report: TemplateParseReport, *, prefix: str) -> 
 
 
 def _resolve_template_path(config: dict[str, Any], template_path: str) -> Path:
+    task_type = str(config.get("task_type", ""))
     if template_path.strip():
         path = Path(template_path.strip())
-        return path if path.is_absolute() else PROJECT_ROOT / path
-    task_type = str(config.get("task_type", ""))
+        resolved = path if path.is_absolute() else PROJECT_ROOT / path
+        if task_type not in {"eb1a_rfe_response", "eb2niw_rfe_response"} or resolved.exists():
+            return resolved
+        # Existing browser forms/case configs may still submit the retired TXT path.
+        return PROJECT_ROOT / DEFAULT_TEMPLATE_BY_TASK_TYPE[task_type]
     configured = config.get("rfe_response", {}).get("template_file", "") if isinstance(config.get("rfe_response"), dict) else ""
-    value = configured or DEFAULT_TEMPLATE_BY_TASK_TYPE.get(task_type, DEFAULT_TEMPLATE_BY_TASK_TYPE["eb1a_petition"])
+    if task_type == "eb1a_petition":
+        value = eb1a_machine_template_file(config)
+    else:
+        value = configured or DEFAULT_TEMPLATE_BY_TASK_TYPE.get(task_type, DEFAULT_TEMPLATE_BY_TASK_TYPE["eb1a_petition"])
     path = Path(str(value))
-    return path if path.is_absolute() else PROJECT_ROOT / path
+    resolved = path if path.is_absolute() else PROJECT_ROOT / path
+    if task_type in {"eb1a_rfe_response", "eb2niw_rfe_response"} and not resolved.exists():
+        return PROJECT_ROOT / DEFAULT_TEMPLATE_BY_TASK_TYPE[task_type]
+    return resolved
 
 
 def _parse_case_info_file(path_value: str) -> dict[str, str]:
@@ -755,6 +1494,16 @@ def _normalize_intake_fields(fields: dict[str, str]) -> dict[str, str]:
         "compensation": "us_work.compensation",
         "work_location": "us_work.work_location",
         "duties_summary": "us_work.duties_summary",
+        "eb2_basis": "eb2_basis",
+        "intended_occupation": "intended_occupation",
+        "proposed_endeavor_title": "proposed_endeavor.title",
+        "proposed_endeavor_one_sentence": "proposed_endeavor.one_sentence",
+        "proposed_endeavor_summary": "proposed_endeavor.summary",
+        "attorney_name": "filing.attorney_name",
+        "law_firm": "filing.law_firm",
+        "eb1a_template_variant": "eb1a_template_variant",
+        "memo_font_family": "memo_font_family",
+        "bundle_font_family": "bundle_font_family",
     }
     result: dict[str, str] = {}
     for key, value in fields.items():
@@ -762,6 +1511,11 @@ def _normalize_intake_fields(fields: dict[str, str]) -> dict[str, str]:
         if value.strip():
             result[normalized] = value.strip()
     return result
+
+
+def _memo_font_family(config: dict[str, Any]) -> str:
+    value = str(config.get("memo_font_family", "")).strip()
+    return value or "Times New Roman"
 
 
 def _apply_gender_defaults(config: dict[str, Any]) -> int:
@@ -819,7 +1573,9 @@ def _apply_updates(config: dict[str, Any], updates: dict[str, str]) -> int:
     return count
 
 
-def _copy_source_folder(source: Path, destination: Path) -> tuple[int, int]:
+def _copy_source_folder(
+    source: Path, destination: Path, *, refresh_existing: bool = False
+) -> tuple[int, int]:
     if not source.exists() or not source.is_dir():
         raise SystemExit(f"Source folder not found: {source}")
     copied = 0
@@ -831,8 +1587,13 @@ def _copy_source_folder(source: Path, destination: Path) -> tuple[int, int]:
         rel = item.relative_to(source)
         target = destination / rel
         if target.exists():
-            skipped += 1
-            continue
+            if (
+                not refresh_existing
+                or item.resolve() == target.resolve()
+                or filecmp.cmp(item, target, shallow=False)
+            ):
+                skipped += 1
+                continue
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(item, target)
         copied += 1
@@ -956,6 +1717,13 @@ def _beneficiary_tokens(config: dict[str, Any]) -> dict[str, str]:
         "compensation": clean(_get(config, "us_work.compensation")) or "[Compensation]",
         "work_location": clean(_get(config, "us_work.work_location")) or "[Work Location]",
         "duties_summary": clean(_get(config, "us_work.duties_summary")) or "[Duties Summary]",
+        "eb2_basis": clean(config.get("eb2_basis", "")) or "auto",
+        "intended_occupation": clean(config.get("intended_occupation", "")) or "[Intended Occupation]",
+        "proposed_endeavor_title": clean(_get(config, "proposed_endeavor.title")) or "[Proposed Endeavor Title]",
+        "proposed_endeavor_one_sentence": clean(_get(config, "proposed_endeavor.one_sentence")) or "[One-Sentence Proposed Endeavor]",
+        "proposed_endeavor_summary": clean(_get(config, "proposed_endeavor.summary")) or "[Proposed Endeavor Summary]",
+        "attorney_name": clean(_get(config, "filing.attorney_name")) or "[Attorney Name]",
+        "law_firm": clean(_get(config, "filing.law_firm")) or "[Law Firm]",
     }
 
 
@@ -973,7 +1741,170 @@ def _metadata_lines(config: dict[str, Any]) -> list[str]:
         f"- Area: `{config.get('field', '')}`",
         f"- Specialization: `{config.get('specialization', '')}`",
         f"- SOC code: `{config.get('soc_code', '')}`",
+        f"- Intended occupation: `{config.get('intended_occupation', '')}`",
+        f"- Proposed endeavor: `{_get(config, 'proposed_endeavor.title')}`",
     ]
+
+
+def _clean_memo_paragraphs(text: str) -> list[str]:
+    return [
+        paragraph
+        for paragraph in (
+            part.strip() for part in re.split(r"\n\s*\n", text.strip())
+        )
+        if paragraph
+        and not any(paragraph.startswith(prefix) for prefix in TECHNICAL_MEMO_PREFIXES)
+    ]
+
+
+def _normalized_heading(value: str) -> str:
+    return " ".join(
+        "".join(character if character.isalnum() else " " for character in value.casefold()).split()
+    )
+
+
+def _evidence_index_entries(
+    case_dir: Path, config: dict[str, Any]
+) -> list[tuple[str, list[tuple[str, str]]]]:
+    paths = config.get("paths", {}) if isinstance(config.get("paths"), dict) else {}
+    document_path = case_dir / str(paths.get("document_index", "indexes/document_index.csv"))
+    exhibit_path = case_dir / str(paths.get("exhibit_index", "indexes/exhibit_index.csv"))
+    if not document_path.exists() or not exhibit_path.exists():
+        return []
+
+    with document_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        documents = [dict(row) for row in csv.DictReader(handle)]
+    with exhibit_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        exhibits = [dict(row) for row in csv.DictReader(handle)]
+    by_id = {row.get("document_id", ""): row for row in documents if row.get("document_id")}
+
+    entries: list[tuple[str, list[tuple[str, str]]]] = []
+    for exhibit in sorted(exhibits, key=_exhibit_index_sort_key):
+        number = exhibit.get("exhibit_number", "").strip()
+        if not number:
+            continue
+        title = exhibit.get("display_title", "").strip()
+        heading = f"Exhibit {number}"
+        if title and title.casefold() != heading.casefold():
+            heading += f": {title}"
+        document_ids = [
+            item.strip() for item in exhibit.get("document_ids", "").split(";") if item.strip()
+        ]
+        selected_ids = set(document_ids)
+        translations_by_parent: dict[str, list[dict[str, str]]] = {}
+        for document_id in document_ids:
+            document = by_id.get(document_id, {})
+            parent = document.get("parent_document_id", "").strip()
+            is_translation = (
+                document.get("translation_status", "").strip().lower() == "translation"
+                or document.get("relationship_type", "").strip().lower() == "translation"
+            )
+            if is_translation and parent in selected_ids:
+                translations_by_parent.setdefault(parent, []).append(document)
+        episode_groups: list[tuple[str, list[str]]] = []
+        episode_index: dict[str, int] = {}
+        for document_id in document_ids:
+            document = by_id.get(document_id)
+            if not document:
+                continue
+            parent = document.get("parent_document_id", "").strip()
+            is_translation = (
+                document.get("translation_status", "").strip().lower() == "translation"
+                or document.get("relationship_type", "").strip().lower() == "translation"
+            )
+            if is_translation and parent in selected_ids:
+                continue
+            episode_title = _evidence_document_episode_title(document, config)
+            document_title = (
+                document.get("display_title", "").strip()
+                or document.get("original_file_name", "").strip()
+            )
+            if translations_by_parent.get(document_id):
+                document_title += "; English translation"
+            if document_title:
+                if episode_title not in episode_index:
+                    episode_index[episode_title] = len(episode_groups)
+                    episode_groups.append((episode_title, []))
+                episode_groups[episode_index[episode_title]][1].append(document_title)
+        evidence_items: list[tuple[str, str]] = []
+        has_episode_groups = any(episode_title for episode_title, _titles in episode_groups)
+        for episode_position, (episode_title, titles) in enumerate(episode_groups, start=1):
+            if episode_title:
+                evidence_items.append(
+                    (
+                        "episode",
+                        f"{_evidence_index_label(number, episode_position)} {episode_title}",
+                    )
+                )
+            for document_position, title in enumerate(titles, start=1):
+                if has_episode_groups:
+                    label = _evidence_index_label(number, episode_position, document_position)
+                else:
+                    label = _evidence_index_label(number, document_position)
+                evidence_items.append(("document", f"{label} {title}"))
+        entries.append((heading, evidence_items))
+    return entries
+
+
+def _evidence_index_label(exhibit_number: str, *positions: int) -> str:
+    parts = [exhibit_number.strip(), *(str(position) for position in positions)]
+    return ".".join(part for part in parts if part) + "."
+
+
+def _evidence_document_episode_title(document: dict[str, str], config: dict[str, Any]) -> str:
+    indexed_title = str(document.get("episode_title", "")).strip()
+    if indexed_title:
+        return _episode_title_override(config, indexed_title)
+    raw_path = str(document.get("file_path", "")).replace("\\", "/").strip()
+    if not raw_path:
+        return ""
+    parts = PurePosixPath(raw_path).parts
+    evidence_root_index = -1
+    for marker in ("originals", "translations"):
+        if marker in parts:
+            evidence_root_index = parts.index(marker)
+            break
+    if evidence_root_index < 0:
+        return ""
+    relative_parts = parts[evidence_root_index + 1 :]
+    if len(relative_parts) < 3:
+        return ""
+    return _episode_title_override(config, relative_parts[1].strip())
+
+
+def _episode_title_override(config: dict[str, Any], raw_title: str) -> str:
+    title = raw_title.strip()
+    overrides = config.get("episode_title_overrides", {})
+    if not isinstance(overrides, dict) or not title:
+        return title
+    exact = str(overrides.get(title, "")).strip()
+    if exact:
+        return exact
+    normalized_title = _normalize_episode_override_key(title)
+    for key, value in overrides.items():
+        if _normalize_episode_override_key(str(key)) == normalized_title:
+            replacement = str(value).strip()
+            if replacement:
+                return replacement
+    return title
+
+
+def _normalize_episode_override_key(value: str) -> str:
+    value = re.sub(r"^\s*\d+(?:\.\d+)*[\).\s-]+", "", value).strip()
+    return " ".join(
+        "".join(character.casefold() if character.isalnum() else " " for character in value).split()
+    )
+
+
+def _exhibit_index_sort_key(row: dict[str, str]) -> tuple[int, list[object], str]:
+    order = row.get("final_bundle_order", "").strip()
+    if order.isdigit():
+        return (0, [int(order)], row.get("exhibit_number", ""))
+    return (1, _natural_key(row.get("exhibit_number", "")), row.get("exhibit_id", ""))
+
+
+def _natural_key(value: str) -> list[object]:
+    return [int(part) if part.isdigit() else part.casefold() for part in re.split(r"(\d+)", value)]
 
 
 def _o1b_document_xml(config: dict[str, Any], case_dir: Path) -> str:
@@ -1135,7 +2066,426 @@ def _o1b_document_xml(config: dict[str, Any], case_dir: Path) -> str:
     return _wrap_document_xml("".join(body))
 
 
+def _eb2niw_document_xml(config: dict[str, Any], case_dir: Path) -> str:
+    tokens = _beneficiary_tokens(config)
+    advanced, exceptional = _eb2niw_basis_flags(config, case_dir)
+    if advanced and exceptional:
+        basis_label = "an advanced degree professional and a person of exceptional ability"
+    elif exceptional:
+        basis_label = "a person of exceptional ability"
+    else:
+        basis_label = "an advanced degree professional"
+
+    body: list[str] = []
+    body.append(_rich_paragraph([("INDEX:", {"bold": True})], style="Heading1"))
+    evidence_entries = _evidence_index_entries(case_dir, config)
+    if evidence_entries:
+        for exhibit_heading, evidence_items in evidence_entries:
+            body.append(_rich_paragraph([(exhibit_heading, {"bold": True})], style="Heading2"))
+            for item_kind, item_title in evidence_items:
+                body.append(
+                    _rich_paragraph(
+                        [(item_title, {})],
+                        style="Heading3" if item_kind == "episode" else "Normal",
+                    )
+                )
+    else:
+        body.append(
+            _placeholder_paragraph(
+                "[SCRIPT PLACEHOLDER: generated from indexes/exhibit_index.csv after validated LLM outputs are available.]"
+            )
+        )
+    body.append(_page_break_paragraph())
+
+    body.append(_rich_paragraph([(tokens["petition_date"], {})]))
+    body.append(_rich_paragraph([("To U.S. Citizenship and Immigration Services", {"bold": True})], style="Heading1"))
+    body.append(_rich_paragraph([(tokens["uscis_address"], {})]))
+    body.append(_rich_paragraph([(f'Petitioner/Beneficiary: {tokens["formal_name"]}', {"bold": True})]))
+    body.append(_rich_paragraph([(f'Citizenship: {tokens["citizenship"]}', {})]))
+    body.append(
+        _rich_paragraph(
+            [
+                (
+                    f'RE: Form I-140 (EB-2 NIW) — {tokens["intended_occupation"]}; '
+                    f'Proposed Endeavor: {tokens["proposed_endeavor_title"]}',
+                    {"bold": True},
+                )
+            ]
+        )
+    )
+    body.append(_rich_paragraph([("Dear Officer:", {})]))
+    body.append(
+        _rich_paragraph(
+            [
+                (
+                    f'This memorandum supports {tokens["formal_name"]}\'s Form I-140 self-petition for '
+                    f'classification under the employment-based second preference as {basis_label}, together '
+                    'with a request for a national interest waiver of the job-offer and labor-certification requirements.',
+                    {},
+                )
+            ]
+        )
+    )
+    body.append(
+        _rich_paragraph(
+            [
+                (
+                    f'{tokens["preferred_reference"]} intends to advance {tokens["proposed_endeavor_title"]}. '
+                    f'{tokens["proposed_endeavor_one_sentence"]}',
+                    {},
+                )
+            ]
+        )
+    )
+    threshold_items: list[str] = []
+    if advanced:
+        threshold_items.append("The record establishes eligibility as an Advanced Degree Professional.")
+    if exceptional:
+        threshold_items.append(
+            "The record establishes at least three regulatory criteria for Exceptional Ability and, in the aggregate, expertise significantly above that ordinarily encountered."
+        )
+    for item in threshold_items:
+        body.append(_rich_paragraph([(item, {})], num_id=1))
+    for item in (
+        "Prong 1: the proposed endeavor has substantial merit and national importance.",
+        "Prong 2: the petitioner is well positioned to advance the proposed endeavor.",
+        "Prong 3: on balance, waiving the job offer and labor certification requirements would benefit the United States.",
+    ):
+        body.append(_rich_paragraph([(item, {})], num_id=1))
+    body.append(
+        _rich_paragraph(
+            [
+                (
+                    "The enclosed evidence and the analysis below therefore establish eligibility for EB-2 classification and satisfy the framework set forth in Matter of Dhanasar.",
+                    {},
+                )
+            ]
+        )
+    )
+    body.append(_page_break_paragraph())
+
+    body.append(_rich_paragraph([("Petition Memorandum", {"bold": True})], style="Title"))
+    body.append(_rich_paragraph([("Overview", {"bold": True})], style="Heading1"))
+    body.append(
+        _draft_step_xml(case_dir, "eb2niw_overview")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: overview, professional biography, and case roadmap.]" )
+    )
+
+    body.append(_page_break_paragraph())
+    body.append(_rich_paragraph([("A. Basic Eligibility for EB-2", {"bold": True})], style="Heading1"))
+    body.append(
+        _draft_step_xml(case_dir, "eb2niw_basic_eligibility_intro")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: identify the folder-supported EB-2 threshold basis or bases.]" )
+    )
+    if advanced:
+        body.append(_rich_paragraph([("A.1. Advanced Degree Professional", {"bold": True})], style="Heading2"))
+        body.append(_rich_paragraph([("Exhibit 2, Pages from XX to XX.", {"italic": True})]))
+        body.append(
+            _draft_step_xml(case_dir, "eb2niw_advanced_degree")
+            or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: advanced-degree education and, where applicable, five years of progressive experience.]" )
+        )
+    if exceptional:
+        body.append(_rich_paragraph([("A.2. Person of Exceptional Ability", {"bold": True})], style="Heading2"))
+        body.append(_rich_paragraph([("Exhibit 2, Pages from XX to XX.", {"italic": True})]))
+        body.append(
+            _draft_step_xml(case_dir, "eb2niw_exceptional_ability_intro")
+            or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: exceptional-ability regulatory introduction.]" )
+        )
+        exceptional_steps = (
+            ("exceptional_academic_record", "A.2.R1. Official Academic Record", "eb2niw_exceptional_academic_record"),
+            ("exceptional_ten_years", "A.2.R2. At Least Ten Years of Full-Time Experience", "eb2niw_exceptional_ten_years"),
+            ("exceptional_license", "A.2.R3. License or Certification", "eb2niw_exceptional_license"),
+            ("exceptional_remuneration", "A.2.R4. Salary or Other Remuneration Demonstrating Exceptional Ability", "eb2niw_exceptional_remuneration"),
+            ("exceptional_membership", "A.2.R5. Membership in Professional Associations", "eb2niw_exceptional_membership"),
+            ("exceptional_recognition", "A.2.R6. Recognition for Achievements and Significant Contributions", "eb2niw_exceptional_recognition"),
+        )
+        for role, heading, step_id in exceptional_steps:
+            if not _eb2niw_role_has_documents(config, case_dir, role):
+                continue
+            body.append(_rich_paragraph([(heading, {"bold": True})], style="Heading3"))
+            body.append(
+                _draft_step_xml(case_dir, step_id)
+                or _placeholder_paragraph(f"[LLM SECTION PLACEHOLDER: {step_id}]")
+            )
+        body.append(_rich_paragraph([("A.2.FM. Final Merits Determination for Exceptional Ability", {"bold": True})], style="Heading3"))
+        body.append(
+            _draft_step_xml(case_dir, "eb2niw_exceptional_final_merits")
+            or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: exceptional-ability totality analysis.]" )
+        )
+
+    body.append(_page_break_paragraph())
+    body.append(_rich_paragraph([("B. National Interest Waiver", {"bold": True})], style="Heading1"))
+    body.append(_rich_paragraph([("B.0. Proposed Endeavor", {"bold": True})], style="Heading2"))
+    body.append(
+        _draft_step_xml(case_dir, "eb2niw_proposed_endeavor")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: concrete U.S. proposed endeavor, mechanism, beneficiaries, and implementation plan.]" )
+    )
+
+    body.append(_page_break_paragraph())
+    body.append(_rich_paragraph([("B.1. Prong 1: The Proposed Endeavor Has Substantial Merit and National Importance", {"bold": True})], style="Heading1"))
+    body.append(_rich_paragraph([("Exhibit 3, Pages from XX to XX.", {"italic": True})]))
+    body.append(_rich_paragraph([("B.1.1. Substantial Merit", {"bold": True})], style="Heading2"))
+    body.append(
+        _draft_step_xml(case_dir, "eb2niw_prong1_substantial_merit")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: substantial merit of the specific endeavor.]" )
+    )
+    body.append(_rich_paragraph([("B.1.2. National Importance", {"bold": True})], style="Heading2"))
+    body.append(
+        _eb2niw_repeatable_step_xml(case_dir, "eb2niw_prong1_national_importance_episode", episode_style="Heading3")
+        or _placeholder_paragraph("[LLM REPEATABLE PLACEHOLDER: national-importance theses from actual evidence folders.]" )
+    )
+    body.append(
+        _draft_step_xml(case_dir, "eb2niw_prong1_totality")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: Prong 1 synthesis and conclusion.]" )
+    )
+
+    body.append(_page_break_paragraph())
+    body.append(_rich_paragraph([("B.2. Prong 2: The Petitioner Is Well Positioned to Advance the Proposed Endeavor", {"bold": True})], style="Heading1"))
+    body.append(_rich_paragraph([("Exhibit 4, Pages from XX to XX.", {"italic": True})]))
+    body.append(
+        _draft_step_xml(case_dir, "eb2niw_prong2_intro")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: concise roadmap of the petitioner's preparation, record, plan, progress, and support.]" )
+    )
+    fixed_prong2 = (
+        ("prong2_implementation", "Steps Taken to Implement the Proposed Endeavor", "eb2niw_prong2_implementation"),
+        ("prong2_us_support", "Interest and Support from U.S. Companies and Institutions", "eb2niw_prong2_us_support"),
+    )
+    for role, heading, step_id in fixed_prong2:
+        if not _eb2niw_role_has_documents(config, case_dir, role):
+            continue
+        body.append(_rich_paragraph([(heading, {"bold": True})], style="Heading2"))
+        body.append(
+            _draft_step_xml(case_dir, step_id)
+            or _placeholder_paragraph(f"[LLM SECTION PLACEHOLDER: {step_id}]")
+        )
+    for step_id in (
+        "eb2niw_prong2_role_episode",
+        "eb2niw_prong2_awards_episode",
+        "eb2niw_prong2_publications_episode",
+        "eb2niw_prong2_judging_episode",
+        "eb2niw_prong2_grants_episode",
+        "eb2niw_prong2_patents_episode",
+        "eb2niw_prong2_conferences_episode",
+        "eb2niw_prong2_recommendations_episode",
+    ):
+        body.append(_eb2niw_repeatable_step_xml(case_dir, step_id, episode_style="Heading2"))
+    body.append(_rich_paragraph([("B.2.4. Totality of Circumstances Under Prong 2", {"bold": True})], style="Heading2"))
+    body.append(
+        _draft_step_xml(case_dir, "eb2niw_prong2_totality")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: Prong 2 totality analysis.]" )
+    )
+
+    body.append(_page_break_paragraph())
+    body.append(_rich_paragraph([("B.3. Prong 3: On Balance, It Would Be Beneficial to Waive the Job Offer and Labor Certification Requirements", {"bold": True})], style="Heading1"))
+    body.append(_rich_paragraph([("Exhibit 5, Pages from XX to XX.", {"italic": True})]))
+    body.append(
+        _draft_step_xml(case_dir, "eb2niw_prong3_balance")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: evidence-based Dhanasar balancing analysis without a crude U.S.-worker comparison.]" )
+    )
+
+    body.append(_page_break_paragraph())
+    body.append(_rich_paragraph([("Conclusion", {"bold": True})], style="Heading1"))
+    body.append(
+        _draft_step_xml(case_dir, "eb2niw_conclusion")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: short synthesis and request for approval.]" )
+    )
+    body.append(_rich_paragraph([("Sincerely,", {})]))
+    body.append(_rich_paragraph([(tokens["attorney_name"], {})]))
+    body.append(_rich_paragraph([(tokens["law_firm"], {})]))
+    body.append(_eb2niw_section_properties())
+    return _wrap_document_xml("".join(body))
+
+
+def _eb2niw_role_has_documents(config: dict[str, Any], case_dir: Path, role: str) -> bool:
+    roles = folder_role_map(config)
+    folder_name = str(roles.get(role, role))
+    for source_key in ("source_originals", "source_translations", "source_other"):
+        try:
+            root = case_dir / _path_from_config(config, source_key)
+        except SystemExit:
+            continue
+        if _folder_has_documents(root / folder_name):
+            return True
+    return False
+
+
+def _eb2niw_repeatable_step_xml(
+    case_dir: Path, step_id: str, *, episode_style: str = "Heading2"
+) -> str:
+    try:
+        loaded = load_case(case_dir.name)
+        step = find_step(loaded.workflow, step_id)
+    except (SystemExit, OSError):
+        return ""
+    parts: list[str] = []
+    for episode_id, episode_folder in _repeatable_episode_candidates(loaded, step):
+        options = PromptOptions(episode_id=episode_id, episode_folder=episode_folder)
+        destination = destination_for_step(step, options)
+        path = case_dir / destination if destination else Path("__missing__")
+        if not path.exists() or not path.is_file():
+            continue
+        configured = str(step.get("episode_title", "")).strip()
+        raw_title = configured if episode_folder == "." else episode_folder
+        title = _display_episode_title(raw_title or episode_id)
+        title = _episode_title_override(loaded.config, title)
+        if title:
+            parts.append(_rich_paragraph([(title, {"bold": True})], style=episode_style))
+        text = path.read_text(encoding="utf-8-sig", errors="replace").strip()
+        if text:
+            parts.append(_draft_text_xml(text))
+    return "".join(parts)
+
+
+def _display_episode_title(value: str) -> str:
+    return re.sub(r"^\s*\d+(?:\.\d+)*[\).\s-]+", "", value).strip() or value.strip()
+
+
+def _eb1a_migrator_document_xml(config: dict[str, Any], case_dir: Path) -> str:
+    structure = _load_working_structure(config)
+    tokens = _beneficiary_tokens(config)
+    document_data = structure.get("document", {})
+    if not isinstance(document_data, dict):
+        document_data = {}
+    criteria_data = structure.get("criteria", {})
+    if not isinstance(criteria_data, dict):
+        criteria_data = {}
+    selected_roles = _selected_criteria(config, case_dir)
+    selected_criteria = [
+        (role, criteria_data[role])
+        for role in selected_roles
+        if role in criteria_data and isinstance(criteria_data[role], dict)
+    ]
+
+    body: list[str] = []
+    body.append(_rich_paragraph([("INDEX:", {"bold": True})], style="Heading1"))
+    evidence_entries = _evidence_index_entries(case_dir, config)
+    if evidence_entries:
+        for exhibit_heading, evidence_items in evidence_entries:
+            body.append(_rich_paragraph([(exhibit_heading, {"bold": True})], style="Heading2"))
+            for item_kind, item_title in evidence_items:
+                style = "Heading3" if item_kind == "episode" else "Normal"
+                body.append(
+                    _rich_paragraph(
+                        [(item_title, {})],
+                        style=style,
+                    )
+                )
+    else:
+        index_rows = structure.get("index_rows", [])
+        if isinstance(index_rows, list):
+            for row in index_rows:
+                body.append(_rich_paragraph([(_format_case_text(str(row), tokens), {})]))
+        body.append(_placeholder_paragraph("[SCRIPT PLACEHOLDER: final exhibit titles and page ranges are generated from indexes after PDF assembly.]"))
+    body.append(_page_break_paragraph())
+
+    body.append(_rich_paragraph([(tokens["petition_date"], {})]))
+    body.append(_rich_paragraph([("TO USCIS", {"bold": True})], style="Heading1"))
+    body.append(_rich_paragraph([(tokens["uscis_address"], {})]))
+    body.append(_rich_paragraph([("RE: I-140 Petition for Alien of Extraordinary Ability", {"bold": True})]))
+    body.append(_rich_paragraph([(f'Petitioner: {tokens["formal_name"]}', {"bold": True})]))
+    body.append(_rich_paragraph([(f'Beneficiary: {tokens["formal_name"]}', {"bold": True})]))
+    body.append(_rich_paragraph([(f'Citizenship: {tokens["citizenship"]}', {"bold": True})]))
+    body.append(_rich_paragraph([("Dear Sir or Madam:", {})]))
+    body.append(
+        _rich_paragraph(
+            [
+                (
+                    f'This memorandum is submitted in support of {tokens["formal_name"]}\'s self-petition '
+                    f'for classification as an alien of extraordinary ability in {tokens["field"]}, '
+                    f'with a specialization in {tokens["specialization"]}.',
+                    {},
+                )
+            ]
+        )
+    )
+    body.append(
+        _rich_paragraph(
+            [
+                (
+                    f'The enclosed record demonstrates that {tokens["preferred_reference"]} satisfies at least '
+                    'three of the regulatory criteria at 8 C.F.R. § 204.5(h)(3) and merits a favorable final '
+                    'merits determination.',
+                    {},
+                )
+            ]
+        )
+    )
+    for _role, criterion in selected_criteria:
+        cover_text = _format_case_text(str(criterion.get("cover_text", criterion.get("title", ""))), tokens)
+        body.append(_rich_paragraph([(cover_text, {})], num_id=2))
+    body.append(_page_break_paragraph())
+
+    body.append(_rich_paragraph([("OVERVIEW OF THE BENEFICIARY'S QUALIFICATIONS AND ACHIEVEMENTS", {"bold": True})], style="Heading1"))
+    body.append(
+        _draft_step_xml(case_dir, "final_overview")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: concise overview of the beneficiary's qualifications and achievements.]")
+    )
+    body.append(
+        _draft_step_xml(case_dir, "professional_biography", strip_opening_headings=True)
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: professional biography, education, and specialization.]")
+    )
+    body.append(_rich_paragraph([("Recommendation Letters", {"bold": True})], style="Heading2"))
+    body.append(
+        _draft_step_xml(case_dir, "recommendation_letters_roster")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: recommendation_letters_roster]")
+    )
+    body.append(
+        _draft_step_xml(case_dir, "recommendation_letters_quotes")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: recommendation_letters_quotes]")
+    )
+
+    body.append(_page_break_paragraph())
+    body.append(_rich_paragraph([("OVERVIEW OF THE INDUSTRY", {"bold": True})], style="Heading1"))
+    body.append(
+        _draft_step_xml(case_dir, "industry_overview")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: U.S.-focused industry overview and benefit of the specialization.]")
+    )
+
+    body.append(_page_break_paragraph())
+    body.append(_rich_paragraph([("EVIDENTIAL CRITERIA OF ELIGIBILITY", {"bold": True})], style="Heading1"))
+    for role, criterion in selected_criteria:
+        body.append(_page_break_paragraph())
+        title = _format_case_text(str(criterion.get("title", EB1A_CRITERION_STEP_BY_ROLE.get(role, ('', role))[1])), tokens)
+        body.append(_rich_paragraph([(title, {"bold": True})], style="Heading1"))
+        step_ids = criterion.get("step_ids", [])
+        if not isinstance(step_ids, list):
+            step_ids = [step_ids]
+        for step_id in step_ids:
+            body.append(
+                _draft_step_xml(case_dir, str(step_id), episode_style="Heading2", episode_label="")
+                or _placeholder_paragraph(f"[LLM SECTION PLACEHOLDER: {step_id}]")
+            )
+
+    body.append(_page_break_paragraph())
+    body.append(
+        _rich_paragraph(
+            [("BENEFICIARY WILL CONTINUE TO WORK IN CLAIMED AREA OF EXPERTISE. FINAL MERIT DETERMINATION.", {"bold": True})],
+            style="Heading1",
+        )
+    )
+    body.append(
+        _draft_step_xml(case_dir, "employment_plan", episode_style="Heading2", episode_label="")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: employment_plan]")
+    )
+    body.append(_page_break_paragraph())
+    body.append(_rich_paragraph([("Conclusions", {"bold": True})], style="Heading1"))
+    body.append(
+        _draft_step_xml(case_dir, "final_overview")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: final EB-1A conclusion.]")
+    )
+    body.append(_page_break_paragraph())
+    body.append(_rich_paragraph([("Beneficiary Statement", {"bold": True})], style="Heading1"))
+    body.append(
+        _draft_step_xml(case_dir, "beneficiary_statement")
+        or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: first-person beneficiary statement.]")
+    )
+    body.append(_section_properties())
+    return _wrap_document_xml("".join(body))
+
+
 def _eb1a_document_xml(config: dict[str, Any], case_dir: Path) -> str:
+    if eb1a_template_variant(config) == "migrator":
+        return _eb1a_migrator_document_xml(config, case_dir)
     structure = _load_working_structure(config)
     tokens = _beneficiary_tokens(config)
     document_data = structure.get("document", {})
@@ -1418,8 +2768,30 @@ def _draft_paths_for_step(case_dir: Path, step_id: str) -> list[Path]:
         "professional_biography": root / "professional_biography.md",
         "recommendation_letters_roster": root / "recommendation_letters_roster.md",
         "recommendation_letters_quotes": root / "recommendation_letters_quotes.md",
+        "industry_overview": root / "industry_overview.md",
         "specialization_essay": root / "specialization_essay.md",
         "final_overview": root / "final_overview.md",
+        "beneficiary_statement": root / "beneficiary_statement.md",
+        "eb2niw_overview": root / "eb2niw" / "overview.md",
+        "eb2niw_basic_eligibility_intro": root / "eb2niw" / "basic_eligibility" / "intro.md",
+        "eb2niw_advanced_degree": root / "eb2niw" / "basic_eligibility" / "advanced_degree.md",
+        "eb2niw_exceptional_ability_intro": root / "eb2niw" / "basic_eligibility" / "exceptional_ability_intro.md",
+        "eb2niw_exceptional_academic_record": root / "eb2niw" / "basic_eligibility" / "exceptional_academic_record.md",
+        "eb2niw_exceptional_ten_years": root / "eb2niw" / "basic_eligibility" / "exceptional_ten_years.md",
+        "eb2niw_exceptional_license": root / "eb2niw" / "basic_eligibility" / "exceptional_license.md",
+        "eb2niw_exceptional_remuneration": root / "eb2niw" / "basic_eligibility" / "exceptional_remuneration.md",
+        "eb2niw_exceptional_membership": root / "eb2niw" / "basic_eligibility" / "exceptional_membership.md",
+        "eb2niw_exceptional_recognition": root / "eb2niw" / "basic_eligibility" / "exceptional_recognition.md",
+        "eb2niw_exceptional_final_merits": root / "eb2niw" / "basic_eligibility" / "exceptional_final_merits.md",
+        "eb2niw_proposed_endeavor": root / "eb2niw" / "prong1" / "proposed_endeavor.md",
+        "eb2niw_prong1_substantial_merit": root / "eb2niw" / "prong1" / "substantial_merit.md",
+        "eb2niw_prong1_totality": root / "eb2niw" / "prong1" / "totality.md",
+        "eb2niw_prong2_intro": root / "eb2niw" / "prong2" / "intro.md",
+        "eb2niw_prong2_implementation": root / "eb2niw" / "prong2" / "implementation.md",
+        "eb2niw_prong2_us_support": root / "eb2niw" / "prong2" / "us_support.md",
+        "eb2niw_prong2_totality": root / "eb2niw" / "prong2" / "totality.md",
+        "eb2niw_prong3_balance": root / "eb2niw" / "prong3" / "balance.md",
+        "eb2niw_conclusion": root / "eb2niw" / "conclusion.md",
     }
     if step_id in fixed:
         return [fixed[step_id]] if fixed[step_id].exists() else []
@@ -1662,10 +3034,21 @@ def _o1b_section_properties() -> str:
     )
 
 
-def _styles_xml() -> str:
-    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+def _eb2niw_section_properties() -> str:
+    return (
+        "<w:sectPr>"
+        '<w:footerReference w:type="default" r:id="rIdFooter"/>'
+        '<w:pgSz w:w="12240" w:h="15840"/>'
+        '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/>'
+        "</w:sectPr>"
+    )
+
+
+def _styles_xml(font_family: str = "Times New Roman") -> str:
+    font = html.escape(font_family or "Times New Roman", quote=True)
+    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:eastAsia="Aptos"/><w:sz w:val="24"/></w:rPr><w:pPr><w:spacing w:after="160" w:line="278" w:lineRule="auto"/></w:pPr></w:style>
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:rPr><w:rFonts w:ascii="{font}" w:hAnsi="{font}" w:eastAsia="{font}"/><w:sz w:val="24"/></w:rPr><w:pPr><w:spacing w:after="160" w:line="278" w:lineRule="auto"/></w:pPr></w:style>
   <w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="24"/></w:rPr><w:pPr><w:spacing w:before="0" w:after="160"/></w:pPr></w:style>
   <w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="24"/></w:rPr><w:pPr><w:spacing w:before="0" w:after="160"/><w:keepNext/></w:pPr></w:style>
   <w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="24"/></w:rPr><w:pPr><w:spacing w:before="0" w:after="160"/><w:keepNext/></w:pPr></w:style>
@@ -1678,10 +3061,28 @@ def _styles_xml() -> str:
 </w:styles>"""
 
 
-def _o1b_styles_xml() -> str:
-    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+def _o1b_styles_xml(font_family: str = "Times New Roman") -> str:
+    font = html.escape(font_family or "Times New Roman", quote=True)
+    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman"/><w:sz w:val="24"/></w:rPr><w:pPr><w:jc w:val="both"/><w:spacing w:before="0" w:after="160" w:line="360" w:lineRule="auto"/></w:pPr></w:style>
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:rPr><w:rFonts w:ascii="{font}" w:hAnsi="{font}" w:eastAsia="{font}"/><w:sz w:val="24"/></w:rPr><w:pPr><w:jc w:val="both"/><w:spacing w:before="0" w:after="160" w:line="360" w:lineRule="auto"/></w:pPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="240"/></w:pPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:pPr><w:spacing w:before="240" w:after="160"/><w:keepNext/></w:pPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="28"/></w:rPr><w:pPr><w:spacing w:before="200" w:after="120"/><w:keepNext/></w:pPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Heading3"><w:name w:val="heading 3"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="24"/></w:rPr><w:pPr><w:spacing w:before="160" w:after="100"/><w:keepNext/></w:pPr></w:style>
+  <w:style w:type="paragraph" w:styleId="SpecialSection"><w:name w:val="Special section"/><w:basedOn w:val="Heading1"/><w:qFormat/></w:style>
+  <w:style w:type="paragraph" w:styleId="Meta"><w:name w:val="Memo metadata"/><w:basedOn w:val="Normal"/><w:rPr><w:i/></w:rPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Note"><w:name w:val="Draft note"/><w:basedOn w:val="Normal"/><w:rPr><w:color w:val="666666"/></w:rPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Placeholder"><w:name w:val="Script placeholder"/><w:basedOn w:val="Normal"/><w:rPr><w:color w:val="666666"/></w:rPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Bullet"><w:name w:val="Script bullet"/><w:basedOn w:val="Normal"/><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr></w:pPr></w:style>
+</w:styles>"""
+
+
+def _eb2niw_styles_xml(font_family: str = "Times New Roman") -> str:
+    font = html.escape(font_family or "Times New Roman", quote=True)
+    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:rPr><w:rFonts w:ascii="{font}" w:hAnsi="{font}" w:eastAsia="{font}"/><w:sz w:val="24"/></w:rPr><w:pPr><w:jc w:val="both"/><w:spacing w:before="0" w:after="120" w:line="360" w:lineRule="auto"/></w:pPr></w:style>
   <w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="240"/></w:pPr></w:style>
   <w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:pPr><w:spacing w:before="240" w:after="160"/><w:keepNext/></w:pPr></w:style>
   <w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="28"/></w:rPr><w:pPr><w:spacing w:before="200" w:after="120"/><w:keepNext/></w:pPr></w:style>

@@ -11,22 +11,62 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from .bundle_workflow import (
+    bundle_display_title_review,
+    bundle_catalog,
     build_bundle_plan,
     build_evidence_bundle,
     build_exhibit_index,
+    build_final_filing_pdf,
     generate_separator_pages,
+    inspect_bundle_preparation,
+    inspect_layout_index_status,
+    load_bundle_selection,
+    prepare_selected_bundle,
+    refresh_layout_indexes,
     render_separator_pdfs,
+    save_bundle_display_titles,
+    sync_layout_indexes_from_memo,
 )
 from .cli_support import CASE_ROOT, configure_console, create_case_from_template, validate_case_id
+from .document_layout import (
+    add_mapping as add_document_layout_mapping,
+    build_original_directory_catalog,
+    build_layout_bundle,
+    build_layout_preview,
+    list_installed_fonts,
+    load_layout_selection,
+    load_layout_status,
+    refresh_layout_sources,
+    remove_mapping as remove_document_layout_mapping,
+    save_folder_scopes,
+    save_layout_selection,
+    save_layout_structure,
+    set_mapping_paths,
+    update_layout_settings,
+)
 from .evidence import (
     link_translations,
     manual_link_translation,
     scan_documents,
     unlink_translation,
 )
-from .memo_builder import apply_case_intake, build_working_memo, parse_machine_template
+from .memo_builder import (
+    _write_yaml_file,
+    apply_case_intake,
+    build_working_memo,
+    parse_machine_template,
+    refresh_case_sources,
+)
+from .json_input import parse_llm_json_object
 from .progress import CaseProgress, build_case_progress
+from .rfe_strategy import (
+    apply_strategy_output,
+    build_strategy_bootstrap_prompt,
+    import_evidence_and_scan_inputs,
+    load_strategy_manifest,
+)
 from .stages import LLMStage, LLMUnit, build_llm_stage
+from .template_variants import EB1A_TEMPLATE_VARIANTS, eb1a_machine_template_file, eb1a_template_variant
 from .workflow import (
     _case_path_value,
     build_prompt,
@@ -43,6 +83,8 @@ from .workflow import (
     run_next_report,
     validate_llm_output,
 )
+
+RFE_TASK_TYPES = {"eb1a_rfe_response", "eb2niw_rfe_response"}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -76,6 +118,12 @@ class PetitionsHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         try:
             parsed = urlparse(self.path)
+            if parsed.path == "/favicon.ico":
+                self._send_bytes(
+                    Path(__file__).resolve().parents[1] / "free-icon-robot-3398643.png",
+                    "image/png",
+                )
+                return
             if parsed.path == "/":
                 self._send_html(render_home(parsed.query))
                 return
@@ -99,6 +147,11 @@ class PetitionsHandler(BaseHTTPRequestHandler):
                 case_id = _single(params, "case")
                 self._send_html(render_layout_page(case_id, params))
                 return
+            if parsed.path == "/document-layout":
+                params = parse_qs(parsed.query)
+                case_id = _single(params, "case")
+                self._send_html(render_document_layout_page(case_id, params))
+                return
             if parsed.path == "/translations":
                 params = parse_qs(parsed.query)
                 case_id = _single(params, "case")
@@ -117,6 +170,19 @@ class PetitionsHandler(BaseHTTPRequestHandler):
                 case_id = _single(params, "case")
                 rel_path = _single(params, "path")
                 self._send_text(read_case_file(case_id, rel_path))
+                return
+            if parsed.path == "/layout-artifact":
+                params = parse_qs(parsed.query)
+                case_id = _single(params, "case")
+                kind = _single(params, "kind")
+                status = load_layout_status(case_id)
+                if kind == "preview":
+                    self._send_bytes(status.preview_pdf, "application/pdf")
+                    return
+                if kind == "final":
+                    self._send_bytes(status.final_pdf, "application/pdf")
+                    return
+                self.send_error(404)
                 return
             self.send_error(404)
         except (Exception, SystemExit) as exc:  # noqa: BLE001
@@ -140,13 +206,14 @@ class PetitionsHandler(BaseHTTPRequestHandler):
             else:
                 route = _action_route(action)
                 destination = f"{route}?case={quote(destination_case)}&message={quote(message)}"
-                if action == "build_prompt" and data.get("step"):
+                if action in {"build_prompt", "refresh_unit_documents"} and data.get("step"):
                     step_id = data.get("step", "")
                     episode_id = data.get("episode_id", "")
                     destination += f"&step={quote(step_id)}"
                     if episode_id:
                         destination += f"&episode={quote(episode_id)}"
-                    destination += f"&prompt={quote(output_stem(step_id, episode_id) + '.latest.prompt.md')}"
+                    if action == "build_prompt":
+                        destination += f"&prompt={quote(output_stem(step_id, episode_id) + '.latest.prompt.md')}"
                 elif action == "run_next":
                     prompts = latest_prompts(destination_case)
                     if prompts:
@@ -196,6 +263,15 @@ class PetitionsHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_bytes(self, path: Path, content_type: str) -> None:
+        body = path.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Cache-Control", "public, max-age=86400")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def _redirect(self, location: str) -> None:
         self.send_response(303)
         self.send_header("Location", location)
@@ -210,9 +286,163 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
         return f"Created case {new_case}."
 
     validate_case_id(case_id)
+    if action == "layout_pick_originals_dir":
+        selected = _pick_directory(_safe_layout_setting(case_id, "originals_dir"))
+        if not selected:
+            return "Originals folder selection was canceled."
+        update_layout_settings(case_id, originals_dir=selected)
+        return "Selected originals folder."
+    if action == "layout_pick_translations_dir":
+        selected = _pick_directory(_safe_layout_setting(case_id, "translations_dir"))
+        if not selected:
+            return "Translations folder selection was canceled."
+        update_layout_settings(case_id, translations_dir=selected)
+        return "Selected translations folder."
+    if action == "layout_pick_list_document":
+        selected = _pick_file(_safe_layout_setting(case_id, "list_document_path"))
+        if not selected:
+            return "Exhibit list file selection was canceled."
+        update_layout_settings(case_id, list_document_path=selected)
+        return "Selected exhibit list document."
+    if action == "layout_parse_sources":
+        summary = refresh_layout_sources(
+            case_id,
+            originals_dir=data.get("originals_dir", ""),
+            translations_dir=data.get("translations_dir", ""),
+            list_document_path=data.get("list_document_path", ""),
+            font_family=data.get("font_family", ""),
+        )
+        return (
+            f"Scanned {summary.original_files} original file(s) and {summary.translation_files} translation file(s); "
+            f"parsed {summary.exhibits} exhibit(s), {summary.episodes} episode(s), and {summary.documents} document(s)."
+        )
+    if action == "layout_save_structure":
+        save_layout_structure(case_id, data)
+        return "Saved exhibit titles, episode titles, and document titles."
+    if action == "layout_save_folder_scopes":
+        save_folder_scopes(case_id, data)
+        return "Saved exhibit and episode folder selections."
+    if action == "layout_save_document_originals":
+        selected_files = [
+            value
+            for key, value in data.items()
+            if key.startswith("original_choice_") and value.strip()
+        ]
+        set_mapping_paths(case_id, data.get("document_id", ""), "original", selected_files)
+        return f"Saved {len(selected_files)} original file(s) for the selected document."
+    if action == "layout_add_mapping":
+        kind = data.get("mapping_kind", "").strip()
+        initial_dir = _safe_layout_setting(case_id, "translations_dir" if kind == "translation" else "originals_dir")
+        selected = _pick_file(initial_dir)
+        if not selected:
+            return "File selection was canceled."
+        add_document_layout_mapping(case_id, data.get("document_id", ""), kind, selected)
+        return "Attached file to the selected document."
+    if action == "layout_remove_mapping":
+        remove_document_layout_mapping(
+            case_id,
+            data.get("document_id", ""),
+            data.get("mapping_kind", ""),
+            int(data.get("mapping_index", "0") or "0"),
+        )
+        return "Removed the selected file mapping."
+    if action == "layout_preview":
+        summary = build_layout_preview(case_id)
+        return f"Built separator preview PDF: {summary.pdf_path}."
+    if action == "layout_build":
+        selected_exhibits = [
+            key.removeprefix("select_layout_exhibit_")
+            for key, value in data.items()
+            if key.startswith("select_layout_exhibit_") and value == "on"
+        ]
+        selected_documents = [
+            key.removeprefix("select_layout_document_")
+            for key, value in data.items()
+            if key.startswith("select_layout_document_") and value == "on"
+        ]
+        save_layout_selection(case_id, selected_exhibits, selected_documents)
+        summary = build_layout_bundle(case_id, selected_exhibits, selected_documents)
+        return (
+            f"Built layout bundle PDF: {summary.pdf_path}. "
+            f"Included {summary.exhibits} exhibit(s), {summary.documents} document(s), and {summary.source_files} mapped file(s)."
+        )
     if action == "scan_documents":
         summary = scan_documents(case_id)
-        return f"Scanned {summary.scanned_files} file(s); added {summary.added_rows}, updated {summary.updated_rows}."
+        return (
+            f"Scanned {summary.scanned_files} file(s); added {summary.added_rows}, "
+            f"updated {summary.updated_rows}, removed {summary.removed_rows} auxiliary row(s)."
+        )
+    if action == "refresh_intake_sources":
+        loaded = load_case(case_id)
+        if str(loaded.config.get("task_type", "")) in RFE_TASK_TYPES:
+            imports = loaded.config.get("source_imports", {})
+            if not isinstance(imports, dict):
+                imports = {}
+            imported = import_evidence_and_scan_inputs(
+                case_id,
+                str(imports.get("initial_filing_memo", "")),
+                str(imports.get("rfe_new_documents", "")),
+            )
+            refreshed_files = imported.copied_files
+        else:
+            refreshed_files = refresh_case_sources(case_id).source_files_copied
+        scanned = scan_documents(case_id)
+        linked = link_translations(case_id)
+        return (
+            f"Refreshed intake sources ({refreshed_files} new or changed file(s)); "
+            f"reindexed {scanned.scanned_files} document(s) and linked "
+            f"{linked.linked_translations} translation(s). The memorandum was not changed."
+        )
+    if action == "refresh_unit_documents":
+        scanned = scan_documents(case_id)
+        linked = link_translations(case_id)
+        return (
+            f"Refreshed document list: {scanned.scanned_files} scanned, "
+            f"{scanned.added_rows} added, {scanned.updated_rows} updated, "
+            f"{scanned.removed_rows} auxiliary row(s) removed, "
+            f"{linked.linked_translations} translation(s) linked."
+        )
+    if action == "build_rfe_strategy_prompt":
+        summary = build_strategy_bootstrap_prompt(
+            case_id,
+            data.get("strategy_path", ""),
+            data.get("rfe_path", ""),
+        )
+        return f"Created strategy bootstrap prompt {summary.prompt_path.name}."
+    if action == "import_rfe_strategy_output":
+        output_text = data.get("strategy_output_json", "").strip()
+        if not output_text:
+            raise ValueError("Paste the strategy bootstrap JSON first.")
+        try:
+            parsed_strategy = parse_llm_json_object(output_text)
+            output = parsed_strategy.data
+        except ValueError as exc:
+            raise ValueError(f"Invalid strategy JSON: {exc}") from exc
+        summary = apply_strategy_output(case_id, output)
+        memo = build_working_memo(case_id)
+        repair = (
+            f" Automatic JSON repair applied: {'; '.join(parsed_strategy.repair_notes)}."
+            if parsed_strategy.repaired
+            else ""
+        )
+        return (
+            f"Accepted strategy manifest with {summary.unit_count} drafting unit(s); "
+            f"built {memo.docx_path.name}.{repair}"
+        )
+    if action == "import_rfe_evidence":
+        imported = import_evidence_and_scan_inputs(
+            case_id,
+            data.get("initial_memo_path", ""),
+            data.get("new_documents_path", ""),
+        )
+        scanned = scan_documents(case_id)
+        linked = link_translations(case_id)
+        memo = build_working_memo(case_id)
+        return (
+            f"Imported {imported.copied_files} file(s), scanned {scanned.scanned_files}, "
+            f"partitioned {imported.initial_sections} initial-filing section(s), and linked "
+            f"{linked.linked_translations} translation(s); rebuilt {memo.docx_path.name} from actual evidence folders."
+        )
     if action == "apply_intake":
         summary = apply_case_intake(
             case_id,
@@ -244,8 +474,20 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
                 "compensation": data.get("compensation", ""),
                 "work_location": data.get("work_location", ""),
                 "duties_summary": data.get("duties_summary", ""),
+                "eb1a_template_variant": data.get("eb1a_template_variant", ""),
+                "eb2_basis": data.get("eb2_basis", ""),
+                "intended_occupation": data.get("intended_occupation", ""),
+                "proposed_endeavor_title": data.get("proposed_endeavor_title", ""),
+                "proposed_endeavor_one_sentence": data.get("proposed_endeavor_one_sentence", ""),
+                "proposed_endeavor_summary": data.get("proposed_endeavor_summary", ""),
+                "petition_date": data.get("petition_date", ""),
+                "attorney_name": data.get("attorney_name", ""),
+                "law_firm": data.get("law_firm", ""),
+                "memo_font_family": data.get("memo_font_family", ""),
+                "bundle_font_family": data.get("bundle_font_family", ""),
             },
             case_info_file=data.get("case_info_file", ""),
+            case_context_file=data.get("case_context_file", ""),
             source_folder_path=data.get("source_folder_path", ""),
             source_target_key=data.get("source_target_key", "source_originals"),
             source_folder_paths={
@@ -279,6 +521,13 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
             else None,
         )
         return f"Updated {summary.fields_updated} field(s); copied {summary.source_files_copied} source file(s)."
+    if action in {"save_intake_font_settings", "save_layout_font_settings"}:
+        _save_case_font_settings(
+            case_id,
+            memo_font_family=data.get("memo_font_family", ""),
+            bundle_font_family=data.get("bundle_font_family", ""),
+        )
+        return "Saved memo and bundle font settings."
     if action == "build_working_memo":
         summary = build_working_memo(case_id, template_path=data.get("template_path", ""))
         return f"Built working memo: {summary.docx_path.name}; sections {summary.sections_written}; placeholders {summary.placeholders_seen}."
@@ -366,12 +615,10 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
         if not output_text:
             raise ValueError("Paste JSON output first.")
         try:
-            output_data = json.loads(output_text)
-        except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"Output was not accepted: invalid JSON at line {exc.lineno}, column {exc.colno}. "
-                "Correct the response or ask the LLM to return only one JSON object."
-            ) from exc
+            parsed_output = parse_llm_json_object(output_text)
+            output_data = parsed_output.data
+        except ValueError as exc:
+            raise ValueError(f"Output was not accepted: {exc}") from exc
         loaded = load_case(case_id)
         step_data = find_step(loaded.workflow, step)
         try:
@@ -396,7 +643,9 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
                 "Use Retry/overwrite from the LLM workspace if replacement is intentional."
             )
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(output_text + "\n", encoding="utf-8")
+        output_path.write_text(
+            json.dumps(output_data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
         validated = import_llm_output(case_id, step, str(output_path), episode_id=episode_id, force=force)
         if data.get("insert_after_import") == "on":
             target = insert_section(case_id, step, episode_id=episode_id, force=force)
@@ -405,15 +654,46 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
                 f"Validated {validated.name}, inserted {target.name}, and refreshed working_memo.docx.\n\n"
                 f"{next_report}"
             )
-        return f"Validated output {validated.name}."
+        repair = (
+            f" Automatic JSON repair applied: {'; '.join(parsed_output.repair_notes)}."
+            if parsed_output.repaired
+            else ""
+        )
+        return f"Validated output {validated.name}.{repair}"
     if action == "insert_section":
         step = data.get("step", "").strip()
         episode_id = data.get("episode_id", "").strip() or None
         target = insert_section(case_id, step, episode_id=episode_id, force=data.get("force") == "on")
         next_report = run_next_report(case_id, build_prompt_file=True)
         return f"Inserted section {target.name} and refreshed working_memo.docx.\n\n{next_report}"
+    if action == "refresh_layout_indexes":
+        summary = refresh_layout_indexes(case_id)
+        status = summary.status
+        warning = ""
+        if status.stale_document_ids or status.assignment_conflicts:
+            warning = " Some references could not be fully matched; available documents can still be bundled."
+        elif status.unsupported_documents:
+            warning = " Indexes are ready; unsupported source files will be skipped unless converted."
+        return (
+            f"Refreshed indexes: scanned {summary.scanned_files} file(s), removed "
+            f"{summary.auxiliary_rows_removed} auxiliary row(s), rebound "
+            f"{summary.replacement_documents_rebound} replacement PDF(s), assigned "
+            f"{status.assigned_used_documents}/{status.unique_used_documents} used document(s), "
+            f"and built {status.exhibit_count} exhibit(s).{warning}"
+        )
+    if action == "sync_layout_indexes_from_memo":
+        summary = sync_layout_indexes_from_memo(case_id)
+        return (
+            f"Synced indexes from working_memo.docx: {summary.documents_matched}/"
+            f"{summary.documents_seen} document(s), {summary.exhibits_seen} exhibit(s), "
+            f"{summary.episodes_seen} episode heading(s)."
+        )
     if action == "build_index":
         summary = build_exhibit_index(case_id)
+        if summary.documents_seen and not summary.documents_with_exhibit_number:
+            raise ValueError(
+                "No documents have Exhibit numbers. Use 'Refresh indexes' to derive them from validated LLM outputs first."
+            )
         return f"Exhibits created {summary.exhibits_created}, updated {summary.exhibits_updated}."
     if action == "separators":
         summary = generate_separator_pages(case_id)
@@ -424,9 +704,69 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
     if action == "bundle_dry_run":
         summary = build_bundle_plan(case_id)
         return f"Bundle plan: {summary.ready_items} ready, {summary.missing_items} missing, {summary.unsupported_items} unsupported."
+    if action == "save_bundle_display_titles":
+        exhibit_titles = {
+            key.removeprefix("exhibit_title_"): value
+            for key, value in data.items()
+            if key.startswith("exhibit_title_")
+        }
+        document_titles = {
+            key.removeprefix("document_title_"): value
+            for key, value in data.items()
+            if key.startswith("document_title_")
+        }
+        episode_titles: dict[str, str] = {}
+        for key, raw_title in data.items():
+            if not key.startswith("episode_raw_"):
+                continue
+            index = key.removeprefix("episode_raw_")
+            episode_titles[raw_title] = data.get(f"episode_title_{index}", "")
+        summary = save_bundle_display_titles(
+            case_id,
+            exhibit_titles=exhibit_titles,
+            episode_titles=episode_titles,
+            document_titles=document_titles,
+        )
+        return (
+            "Saved display titles: "
+            f"{summary.exhibit_titles_updated} exhibit title(s), "
+            f"{summary.episode_overrides_saved} episode override(s), "
+            f"{summary.document_titles_updated} document title(s). "
+            "Prepare the bundle again before building PDF."
+        )
+    if action == "prepare_selected_bundle":
+        selected_exhibits = [
+            key.removeprefix("select_exhibit_")
+            for key, value in data.items()
+            if key.startswith("select_exhibit_") and value == "on"
+        ]
+        selected_documents = [
+            key.removeprefix("select_document_")
+            for key, value in data.items()
+            if key.startswith("select_document_") and value == "on"
+        ]
+        summary = prepare_selected_bundle(case_id, selected_exhibits, selected_documents)
+        return (
+            f"Prepared {len(summary.selection.exhibit_numbers)} exhibit(s) and "
+            f"{len(summary.selection.document_ids)} document(s): rendered "
+            f"{summary.separator_pdfs} separator PDF(s); plan has "
+            f"{summary.plan.missing_items} missing and {summary.plan.unsupported_items} unsupported item(s)."
+        )
     if action == "bundle_build":
         summary = build_evidence_bundle(case_id)
         return f"Built final PDF: {summary.final_pdf_path}."
+    if action == "final_filing_build":
+        summary = build_final_filing_pdf(case_id)
+        warning = (
+            f" {summary.placeholders_unresolved} PAGE placeholder(s) could not be resolved; review {summary.report_path}."
+            if summary.placeholders_unresolved
+            else ""
+        )
+        return (
+            f"Built final filing PDF: {summary.final_pdf_path}. "
+            f"Resolved {summary.placeholders_resolved}/{summary.placeholders_seen} PAGE placeholder(s); "
+            f"memo pages: {summary.memo_pages}; final pages: {summary.final_pages}.{warning}"
+        )
     raise ValueError(f"Unknown action: {action}")
 
 
@@ -441,7 +781,7 @@ def render_home(query: str = "") -> str:
         cards.append(
             f'<a class="case-card" href="/case?case={quote(case_id)}">'
             f"<strong>{escape(progress.beneficiary_name)}</strong>"
-            f"<span>{escape(case_id)} · {escape(progress.task_type)}</span>"
+            f"<span>{escape(case_id)} · {escape(_task_type_label(progress.task_type))}</span>"
             f"<span>Stage: {escape(progress.stage_label)} · {progress.completion_percent}%</span></a>"
         )
     return page(
@@ -460,7 +800,10 @@ def render_home(query: str = "") -> str:
             <select name="task_type">
               <option value="eb1a_petition">EB1A petition</option>
               <option value="o1b_petition">O-1B petition</option>
+              <option value="eb2niw_petition">EB-2 NIW petition</option>
               <option value="eb1a_rfe_response">EB1A RFE response</option>
+              <option value="eb2niw_rfe_response">EB-2 NIW RFE response</option>
+              <option value="document_layout">Document layout</option>
             </select>
             <button>Create case</button>
           </form>
@@ -483,6 +826,35 @@ def render_case_page(case_id: str, params: dict[str, list[str]]) -> str:
     message = _single(params, "message")
     error = _single(params, "error")
     task_type = _safe_case_task_type(case_id)
+    if task_type == "document_layout":
+        layout_status = load_layout_status(case_id)
+        stage_one = 100 if layout_status.stage1_complete else 0
+        stage_two = (
+            0
+            if not layout_status.stage2_available
+            else round(
+                (layout_status.fully_mapped_document_count / max(layout_status.document_count, 1)) * 100
+            )
+        )
+        stage_three = 100 if layout_status.has_final else 0
+        return page(
+            f"Case {case_id}",
+            f"""
+            <div class="case-nav"><a href="/">&larr; Case library</a>{render_case_switch(case_id)}</div>
+            {alert(message, "ok")}
+            {alert(error, "error")}
+            <section class="panel">
+              <h1>{escape(case_id)}</h1>
+              <p class="muted">Task type: {escape(_task_type_label(task_type))}</p>
+              <p>This case uses the isolated document-layout workflow: parse the exhibit list, attach one or more real files to each document, then assemble a PDF bundle.</p>
+            </section>
+            <div class="stage-grid">
+              {_stage_card("1", "Parse sources", stage_one, f"{layout_status.exhibit_count} exhibit(s), {layout_status.document_count} document(s)", f"/document-layout?case={quote(case_id)}", "Open layout workflow")}
+              {_stage_card("2", "Map files", stage_two, f"{layout_status.fully_mapped_document_count}/{layout_status.document_count} document(s) linked to originals", f"/document-layout?case={quote(case_id)}", "Continue mapping")}
+              {_stage_card("3", "Build PDF", stage_three, "Preview separators and assemble a selected final PDF.", f"/document-layout?case={quote(case_id)}", "Open final stage")}
+            </div>
+            """,
+        )
     progress = _safe_progress(case_id)
     llm_stage = _safe_llm_stage(case_id)
     intake_percent = _stage_percent(progress, {"intake", "working_memo", "scan", "translations"})
@@ -495,7 +867,7 @@ def render_case_page(case_id: str, params: dict[str, list[str]]) -> str:
         {alert(error, "error")}
         <section class="panel">
           <h1>{escape(case_id)}</h1>
-          <p class="muted">Task type: {escape(task_type)}</p>
+          <p class="muted">Task type: {escape(_task_type_label(task_type))}</p>
           <p>This page is the case overview. Open the stage you are working on; drafting and layout controls are kept separate.</p>
         </section>
         {render_case_progress(progress)}
@@ -520,15 +892,15 @@ def render_intake_page(case_id: str, params: dict[str, list[str]]) -> str:
         {alert(_single(params, 'error'), 'error')}
         <section class="panel">
           <h1>Intake & evidence</h1>
-          <div class="button-row">
-            {post_button(case_id, "build_working_memo", "Build working memo")}
-            {post_button(case_id, "scan_documents", "Scan documents")}
-            {post_button(case_id, "link_translations", "Auto-link translations")}
-            <a class="action-link" href="/translations?case={quote(case_id)}">Review translation links</a>
-          </div>
+          {'' if task_type in RFE_TASK_TYPES else '<div class="button-row">'}
+          {'' if task_type in RFE_TASK_TYPES else post_button(case_id, "build_working_memo", "Build working memo")}
+          {'' if task_type in RFE_TASK_TYPES else post_button(case_id, "scan_documents", "Scan documents")}
+          {'' if task_type in RFE_TASK_TYPES else post_button(case_id, "link_translations", "Auto-link translations")}
+          {'' if task_type in RFE_TASK_TYPES else f'<a class="action-link" href="/translations?case={quote(case_id)}">Review translation links</a>'}
+          {'' if task_type in RFE_TASK_TYPES else '</div>'}
+          {_render_case_font_settings_form(case_id, action="save_intake_font_settings", compact=True)}
         </section>
-        {render_intake_panel(case_id, task_type)}
-        {render_rfe_panel(case_id) if task_type == 'eb1a_rfe_response' else ''}
+        {render_rfe_panel(case_id) if task_type in RFE_TASK_TYPES else render_intake_panel(case_id, task_type)}
         <section class="panel"><h2>Evidence status</h2><pre>{escape(status)}</pre></section>
         """,
     )
@@ -595,11 +967,172 @@ def render_llm_page(case_id: str, params: dict[str, list[str]]) -> str:
     )
 
 
+def _render_bundle_display_title_form(case_id: str, *, disabled: bool = False) -> str:
+    review = bundle_display_title_review(case_id) if not disabled else []
+    if disabled or not review:
+        return (
+            '<section class="panel"><h2>Review display names</h2>'
+            '<p class="muted">Refresh indexes to review and edit exhibit, episode, and document names before preparing the bundle.</p>'
+            '</section>'
+        )
+    episode_index = 0
+    exhibit_blocks = []
+    for exhibit in review:
+        exhibit_number = str(exhibit.get("exhibit_number", ""))
+        episode_blocks = []
+        for episode in exhibit.get("episodes", []):
+            raw_title = str(episode.get("raw_title", ""))
+            display_title = str(episode.get("display_title", ""))
+            document_rows = []
+            for document in episode.get("documents", []):
+                document_id = str(document.get("document_id", ""))
+                translation_ids = [
+                    str(value) for value in document.get("translation_ids", []) if str(value)
+                ]
+                translation_note = (
+                    f' <small class="muted">translation(s): {escape(", ".join(translation_ids))}</small>'
+                    if translation_ids
+                    else ""
+                )
+                document_rows.append(
+                    '<label class="title-review-document">'
+                    f'<code>{escape(document_id)}</code>'
+                    f'<input name="document_title_{escape(document_id, quote=True)}" '
+                    f'value="{escape(str(document.get("display_title", "")), quote=True)}">'
+                    f'{translation_note}'
+                    f'<small class="muted">{escape(str(document.get("file_path", "")))}</small>'
+                    '</label>'
+                )
+            if raw_title:
+                episode_index += 1
+                episode_title_control = (
+                    '<label class="title-review-field">'
+                    '<span>Episode title</span>'
+                    f'<input type="hidden" name="episode_raw_{episode_index}" value="{escape(raw_title, quote=True)}">'
+                    f'<input name="episode_title_{episode_index}" value="{escape(display_title, quote=True)}">'
+                    f'<small class="muted">Raw folder-derived title: {escape(raw_title)}</small>'
+                    '</label>'
+                )
+            else:
+                episode_title_control = '<p class="muted small">Direct exhibit documents; no episode separator title.</p>'
+            episode_blocks.append(
+                '<div class="title-review-episode">'
+                f'{episode_title_control}'
+                '<div class="title-review-documents">'
+                + "".join(document_rows)
+                + '</div></div>'
+            )
+        exhibit_blocks.append(
+            '<details class="title-review-exhibit" open>'
+            f'<summary><strong>Exhibit {escape(exhibit_number)}</strong></summary>'
+            '<label class="title-review-field">'
+            '<span>Exhibit title</span>'
+            f'<input name="exhibit_title_{escape(exhibit_number, quote=True)}" '
+            f'value="{escape(str(exhibit.get("display_title", "")), quote=True)}">'
+            '</label>'
+            + "".join(episode_blocks)
+            + '</details>'
+        )
+    return (
+        '<section class="panel">'
+        '<h2>Review display names before bundle</h2>'
+        '<p class="muted">Edit final display titles without renaming folders. Episode overrides are saved in '
+        '<code>case_config.yaml</code>; exhibit and document titles are saved in the indexes. '
+        'After saving, prepare the bundle again so separators are regenerated.</p>'
+        '<form method="post" class="title-review-form">'
+        f'<input type="hidden" name="case" value="{escape(case_id)}">'
+        '<input type="hidden" name="action" value="save_bundle_display_titles">'
+        + "".join(exhibit_blocks)
+        + '<button class="secondary">Save display names</button>'
+        '</form></section>'
+    )
+
+
 def render_layout_page(case_id: str, params: dict[str, list[str]]) -> str:
     validate_case_id(case_id)
     stage = _safe_llm_stage(case_id)
     progress = _safe_progress(case_id)
     layout_percent = _stage_percent(progress, {"exhibits", "bundle"})
+    index_status = inspect_layout_index_status(case_id)
+    index_ready = index_status.ready_for_separators
+    catalog = bundle_catalog(case_id) if index_ready else []
+    selection = load_bundle_selection(case_id) if index_ready else None
+    preparation = inspect_bundle_preparation(case_id) if index_ready else None
+    if not index_status.unique_used_documents:
+        index_notice = (
+            '<div class="alert error"><strong>No validated evidence selection found.</strong> '
+            "Complete Stage 2 outputs before building the evidence index.</div>"
+        )
+    elif index_status.refresh_required:
+        details = []
+        if index_status.stale_document_ids:
+            details.append(f"{len(index_status.stale_document_ids)} stale document reference(s)")
+        if index_status.assignment_conflicts:
+            details.append(f"{len(index_status.assignment_conflicts)} assignment conflict(s)")
+        if index_status.indexed_sidecars:
+            details.append(f"{len(index_status.indexed_sidecars)} auxiliary file(s) still indexed")
+        detail_text = "; ".join(details) or "Exhibit numbers have not been assigned yet"
+        index_notice = (
+            '<div class="alert error"><strong>Index refresh required.</strong> '
+            f"{escape(detail_text)}. Click <strong>Refresh indexes</strong> before generating separators.</div>"
+        )
+    else:
+        index_notice = (
+            '<div class="alert ok"><strong>Evidence indexes ready.</strong> '
+            f"{index_status.assigned_used_documents} used document(s) assigned to "
+            f"{index_status.exhibit_count} exhibit(s).</div>"
+        )
+    unsupported_notice = (
+        '<div class="alert ok"><strong>Bundle warning.</strong> '
+        "Unsupported or missing source files will be skipped unless replaced/converted.<ul>"
+        + "".join(f"<li>{escape(item)}</li>" for item in index_status.unsupported_documents)
+        + "</ul></div>"
+        if index_status.unsupported_documents
+        else ""
+    )
+    selected_exhibits = set(selection.exhibit_numbers) if selection else set()
+    selected_documents = set(selection.document_ids) if selection else set()
+    exhibit_rows = []
+    for exhibit in catalog:
+        exhibit_number = str(exhibit["exhibit_number"])
+        documents = exhibit["documents"]
+        document_rows = "".join(
+            '<label class="bundle-document">'
+            f'<input type="checkbox" name="select_document_{escape(str(document.get("document_id", "")))}" '
+            f'data-exhibit="{escape(exhibit_number)}"'
+            f'{" checked" if str(document.get("document_id", "")) in selected_documents else ""}>'
+            f'<code>{escape(str(document.get("document_id", "")))}</code> '
+            f'<span>{escape(str(document.get("display_title", "") or document.get("original_file_name", "")))}</span>'
+            '</label>'
+            for document in documents
+        )
+        exhibit_rows.append(
+            f'<details class="bundle-exhibit" open><summary><label>'
+            f'<input type="checkbox" name="select_exhibit_{escape(exhibit_number)}" '
+            f'data-exhibit-toggle="{escape(exhibit_number)}"'
+            f'{" checked" if exhibit_number in selected_exhibits else ""}>'
+            f'<strong>Exhibit {escape(exhibit_number)} — {escape(str(exhibit["display_title"]))}</strong> '
+            f'<span class="muted">({len(documents)} documents)</span></label></summary>'
+            f'<div class="bundle-documents">{document_rows}</div></details>'
+        )
+    selector = (
+        '<form method="post" class="bundle-selection" data-bundle-selection>'
+        f'<input type="hidden" name="case" value="{escape(case_id)}">'
+        '<input type="hidden" name="action" value="prepare_selected_bundle">'
+        '<div class="button-row"><button type="button" class="secondary" data-select-all>Select all</button>'
+        '<button type="button" class="secondary" data-clear-all>Clear all</button></div>'
+        + "".join(exhibit_rows)
+        + f'<button{("" if index_ready else " disabled")}>Prepare selected bundle</button></form>'
+    ) if catalog else '<p class="muted">Refresh indexes to load the exhibit list.</p>'
+    preparation_ready = bool(preparation and preparation.ready_to_build)
+    preparation_text = preparation.reason if preparation else "Refresh indexes first."
+    case_root = CASE_ROOT / case_id
+    final_filing_pdf = case_root / "bundle" / "final" / "final_filing.pdf"
+    final_filing_ready = final_filing_pdf.exists() and final_filing_pdf.is_file()
+    phase_one_class = "done" if index_ready else "current"
+    phase_two_class = "done" if preparation_ready else ("current" if index_ready else "locked")
+    phase_three_class = "done" if final_filing_ready else ("current" if preparation_ready else "locked")
+    phase_four_class = "done" if final_filing_ready else ("current" if preparation_ready else "locked")
     return page(
         f"Layout - {case_id}",
         f"""
@@ -610,15 +1143,396 @@ def render_layout_page(case_id: str, params: dict[str, list[str]]) -> str:
           <div class="progress-heading"><div><h1>Layout & evidence bundle</h1><p class="muted">LLM drafting: {stage.percent}% complete</p></div><strong>{layout_percent}%</strong></div>
           <div class="progress-bar"><span style="width:{layout_percent}%"></span></div>
           {'<p class="alert error">LLM drafting is not complete. A dry run is allowed, but final assembly should wait.</p>' if not stage.complete else ''}
-          <div class="button-row">
-            {post_button(case_id, "build_index", "Build exhibit index")}
-            {post_button(case_id, "separators", "Generate separators")}
-            {post_button(case_id, "separator_pdfs", "Render separator PDFs")}
-            {post_button(case_id, "bundle_dry_run", "Bundle dry-run")}
-            {post_button(case_id, "bundle_build", "Build final bundle")}
-          </div>
+          {index_notice}
+          {unsupported_notice}
+          <p class="muted small">Validated evidence references: {index_status.used_document_references}; unique documents: {index_status.unique_used_documents}; assigned: {index_status.assigned_used_documents}; exhibits: {index_status.exhibit_count}.</p>
+          {_render_case_font_settings_form(case_id, action="save_layout_font_settings", compact=True)}
         </section>
+        <section class="bundle-pipeline">
+          <div class="pipeline-phase {phase_one_class}"><span class="phase-number">1</span><h2>Refresh indexes</h2><p>Rescan evidence from Stage 2 outputs, or after manual memo edits sync the technical indexes from the memo INDEX section.</p><div class="button-row">{post_button(case_id, "refresh_layout_indexes", "Refresh indexes")}{post_button(case_id, "sync_layout_indexes_from_memo", "Sync indexes from memo")}</div></div>
+          <div class="pipeline-arrow" aria-hidden="true">→</div>
+          <div class="pipeline-phase {phase_two_class}"><span class="phase-number">2</span><h2>Select & prepare</h2><p>Choose all or only the exhibits and documents you need. Separator generation, PDF rendering, and validation run together.</p><p class="muted small">{escape(preparation_text)}</p></div>
+          <div class="pipeline-arrow" aria-hidden="true">→</div>
+          <div class="pipeline-phase {phase_three_class}"><span class="phase-number">3</span><h2>Build PDF</h2><p>Assemble the prepared selection into one evidence bundle.</p>{post_button(case_id, "bundle_build", "Build selected PDF", disabled=not preparation_ready)}</div>
+          <div class="pipeline-arrow" aria-hidden="true">→</div>
+          <div class="pipeline-phase {phase_four_class}"><span class="phase-number">4</span><h2>Final filing</h2><p>After manual memo edits, replace PAGE placeholders using document separator pages and merge the memo with the evidence bundle.</p>{post_button(case_id, "final_filing_build", "Build final filing PDF", disabled=not preparation_ready)}</div>
+        </section>
+        {_render_bundle_display_title_form(case_id, disabled=not index_ready)}
+        <section class="panel"><h2>Exhibits and documents</h2><p class="muted">Review the contents, select entire exhibits or individual documents, then prepare the selection.</p>{selector}</section>
         <section class="panel"><h2>Bundle status</h2><pre>{escape(_safe_text(lambda: build_status_report(case_id)))}</pre></section>
+        """,
+    )
+
+
+def render_document_layout_page(case_id: str, params: dict[str, list[str]]) -> str:
+    validate_case_id(case_id)
+    status = load_layout_status(case_id)
+    if _safe_case_task_type(case_id) != "document_layout":
+        return page(
+            "Wrong case type",
+            f"<section class='panel'><h1>Wrong case type</h1><p>{escape(case_id)} is not a document-layout case.</p></section>",
+        )
+
+    selected = load_layout_selection(case_id)
+    selected_exhibits = set(selected.get("selected_exhibits", []))
+    selected_documents = set(selected.get("selected_documents", []))
+    if not selected_exhibits and not selected_documents:
+        selected_exhibits = {
+            str(exhibit.get("number", ""))
+            for exhibit in status.structure.get("exhibits", [])
+        }
+        selected_documents = {
+            str(document.get("id", ""))
+            for exhibit in status.structure.get("exhibits", [])
+            for episode in exhibit.get("episodes", [])
+            for document in episode.get("documents", [])
+        }
+
+    stage_one_class = "done" if status.stage1_complete else "current"
+    stage_two_class = "done" if status.stage2_complete else ("current" if status.stage2_available else "locked")
+    stage_three_class = "current" if status.stage3_available else "locked"
+    if status.has_final:
+        stage_three_class = "done"
+
+    settings = status.settings
+    available_fonts = list_installed_fonts()
+    font_family = settings.get("font_family", "Times New Roman") or "Times New Roman"
+    if font_family not in available_fonts:
+        available_fonts = [font_family, *available_fonts]
+    font_options = "".join(
+        f'<option value="{escape(name, quote=True)}"{" selected" if name == font_family else ""}>{escape(name)}</option>'
+        for name in available_fonts
+    )
+    inventory = status.inventory
+    directory_catalog = build_original_directory_catalog(case_id)
+    directories_by_path = {
+        str(item.get("directory", "")): item for item in directory_catalog
+    }
+    inventory_html = (
+        f"<p class='muted small'>Indexed files: {len(inventory.get('original_files', []))} original(s), {len(inventory.get('translation_files', []))} translation(s).</p>"
+        "<details><summary>View indexed files</summary>"
+        f"<div class='inventory-grid'>{_render_inventory_group('Originals', inventory.get('original_files', []))}{_render_inventory_group('Translations', inventory.get('translation_files', []))}</div>"
+        "</details>"
+    )
+
+    structure_rows: list[str] = []
+    for exhibit in status.structure.get("exhibits", []):
+        episode_rows: list[str] = []
+        for episode in exhibit.get("episodes", []):
+            document_rows = "".join(
+                f"""
+                <div class="layout-document-row">
+                  <code>{escape(str(document.get('number', '')))}</code>
+                  <input name="document_title_{escape(str(document.get('id', '')))}" value="{escape(str(document.get('title', '')), quote=True)}">
+                </div>
+                """
+                for document in episode.get("documents", [])
+            )
+            episode_heading = (
+                ""
+                if episode.get("kind") == "direct"
+                else f"""
+                <div class="layout-episode-head">
+                  <code>{escape(str(episode.get('number', '')))}</code>
+                  <input name="episode_title_{escape(str(episode.get('id', '')))}" value="{escape(str(episode.get('title', '')), quote=True)}">
+                </div>
+                """
+            )
+            episode_rows.append(
+                f"""
+                <section class="layout-episode-card {'direct' if episode.get('kind') == 'direct' else ''}">
+                  {episode_heading or '<p class="muted small">Documents directly under this Exhibit</p>'}
+                  {document_rows}
+                </section>
+                """
+            )
+        structure_rows.append(
+            f"""
+            <section class="layout-exhibit-card">
+              <div class="layout-exhibit-head">
+                <input class="layout-exhibit-number" name="exhibit_number_{escape(str(exhibit.get('id', '')))}" value="{escape(str(exhibit.get('number', '')), quote=True)}">
+                <input name="exhibit_title_{escape(str(exhibit.get('id', '')))}" value="{escape(str(exhibit.get('title', '')), quote=True)}">
+              </div>
+              {''.join(episode_rows)}
+            </section>
+            """
+        )
+
+    mapping_rows: list[str] = []
+    folder_scope_rows: list[str] = []
+    for exhibit in status.structure.get("exhibits", []):
+        episode_rows = []
+        exhibit_folder = str(exhibit.get("source_folder", ""))
+        exhibit_options = _render_directory_options(
+            directory_catalog,
+            exhibit_folder,
+        )
+        for episode in exhibit.get("episodes", []):
+            document_cards = []
+            episode_folder = (
+                exhibit_folder
+                if episode.get("kind") == "direct"
+                else str(episode.get("source_folder", ""))
+            )
+            if episode.get("kind") == "direct":
+                episode_scope = "<p class='muted small'>Documents below use the Exhibit folder directly.</p>"
+            else:
+                episode_options = _render_directory_options(
+                    [
+                        item
+                        for item in directory_catalog
+                        if exhibit_folder
+                        and _is_same_or_nested_directory(
+                            str(item.get("directory", "")),
+                            exhibit_folder,
+                        )
+                        and str(item.get("directory", "")) != exhibit_folder
+                    ],
+                    episode_folder,
+                    include_blank=not exhibit_folder,
+                    blank_label="Choose episode folder after Exhibit folder is selected",
+                )
+                episode_scope = (
+                    f"""
+                    <label><strong>Episode folder</strong>
+                      <select name="episode_folder_{escape(str(episode.get('id', '')))}">
+                        {episode_options}
+                      </select>
+                    </label>
+                    """
+                    if exhibit_folder
+                    else "<p class='muted small'>Select the Exhibit folder first, then pick the episode folder.</p>"
+                )
+            candidate_files = _files_for_directory(directory_catalog, episode_folder)
+            for document in episode.get("documents", []):
+                document_id = str(document.get("id", ""))
+                mapping = status.mappings.get(document_id, {})
+                original_paths = list(mapping.get("original_paths", []))
+                translation_paths = list(mapping.get("translation_paths", []))
+                original_list = _render_mapping_list(case_id, document_id, "original", original_paths)
+                translation_list = _render_mapping_list(case_id, document_id, "translation", translation_paths)
+                choices_html = _render_document_choices(
+                    case_id,
+                    document_id,
+                    candidate_files,
+                    original_paths,
+                    bool(episode_folder),
+                )
+                document_cards.append(
+                    f"""
+                    <article class="layout-mapping-card">
+                      <div class="layout-mapping-head">
+                        <div>
+                          <strong>{escape(str(document.get('number', '')))} {escape(str(document.get('title', '')))}</strong>
+                          <p class="muted small">{len(original_paths)} original file(s), {len(translation_paths)} translation file(s)</p>
+                        </div>
+                      </div>
+                      <div class="layout-mapping-columns">
+                        <section>
+                          <h4>Original files</h4>
+                          {original_list}
+                          {choices_html}
+                        </section>
+                        <section>
+                          <h4>Translation files</h4>
+                          {translation_list}
+                          <form method="post">
+                            <input type="hidden" name="case" value="{escape(case_id)}">
+                            <input type="hidden" name="action" value="layout_add_mapping">
+                            <input type="hidden" name="document_id" value="{escape(document_id)}">
+                            <input type="hidden" name="mapping_kind" value="translation">
+                            <button class="secondary">Add translation file</button>
+                          </form>
+                        </section>
+                      </div>
+                    </article>
+                    """
+                )
+            episode_title = (
+                f"{episode.get('number', '')} {episode.get('title', '')}".strip()
+                if episode.get("kind") != "direct"
+                else "Documents directly under this Exhibit"
+            )
+            episode_rows.append(
+                f"""
+                <details class="layout-mapping-episode" open>
+                  <summary>{escape(str(episode_title))}</summary>
+                  <div class="layout-scope-box">{episode_scope}</div>
+                  {''.join(document_cards)}
+                </details>
+                """
+            )
+        folder_scope_rows.append(
+            f"""
+            <section class="layout-mapping-exhibit">
+              <h3>Exhibit {escape(str(exhibit.get('number', '')))} {escape(str(exhibit.get('title', '')))}</h3>
+              <label><strong>Exhibit folder</strong>
+                <select name="exhibit_folder_{escape(str(exhibit.get('id', '')))}">
+                  {exhibit_options}
+                </select>
+              </label>
+              <p class="muted small">Choose the folder in the originals directory that matches this Exhibit. If the Exhibit contains episodes, the episode folders are then narrowed to this folder.</p>
+              {''.join(
+                  f"<p class='muted small'><code>{escape(str(episode.get('number', '')))}</code> {escape(str(episode.get('title', '') or 'Direct exhibit documents'))}</p>"
+                  for episode in exhibit.get('episodes', [])
+                  if episode.get('kind') != 'direct'
+              )}
+            </section>
+            """
+        )
+        mapping_rows.append(
+            f"""
+            <section class="layout-mapping-exhibit">
+              <h3>Exhibit {escape(str(exhibit.get('number', '')))} {escape(str(exhibit.get('title', '')))}</h3>
+              {''.join(episode_rows)}
+            </section>
+            """
+        )
+
+    build_exhibits: list[str] = []
+    for exhibit in status.structure.get("exhibits", []):
+        exhibit_number = str(exhibit.get("number", ""))
+        document_rows = []
+        for episode in exhibit.get("episodes", []):
+            for document in episode.get("documents", []):
+                document_id = str(document.get("id", ""))
+                mapping = status.mappings.get(document_id, {})
+                has_original = bool(mapping.get("original_paths"))
+                document_rows.append(
+                    f"""
+                    <label class="bundle-document {'missing' if not has_original else ''}">
+                      <input type="checkbox" name="select_layout_document_{escape(document_id)}" data-exhibit="{escape(exhibit_number)}"{' checked' if document_id in selected_documents else ''}>
+                      <span><code>{escape(str(document.get('number', '')))}</code> {escape(str(document.get('title', '')))}</span>
+                      <small>{'mapped' if has_original else 'needs original file'}</small>
+                    </label>
+                    """
+                )
+        build_exhibits.append(
+            f"""
+            <details class="bundle-exhibit" open>
+              <summary>
+                <label>
+                  <input type="checkbox" name="select_layout_exhibit_{escape(exhibit_number)}" data-exhibit-toggle="{escape(exhibit_number)}"{' checked' if exhibit_number in selected_exhibits else ''}>
+                  <strong>Exhibit {escape(exhibit_number)} {escape(str(exhibit.get('title', '')))}</strong>
+                </label>
+              </summary>
+              <div class="bundle-documents">{''.join(document_rows)}</div>
+            </details>
+            """
+        )
+
+    preview_link = (
+        f'<a class="action-link" href="/layout-artifact?case={quote(case_id)}&kind=preview" target="_blank">Open separator preview PDF</a>'
+        if status.has_preview
+        else ""
+    )
+    final_link = (
+        f'<a class="action-link" href="/layout-artifact?case={quote(case_id)}&kind=final" target="_blank">Open final PDF</a>'
+        if status.has_final
+        else ""
+    )
+    unmapped_notice = (
+        '<div class="alert error"><strong>Some documents still need originals.</strong><ul>'
+        + "".join(
+            f"<li><code>{escape(item['document_number'])}</code> {escape(item['document_title'])}</li>"
+            for item in status.unmapped_documents[:40]
+        )
+        + ("<li>…</li>" if len(status.unmapped_documents) > 40 else "")
+        + "</ul></div>"
+        if status.unmapped_documents
+        else '<div class="alert ok"><strong>All logical documents already have at least one original file attached.</strong></div>'
+    )
+
+    return page(
+        f"Document layout - {case_id}",
+        f"""
+        {_stage_nav(case_id, "document-layout")}
+        {alert(_single(params, 'message'), 'ok')}
+        {alert(_single(params, 'error'), 'error')}
+        <section class="panel">
+          <div class="progress-heading"><div><h1>Standalone document layout</h1><p class="muted">3-stage isolated workflow for parsing an exhibit list, attaching real files, and assembling a PDF.</p></div><strong>{_safe_progress(case_id).completion_percent}%</strong></div>
+          <div class="progress-bar"><span style="width:{_safe_progress(case_id).completion_percent}%"></span></div>
+          <div class="layout-summary-grid">
+            <div><strong>{status.exhibit_count}</strong><span>Exhibits</span></div>
+            <div><strong>{status.episode_count}</strong><span>Episodes</span></div>
+            <div><strong>{status.document_count}</strong><span>Logical documents</span></div>
+            <div><strong>{status.fully_mapped_document_count}/{status.document_count}</strong><span>Mapped to originals</span></div>
+          </div>
+          {preview_link}
+          {final_link}
+        </section>
+        <section class="bundle-pipeline">
+          <div class="pipeline-phase {stage_one_class}"><span class="phase-number">1</span><h2>Folders and parsing</h2><p>Choose source folders and the exhibit-list document, then scan files and parse the structure.</p></div>
+          <div class="pipeline-arrow" aria-hidden="true">→</div>
+          <div class="pipeline-phase {stage_two_class}"><span class="phase-number">2</span><h2>Attach files</h2><p>For every logical document, attach one or more original files and optional translations.</p></div>
+          <div class="pipeline-arrow" aria-hidden="true">→</div>
+          <div class="pipeline-phase {stage_three_class}"><span class="phase-number">3</span><h2>Preview and build</h2><p>Open the separator-only preview or assemble a selected final PDF bundle.</p></div>
+        </section>
+        <section class="panel">
+          <h2>Stage 1 · Choose folders and parse</h2>
+          <div class="layout-picker-grid">
+            <div class="layout-picker-row"><div><strong>Originals folder</strong><div class="path-box">{escape(settings.get('originals_dir', '') or 'Not selected yet')}</div></div>{post_button(case_id, "layout_pick_originals_dir", "Choose folder")}</div>
+            <div class="layout-picker-row"><div><strong>Translations folder</strong><div class="path-box">{escape(settings.get('translations_dir', '') or 'Optional')}</div></div>{post_button(case_id, "layout_pick_translations_dir", "Choose folder")}</div>
+            <div class="layout-picker-row"><div><strong>Exhibit list document</strong><div class="path-box">{escape(settings.get('list_document_path', '') or 'Not selected yet')}</div></div>{post_button(case_id, "layout_pick_list_document", "Choose file")}</div>
+            <div class="layout-picker-row"><div><strong>Layout font</strong><div class="path-box">{escape(font_family)}</div></div><div class="muted small">Used for generated separator pages and text-based conversions.</div></div>
+          </div>
+          <form method="post" class="stack">
+            <input type="hidden" name="case" value="{escape(case_id)}">
+            <input type="hidden" name="action" value="layout_parse_sources">
+            <input name="originals_dir" value="{escape(settings.get('originals_dir', ''), quote=True)}" placeholder="Folder with original documents">
+            <input name="translations_dir" value="{escape(settings.get('translations_dir', ''), quote=True)}" placeholder="Optional folder with translations">
+            <input name="list_document_path" value="{escape(settings.get('list_document_path', ''), quote=True)}" placeholder="DOCX / PDF / TXT with the exhibit list">
+            <label><strong>Font for generated pages</strong><select name="font_family">{font_options}</select></label>
+            <button>Scan folders and parse list</button>
+          </form>
+          {inventory_html}
+        </section>
+        <section class="panel {'panel-disabled' if not status.stage1_complete else ''}">
+          <h2>Stage 1 output · Refine numbering and titles</h2>
+          {'' if status.stage1_complete else '<p class="muted">This unlocks after Stage 1 parsing succeeds.</p>'}
+          {'' if status.stage1_complete else ''}
+          {(
+            '<form method="post" class="stack"><input type="hidden" name="case" value="'
+            + escape(case_id)
+            + '"><input type="hidden" name="action" value="layout_save_structure">'
+            + ''.join(structure_rows)
+            + '<div class="button-row">'
+            + '<button>Save titles and numbering</button>'
+            + '</div></form>'
+          ) if status.stage1_complete else ''}
+          {(
+            '<div class="button-row">'
+            + post_button(case_id, "layout_preview", "Build separator preview PDF")
+            + (preview_link or '')
+            + '</div>'
+          ) if status.stage1_complete else ''}
+        </section>
+        <section class="panel {'panel-disabled' if not status.stage2_available else ''}">
+          <h2>Stage 2 · Attach one or more files to each logical document</h2>
+          {'' if status.stage2_available else '<p class="muted">This unlocks after Stage 1 parsing succeeds.</p>'}
+          {unmapped_notice if status.stage2_available else ''}
+          {(
+            '<form method="post" class="stack"><input type="hidden" name="case" value="'
+            + escape(case_id)
+            + '"><input type="hidden" name="action" value="layout_save_folder_scopes">'
+            + ''.join(folder_scope_rows)
+            + '<div class="button-row"><button>Save exhibit and episode folders</button></div></form>'
+          ) if status.stage2_available else ''}
+          {''.join(mapping_rows) if status.stage2_available else ''}
+        </section>
+        <section class="panel {'panel-disabled' if not status.stage3_available else ''}">
+          <h2>Stage 3 · Select exhibits/documents and build PDF</h2>
+          {'' if status.stage3_available else '<p class="muted">Attach at least one original file before this stage becomes active.</p>'}
+          {(
+            '<form method="post" class="bundle-selection" data-bundle-selection>'
+            + f'<input type="hidden" name="case" value="{escape(case_id)}">'
+            + '<input type="hidden" name="action" value="layout_build">'
+            + '<div class="button-row"><button type="button" class="secondary" data-select-all>Select all</button><button type="button" class="secondary" data-clear-all>Clear all</button></div>'
+            + ''.join(build_exhibits)
+            + '<div class="button-row"><button>Build selected final PDF</button></div></form>'
+          ) if status.stage3_available else ''}
+          {preview_link if status.stage3_available else ''}
+        </section>
         """,
     )
 
@@ -632,6 +1546,15 @@ def _render_llm_unit(case_id: str, unit: LLMUnit, selected_key: str = "") -> str
         "pending": "Pending",
     }
     episode = f"<small>Episode: {escape(unit.episode_folder or unit.episode_id)}</small>" if unit.episode_id else ""
+    document_list = "".join(
+        f"<li><code>{escape(document_id)}</code> — {escape(title)}</li>"
+        for document_id, title in unit.selected_documents
+    )
+    documents = (
+        f"<details><summary>Documents for prompt ({len(unit.selected_documents)})</summary><ul>{document_list}</ul></details>"
+        if unit.selected_documents
+        else "<small>Documents for prompt: none indexed</small>"
+    )
     prompt_links = "".join(
         f'<a href="/llm?case={quote(case_id)}&step={quote(unit.step_id)}&episode={quote(unit.episode_id)}&prompt={quote(prompt_id)}">{escape(prompt_id)}</a>'
         for prompt_id in unit.prompt_ids
@@ -647,6 +1570,12 @@ def _render_llm_unit(case_id: str, unit: LLMUnit, selected_key: str = "") -> str
       <div class="llm-unit-title"><a class="unit-select" href="/llm?case={quote(case_id)}&step={quote(unit.step_id)}&episode={quote(unit.episode_id)}"><strong>{escape(unit.title)}</strong></a><span>{escape(status_labels.get(unit.status, unit.status))}</span></div>
       <small>{escape(unit.criterion_label)}</small>{episode}
       <code>{escape(unit.key)}</code>
+      {documents}
+      <form method="post" class="document-refresh-form">
+        <input type="hidden" name="action" value="refresh_unit_documents"><input type="hidden" name="case" value="{escape(case_id)}">
+        <input type="hidden" name="step" value="{escape(unit.step_id)}"><input type="hidden" name="episode_id" value="{escape(unit.episode_id)}">
+        <button type="submit" class="secondary small-button">Refresh documents</button>
+      </form>
       <div class="prompt-id-list">{prompt_links}</div>
       {retry}
     </article>
@@ -691,7 +1620,19 @@ def _render_llm_current(
     if prompt_text:
         prompt_section = f"""
         <section class="panel">
-          <div class="progress-heading"><div><h2>Current prompt</h2><p class="muted"><code>{escape(selected_prompt)}</code></p></div><button type="button" class="secondary" data-copy-target="current-prompt">Copy prompt</button></div>
+          <div class="progress-heading"><div><h2>Current prompt</h2><p class="muted"><code>{escape(selected_prompt)}</code></p></div>
+            <div class="button-row">
+              <form method="post" data-confirm-submit="Refresh this generated prompt from the current documents and instructions?">
+                <input type="hidden" name="action" value="build_prompt"><input type="hidden" name="case" value="{escape(case_id)}">
+                <input type="hidden" name="step" value="{escape(unit.step_id)}"><input type="hidden" name="episode_id" value="{escape(unit.episode_id)}">
+                <input type="hidden" name="episode_folder" value="{escape(unit.episode_folder)}"><input type="hidden" name="force" value="on">
+                <input type="hidden" name="redo_step" value="{escape(unit.step_id)}"><input type="hidden" name="redo_episode" value="{escape(unit.episode_id)}">
+                <input type="hidden" name="custom_instructions" value="{escape(custom_instructions, quote=True)}">
+                <button type="submit" class="secondary">Refresh prompt</button>
+              </form>
+              <button type="button" class="secondary" data-copy-target="current-prompt">Copy prompt</button>
+            </div>
+          </div>
           <textarea id="current-prompt" readonly rows="18">{escape(prompt_text)}</textarea>
         </section>
         """
@@ -782,6 +1723,14 @@ def _render_llm_current(
       {episode_text}
       <p>{escape(unit.objective)}</p>
       <p class="muted">You may work on any drafting unit. Importing a valid response inserts its petition text into Word and updates progress.</p>
+      <details open><summary><strong>Documents for this prompt ({len(unit.selected_documents)})</strong></summary>
+        {('<ul>' + ''.join(f'<li><code>{escape(document_id)}</code> — {escape(title)}</li>' for document_id, title in unit.selected_documents) + '</ul>') if unit.selected_documents else '<p class="muted small">No indexed documents are currently assigned to this prompt.</p>'}
+        <form method="post" class="document-refresh-form">
+          <input type="hidden" name="action" value="refresh_unit_documents"><input type="hidden" name="case" value="{escape(case_id)}">
+          <input type="hidden" name="step" value="{escape(unit.step_id)}"><input type="hidden" name="episode_id" value="{escape(unit.episode_id)}">
+          <button type="submit" class="secondary small-button">Refresh document list</button>
+        </form>
+      </details>
     </section>
     {warning_html}{action_section}{custom_section}{prompt_section}{output_section}
     """
@@ -834,7 +1783,27 @@ def _find_llm_unit(stage: LLMStage, step_id: str, episode_id: str = "") -> LLMUn
     )
 
 
+def _task_type_label(task_type: str) -> str:
+    return {
+        "eb1a_petition": "EB1A petition",
+        "o1b_petition": "O-1B petition",
+        "eb2niw_petition": "EB-2 NIW petition",
+        "eb1a_rfe_response": "EB1A RFE response",
+        "eb2niw_rfe_response": "EB-2 NIW RFE response",
+        "document_layout": "Document layout",
+    }.get(task_type, task_type)
+
+
 def _stage_nav(case_id: str, active: str) -> str:
+    if _safe_case_task_type(case_id) == "document_layout":
+        links = (
+            ("overview", "Overview", f"/case?case={quote(case_id)}"),
+            ("document-layout", "Document layout workflow", f"/document-layout?case={quote(case_id)}"),
+        )
+        return '<nav class="stage-nav">' + "".join(
+            f'<a class="{"active" if key == active else ""}" href="{href}">{escape(label)}</a>'
+            for key, label, href in links
+        ) + "</nav>"
     links = (
         ("overview", "Overview", f"/case?case={quote(case_id)}"),
         ("intake", "1. Intake & evidence", f"/intake?case={quote(case_id)}"),
@@ -855,6 +1824,111 @@ def _stage_card(number: str, title: str, percent: int, detail: str, href: str, a
       <a class="action-link" href="{href}">{escape(action)}</a>
     </section>
     """
+
+
+def _render_inventory_group(label: str, items: list[dict[str, str]]) -> str:
+    rows = "".join(
+        f"<li><code>{escape(item.get('relative_path', ''))}</code></li>" for item in items[:120]
+    )
+    more = "<li>…</li>" if len(items) > 120 else ""
+    return f"<section><h3>{escape(label)}</h3><ul class='layout-inventory-list'>{rows}{more}</ul></section>"
+
+
+def _render_mapping_list(case_id: str, document_id: str, kind: str, paths: list[str]) -> str:
+    if not paths:
+        return "<p class='muted small'>No files attached yet.</p>"
+    rows = []
+    for index, path in enumerate(paths):
+        rows.append(
+            f"""
+            <div class="layout-mapping-pill">
+              <code>{escape(Path(path).name)}</code>
+              <form method="post">
+                <input type="hidden" name="case" value="{escape(case_id)}">
+                <input type="hidden" name="action" value="layout_remove_mapping">
+                <input type="hidden" name="document_id" value="{escape(document_id)}">
+                <input type="hidden" name="mapping_kind" value="{escape(kind)}">
+                <input type="hidden" name="mapping_index" value="{index}">
+                <button class="secondary small-button">Remove</button>
+              </form>
+            </div>
+            """
+        )
+    return "".join(rows)
+
+
+def _render_directory_options(
+    directories: list[dict[str, object]],
+    selected: str,
+    *,
+    include_blank: bool = True,
+    blank_label: str = "Choose folder",
+) -> str:
+    options: list[str] = []
+    if include_blank:
+        options.append(
+            f'<option value=""{" selected" if not selected else ""}>{escape(blank_label)}</option>'
+        )
+    for item in directories:
+        directory = str(item.get("directory", ""))
+        depth = int(item.get("depth", 0))
+        prefix = "&nbsp;" * max(depth - 1, 0) * 4
+        label = prefix + escape(str(item.get("label", directory or "[root]")))
+        options.append(
+            f'<option value="{escape(directory, quote=True)}"{" selected" if directory == selected else ""}>{label}</option>'
+        )
+    return "".join(options)
+
+
+def _is_same_or_nested_directory(directory: str, parent: str) -> bool:
+    if not parent:
+        return True
+    return directory == parent or directory.startswith(parent + "/")
+
+
+def _files_for_directory(
+    directories: list[dict[str, Any]], directory: str
+) -> list[dict[str, str]]:
+    for item in directories:
+        if str(item.get("directory", "")) == directory:
+            return [dict(file_entry) for file_entry in item.get("files", [])]
+    return []
+
+
+def _render_document_choices(
+    case_id: str,
+    document_id: str,
+    candidate_files: list[dict[str, str]],
+    selected_paths: list[str],
+    folder_ready: bool,
+) -> str:
+    if not folder_ready:
+        return "<p class='muted small'>Choose the Exhibit/Episode folder first.</p>"
+    if not candidate_files:
+        return "<p class='muted small'>No files were found directly inside the selected folder.</p>"
+    selected_set = {str(Path(path).expanduser().resolve()) for path in selected_paths}
+    choice_rows = []
+    for index, file_entry in enumerate(candidate_files, start=1):
+        absolute_path = str(Path(file_entry.get("path", "")).expanduser().resolve())
+        checked = " checked" if absolute_path in selected_set else ""
+        choice_rows.append(
+            f"""
+            <label class="layout-choice-row">
+              <input type="checkbox" name="original_choice_{index}" value="{escape(absolute_path, quote=True)}"{checked}>
+              <span>{escape(file_entry.get('name', ''))}</span>
+            </label>
+            """
+        )
+    return (
+        '<form method="post" class="stack">'
+        f'<input type="hidden" name="case" value="{escape(case_id)}">'
+        '<input type="hidden" name="action" value="layout_save_document_originals">'
+        f'<input type="hidden" name="document_id" value="{escape(document_id)}">'
+        '<div class="layout-scroll-list">'
+        + "".join(choice_rows)
+        + "</div>"
+        + '<div class="button-row"><button class="secondary">Save selected original files</button></div></form>'
+    )
 
 
 def render_translation_review_page(case_id: str, params: dict[str, list[str]]) -> str:
@@ -1029,6 +2103,7 @@ def page(title: str, body: str) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/png" href="/favicon.ico">
   <title>{escape(title)}</title>
   <style>
     :root {{ --bg:#f6f7fb; --panel:#fff; --ink:#1f2937; --muted:#6b7280; --line:#d8dee9; --brand:#1d4ed8; }}
@@ -1062,6 +2137,9 @@ def page(title: str, body: str) -> str:
     button {{ border:0; border-radius:10px; padding:10px 14px; background:var(--brand); color:#fff; font-weight:600; cursor:pointer; }}
     button:disabled {{ background:#9ca3af; cursor:not-allowed; }}
     button.secondary {{ background:#374151; }}
+    button.small-button {{ padding:6px 9px; font-size:.82rem; }}
+    .document-refresh-form {{ margin-top:8px; }}
+    .document-refresh-form input {{ display:none; }}
     pre {{ white-space:pre-wrap; background:#0f172a; color:#e5e7eb; border-radius:12px; padding:14px; overflow:auto; max-height:420px; }}
     .alert {{ border-radius:12px; padding:12px 14px; margin-bottom:16px; white-space:pre-wrap; }}
     .ok {{ background:#ecfdf5; border:1px solid #a7f3d0; }}
@@ -1135,6 +2213,62 @@ def page(title: str, body: str) -> str:
     .source-actions {{ display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; }}
     .source-actions code {{ max-width:320px; overflow-wrap:anywhere; }}
     .folder-link {{ display:inline-flex; align-items:center; padding:9px 11px; border:1px solid #93c5fd; border-radius:9px; background:#eff6ff; font-size:.88rem; font-weight:600; }}
+    .bundle-pipeline {{ display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr); gap:12px; align-items:stretch; margin-bottom:18px; }}
+    .pipeline-phase {{ position:relative; background:#fff; border:1px solid var(--line); border-radius:16px; padding:20px; }}
+    .pipeline-phase.done {{ border-color:#86efac; background:#f0fdf4; }}
+    .pipeline-phase.current {{ border-color:#93c5fd; background:#eff6ff; }}
+    .pipeline-phase.locked {{ opacity:.62; background:#f3f4f6; }}
+    .pipeline-phase h2 {{ margin:8px 0; font-size:1.1rem; }}
+    .pipeline-phase p {{ font-size:.9rem; }}
+    .phase-number {{ display:grid; place-items:center; width:30px; height:30px; border-radius:50%; background:#dbeafe; color:#1e40af; font-weight:800; }}
+    .pipeline-phase.done .phase-number {{ background:#059669; color:#fff; }}
+    .pipeline-arrow {{ align-self:center; color:var(--muted); font-size:1.8rem; font-weight:800; }}
+    .bundle-selection {{ display:flex; flex-direction:column; gap:12px; }}
+    .bundle-exhibit {{ border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:#f9fafb; }}
+    .bundle-exhibit summary {{ cursor:pointer; }}
+    .bundle-exhibit summary label, .bundle-document {{ display:flex; align-items:flex-start; gap:9px; }}
+    .bundle-exhibit input {{ width:auto; flex:0 0 auto; }}
+    .bundle-documents {{ display:flex; flex-direction:column; gap:7px; margin:10px 0 2px 26px; }}
+    .bundle-document span {{ overflow-wrap:anywhere; }}
+    .bundle-document.missing {{ border:1px dashed #fca5a5; border-radius:10px; padding:8px; background:#fff7f7; }}
+    .bundle-document small {{ color:var(--muted); }}
+    .title-review-form {{ display:flex; flex-direction:column; gap:12px; }}
+    .title-review-exhibit {{ border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:#f9fafb; }}
+    .title-review-exhibit summary {{ cursor:pointer; margin-bottom:10px; }}
+    .title-review-episode {{ border-left:3px solid #dbeafe; padding:10px 0 10px 12px; margin:10px 0; }}
+    .title-review-field {{ display:flex; flex-direction:column; gap:5px; margin:8px 0; }}
+    .title-review-field span {{ font-weight:650; }}
+    .title-review-document {{ display:grid; grid-template-columns:auto minmax(220px,1fr); gap:6px 10px; align-items:center; margin:7px 0; }}
+    .title-review-document small {{ grid-column:2; overflow-wrap:anywhere; }}
+    .title-review-document input {{ width:100%; }}
+    .panel-disabled {{ opacity:.68; }}
+    .layout-summary-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-top:12px; }}
+    .layout-summary-grid div {{ border:1px solid var(--line); border-radius:12px; padding:12px; background:#f9fafb; }}
+    .layout-summary-grid strong {{ display:block; font-size:1.35rem; color:var(--brand); }}
+    .layout-summary-grid span {{ color:var(--muted); font-size:.88rem; }}
+    .layout-picker-grid {{ display:flex; flex-direction:column; gap:12px; margin-bottom:14px; }}
+    .layout-picker-row {{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:end; padding:12px; border:1px solid var(--line); border-radius:12px; background:#f9fafb; }}
+    .layout-picker-row form {{ margin:0; }}
+    .font-settings {{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; gap:12px; align-items:end; margin-top:14px; padding:12px; border:1px solid var(--line); border-radius:12px; background:#f8fafc; }}
+    .font-settings p {{ grid-column:1 / -1; margin:0; }}
+    .font-settings.compact {{ margin-top:16px; }}
+    .layout-exhibit-card {{ border:1px solid var(--line); border-radius:14px; padding:14px; background:#fbfcfd; }}
+    .layout-exhibit-head, .layout-episode-head, .layout-document-row {{ display:grid; grid-template-columns:120px minmax(0,1fr); gap:10px; align-items:center; }}
+    .layout-exhibit-number {{ max-width:120px; }}
+    .layout-episode-card {{ display:flex; flex-direction:column; gap:10px; padding:12px; border:1px solid #e5e7eb; border-radius:12px; background:#fff; }}
+    .layout-document-row code, .layout-exhibit-head code, .layout-episode-head code {{ justify-self:start; }}
+    .layout-mapping-exhibit {{ border:1px solid var(--line); border-radius:14px; padding:14px; background:#fbfcfd; margin-bottom:14px; }}
+    .layout-mapping-episode {{ border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:#fff; margin-bottom:10px; }}
+    .layout-scope-box {{ margin:10px 0 14px; padding:10px 12px; border-radius:10px; background:#f8fafc; border:1px solid #e5e7eb; }}
+    .layout-mapping-card {{ border:1px solid #e5e7eb; border-radius:12px; padding:14px; background:#f9fafb; margin:10px 0; }}
+    .layout-mapping-columns {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }}
+    .layout-mapping-pill {{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; border-radius:10px; background:#fff; border:1px solid #e5e7eb; margin-bottom:8px; }}
+    .layout-scroll-list {{ max-height:220px; overflow:auto; padding:8px; border:1px solid #d1d5db; border-radius:10px; background:#fff; }}
+    .layout-choice-row {{ display:flex; align-items:flex-start; gap:9px; padding:7px 6px; border-bottom:1px solid #f1f5f9; }}
+    .layout-choice-row:last-child {{ border-bottom:0; }}
+    .layout-choice-row input {{ width:auto; min-width:auto; }}
+    .inventory-grid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:12px; }}
+    .layout-inventory-list {{ max-height:260px; overflow:auto; padding-left:18px; }}
     @media (max-width: 850px) {{
       .hero, .columns {{ display:block; }}
       .check-grid {{ grid-template-columns:1fr; }}
@@ -1146,6 +2280,12 @@ def page(title: str, body: str) -> str:
       .review-list {{ max-height:45vh; }}
       .source-row {{ grid-template-columns:1fr; }}
       .source-actions {{ justify-content:flex-start; }}
+      .bundle-pipeline {{ grid-template-columns:1fr; }}
+      .pipeline-arrow {{ transform:rotate(90deg); justify-self:center; }}
+      .layout-picker-row {{ grid-template-columns:1fr; }}
+      .font-settings {{ grid-template-columns:1fr; }}
+      .layout-mapping-columns {{ grid-template-columns:1fr; }}
+      .inventory-grid {{ grid-template-columns:1fr; }}
     }}
   </style>
 </head>
@@ -1203,6 +2343,34 @@ def page(title: str, body: str) -> str:
       }}
     }});
   }});
+  document.querySelectorAll('[data-bundle-selection]').forEach(function(form) {{
+    const all = Array.from(form.querySelectorAll('input[type="checkbox"]'));
+    const documentBoxes = Array.from(form.querySelectorAll('[data-exhibit]'));
+    const exhibitBoxes = Array.from(form.querySelectorAll('[data-exhibit-toggle]'));
+    const syncExhibit = function(exhibit) {{
+      const parent = form.querySelector('[data-exhibit-toggle="' + CSS.escape(exhibit) + '"]');
+      const children = documentBoxes.filter(function(box) {{ return box.dataset.exhibit === exhibit; }});
+      if (!parent || !children.length) return;
+      parent.checked = children.some(function(box) {{ return box.checked; }});
+      parent.indeterminate = parent.checked && !children.every(function(box) {{ return box.checked; }});
+    }};
+    exhibitBoxes.forEach(function(parent) {{
+      parent.addEventListener('change', function() {{
+        documentBoxes.filter(function(box) {{ return box.dataset.exhibit === parent.dataset.exhibitToggle; }})
+          .forEach(function(box) {{ box.checked = parent.checked; }});
+        parent.indeterminate = false;
+      }});
+      syncExhibit(parent.dataset.exhibitToggle || '');
+    }});
+    documentBoxes.forEach(function(box) {{
+      box.addEventListener('change', function() {{ syncExhibit(box.dataset.exhibit || ''); }});
+    }});
+    const setAll = function(checked) {{
+      all.forEach(function(box) {{ box.checked = checked; box.indeterminate = false; }});
+    }};
+    form.querySelector('[data-select-all]')?.addEventListener('click', function() {{ setAll(true); }});
+    form.querySelector('[data-clear-all]')?.addEventListener('click', function() {{ setAll(false); }});
+  }});
 </script>
 </body>
 </html>"""
@@ -1214,12 +2382,14 @@ def alert(message: str, kind: str) -> str:
     return f'<div class="alert {kind}">{escape(message)}</div>'
 
 
-def post_button(case_id: str, action: str, label: str, *, extra: str = "") -> str:
+def post_button(
+    case_id: str, action: str, label: str, *, extra: str = "", disabled: bool = False
+) -> str:
     return (
         '<form method="post">'
         f'<input type="hidden" name="case" value="{escape(case_id)}">'
         f'<input type="hidden" name="action" value="{escape(action)}">'
-        f"{extra}<button>{escape(label)}</button></form>"
+        f"{extra}<button{' disabled' if disabled else ''}>{escape(label)}</button></form>"
     )
 
 
@@ -1290,11 +2460,26 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
         )
         + "</div></fieldset>"
     )
+    eb1a_template_selector = ""
+    if task_type == "eb1a_petition":
+        current_variant = eb1a_template_variant(config)
+        options = "".join(
+            f'<option value="{escape(value)}"{" selected" if current_variant == value else ""}>{escape(meta["label"])}</option>'
+            for value, meta in EB1A_TEMPLATE_VARIANTS.items()
+        )
+        eb1a_template_selector = f"""
+        <label><strong>EB1A memorandum template</strong>
+          <select name="eb1a_template_variant">{options}</select>
+        </label>
+        <p class="muted small">Controls Stage 2 drafting units and the working memo structure for this case.</p>
+        """
     template_default = {
-        "eb1a_rfe_response": "templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.txt",
+        "eb1a_rfe_response": "templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.yaml",
+        "eb2niw_rfe_response": "templates/RFE/EB2NIW/EB2_NIW_RFE_response_unified_LLM_template.yaml",
         "o1b_petition": "templates/O1B/MEMO O-1В_ver.1.0.docx",
-    }.get(task_type, "templates/EB1A/EB1A_unified_template_LLM.docx")
-    if task_type == "eb1a_rfe_response":
+        "eb2niw_petition": "templates/EB2NIW/EB2_NIW_general_memo_template.md",
+    }.get(task_type, eb1a_machine_template_file(config))
+    if task_type in RFE_TASK_TYPES:
         source_target_options = [
             ("source_rfe_notice", "RFE notice"),
             ("source_rfe_issues", "RFE issue folders"),
@@ -1336,7 +2521,7 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
             )
         source_inputs_html = '<div class="source-folders">' + "".join(source_rows) + "</div>"
 
-    if task_type == "eb1a_rfe_response":
+    if task_type in RFE_TASK_TYPES:
         right_fields = f"""
         <input name="case_number" value="{field_value(rfe_metadata.get('case_number'))}" placeholder="RFE/case number">
         <input name="receipt_date" value="{field_value(rfe_metadata.get('receipt_date'))}" placeholder="Receipt / accepted date">
@@ -1381,6 +2566,29 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
         <input name="work_location" value="{field_value(us_work.get('work_location'))}" placeholder="Primary work location">
         <textarea name="duties_summary" rows="3" placeholder="Short duties summary">{field_value(us_work.get('duties_summary'))}</textarea>
         """
+    elif task_type == "eb2niw_petition":
+        filing = config.get("filing", {}) if isinstance(config.get("filing"), dict) else {}
+        endeavor = config.get("proposed_endeavor", {}) if isinstance(config.get("proposed_endeavor"), dict) else {}
+        basis = str(config.get("eb2_basis", "auto"))
+        left_extra = f"""
+        <input name="citizenship" value="{field_value(beneficiary.get('citizenship'))}" placeholder="Citizenship">
+        <select name="eb2_basis">
+          <option value="auto"{" selected" if basis == "auto" else ""}>EB-2 basis: infer from folders</option>
+          <option value="advanced_degree"{" selected" if basis == "advanced_degree" else ""}>Advanced degree</option>
+          <option value="exceptional_ability"{" selected" if basis == "exceptional_ability" else ""}>Exceptional ability</option>
+          <option value="both"{" selected" if basis == "both" else ""}>Both bases</option>
+        </select>
+        <input name="intended_occupation" value="{field_value(config.get('intended_occupation'))}" placeholder="Intended occupation">
+        """
+        right_fields = f"""
+        <input name="proposed_endeavor_title" value="{field_value(endeavor.get('title'))}" placeholder="Proposed endeavor title">
+        <textarea name="proposed_endeavor_one_sentence" rows="2" placeholder="Proposed endeavor — one precise sentence">{field_value(endeavor.get('one_sentence'))}</textarea>
+        <textarea name="proposed_endeavor_summary" rows="5" placeholder="Proposed endeavor — detailed context / implementation summary">{field_value(endeavor.get('summary'))}</textarea>
+        <input name="petition_date" value="{field_value(config.get('petition_date'))}" placeholder="Petition date">
+        <textarea name="filing_uscis_address" rows="3" placeholder="USCIS filing address">{field_value(filing.get('uscis_address'))}</textarea>
+        <input name="attorney_name" value="{field_value(filing.get('attorney_name'))}" placeholder="Attorney name (optional)">
+        <input name="law_firm" value="{field_value(filing.get('law_firm'))}" placeholder="Law firm (optional)">
+        """
     else:
         procedural_value = field_value(config.get("procedural_context")) or "Initial EB-1A petition"
         drafting_value = field_value(config.get("drafting_objective")) or "Prepare EB-1A petition memorandum"
@@ -1398,16 +2606,26 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
             (config.get("us_work", {}) or {}).get("position_or_role") if isinstance(config.get("us_work"), dict) else "",
         )
     )
-    inferred_unsaved = task_type in {"eb1a_petition", "o1b_petition"} and (
+    eb2_missing_intake = task_type == "eb2niw_petition" and any(
+        not field_value(value)
+        for value in (
+            config.get("intended_occupation"),
+            (config.get("proposed_endeavor", {}) or {}).get("title") if isinstance(config.get("proposed_endeavor"), dict) else "",
+            (config.get("proposed_endeavor", {}) or {}).get("one_sentence") if isinstance(config.get("proposed_endeavor"), dict) else "",
+        )
+    )
+    inferred_unsaved = task_type in {"eb1a_petition", "o1b_petition", "eb2niw_petition"} and (
         (bool(claimed) and not bool(configured_claimed))
         or not field_value(config.get("procedural_context"))
         or not field_value(config.get("drafting_objective"))
         or o1b_missing_intake
+        or eb2_missing_intake
     )
     submit_label = "Save inferred intake" if inferred_unsaved else "No intake changes"
     submit_disabled = "" if inferred_unsaved or not existing_intake else " disabled"
     force_dirty = "true" if inferred_unsaved or not existing_intake else "false"
     case_info_path = str(intake_sources.get("case_info_file", ""))
+    case_context_path = str(source_imports.get("case_context_file", ""))
     return f"""
     <section class="panel">
       <h2>Case intake & working file</h2>
@@ -1418,6 +2636,7 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
       <form method="post" class="stack" data-dirty-watch="true" data-existing="{'true' if existing_intake else 'false'}" data-force-dirty="{force_dirty}" data-confirm-message="This updates case_config.yaml and copies files from any non-empty source folders. Existing case documents and manual translation links are not deleted. Rebuild the working memorandum afterward if case data or criteria changed. Continue?">
         <input type="hidden" name="action" value="apply_intake">
         <input type="hidden" name="case" value="{escape(case_id)}">
+        {eb1a_template_selector}
         <div class="columns">
           <div class="stack">
             <input name="beneficiary_full_name" value="{field_value(beneficiary.get('full_name'))}" placeholder="Beneficiary full name">
@@ -1436,10 +2655,20 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
         <label><strong>Optional YAML/TXT case information file</strong>
           <input name="case_info_file" value="{escape(case_info_path, quote=True)}" placeholder="Optional path to YAML/TXT case info file">
         </label>
+        <label><strong>Free-form case context / strategy file</strong>
+          <input name="case_context_file" value="{escape(case_context_path, quote=True)}" placeholder="Optional TXT, MD, YAML, JSON, CSV, or DOCX; included in LLM prompts but never indexed">
+        </label>
+        <p class="muted small">The context file is copied verbatim into the case and supplied to Stage 2 as prompt-only background. It is not an exhibit and cannot be cited.</p>
         <h3>Document source folders</h3>
         <p class="muted small">External paths are remembered for later imports. The case-folder buttons open the copies actually used by the workflow.</p>
         {source_inputs_html}
         <button data-dirty-submit="true"{submit_disabled}>{submit_label}</button>
+      </form>
+      <form method="post" class="inline-form" data-confirm-submit="Refresh the remembered source folders and rebuild the document index? The working memorandum will not be changed.">
+        <input type="hidden" name="action" value="refresh_intake_sources">
+        <input type="hidden" name="case" value="{escape(case_id)}">
+        <button type="submit" class="secondary">Refresh sources + document index</button>
+        <span class="muted small">Uses the saved folder paths even when the intake fields have not changed.</span>
       </form>
       <hr>
       <form method="post" class="stack">
@@ -1453,6 +2682,116 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
 
 
 def render_rfe_panel(case_id: str) -> str:
+    return _render_rfe_strategy_panel(case_id)
+
+
+def _render_rfe_strategy_panel(case_id: str) -> str:
+    loaded = load_case(case_id)
+    task_label = _task_type_label(str(loaded.config.get("task_type", "")))
+    imports = loaded.config.get("source_imports", {})
+    if not isinstance(imports, dict):
+        imports = {}
+    manifest = load_strategy_manifest(loaded.case_dir)
+    prompt = read_case_file_or_empty(case_id, "generated_prompts/rfe_strategy_bootstrap.latest.prompt.md")
+    manifest_status = (
+        f"Accepted: {len(manifest.get('units', []))} drafting unit(s)."
+        if manifest
+        else "Not accepted yet. Build the bootstrap prompt and paste the LLM JSON below."
+    )
+
+    def saved(key: str) -> str:
+        return escape(str(imports.get(key, "")), quote=True)
+
+    prompt_block = (
+        f"""
+        <div class="progress-heading"><div><strong>Generated bootstrap prompt</strong></div>
+          <div class="button-row">
+            <form method="post" data-confirm-submit="Refresh the strategy prompt from the saved strategy and RFE files?">
+              <input type="hidden" name="action" value="build_rfe_strategy_prompt"><input type="hidden" name="case" value="{escape(case_id)}">
+              <input type="hidden" name="strategy_path" value="{saved('rfe_strategy_file')}"><input type="hidden" name="rfe_path" value="{saved('rfe_notice_file')}">
+              <button type="submit" class="secondary">Refresh prompt</button>
+            </form>
+            <button type="button" class="secondary" data-copy-target="rfe-bootstrap-prompt">Copy prompt</button>
+          </div>
+        </div>
+        <textarea id="rfe-bootstrap-prompt" rows="18" readonly>{escape(prompt)}</textarea>
+        """
+        if prompt
+        else '<p class="muted small">The prompt will appear here after both source files are imported.</p>'
+    )
+    evidence_disabled = "" if manifest else " disabled"
+    return f"""
+    <section class="panel">
+      <h2>RFE Stage 1A - strategy bootstrap <span class="muted small">({escape(task_label)})</span></h2>
+      <p class="muted small">
+        Select the human strategy and the full RFE notice. The script copies both into the case,
+        extracts their text, combines them with the base RFE template and produces one prompt.
+      </p>
+      <form method="post" class="stack" data-dirty-watch="true">
+        <input type="hidden" name="action" value="build_rfe_strategy_prompt">
+        <input type="hidden" name="case" value="{escape(case_id)}">
+        <label>Human strategy file (.docx/.txt/.md)
+          <input name="strategy_path" value="{saved('rfe_strategy_file')}" placeholder="C:\\path\\strategy.docx" required>
+        </label>
+        <label>Full RFE notice (.pdf/.docx/.txt)
+          <input name="rfe_path" value="{saved('rfe_notice_file')}" placeholder="C:\\path\\RFE.pdf" required>
+        </label>
+        <button>Import sources + build strategy prompt</button>
+      </form>
+      {prompt_block}
+    </section>
+
+    <section class="panel">
+      <h2>RFE Stage 1B - accept strategy output</h2>
+      <p><strong>{escape(manifest_status)}</strong></p>
+      <p class="muted small">
+        Paste the JSON returned by the LLM. Validation creates
+        <code>case_strategy/strategy_manifest.json</code>, per-unit strategy files,
+        <code>rfe_response_plan.md</code>, and a substantially populated working Word response
+        cloned from the company DOCX template.
+      </p>
+      <form method="post" class="stack">
+        <input type="hidden" name="action" value="import_rfe_strategy_output">
+        <input type="hidden" name="case" value="{escape(case_id)}">
+        <textarea name="strategy_output_json" rows="18" placeholder='{{"case_id": "{escape(case_id)}", ...}}' required></textarea>
+        <button>Validate strategy + build working template</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>RFE Stage 1C - import and scan the record</h2>
+      <p class="muted small">
+        This step unlocks after the strategy is accepted. The initial filing is represented only
+        by its memorandum; its criterion sections and document lists are extracted automatically.
+        New evidence may contain <code>originals</code>/<code>translations</code>; otherwise the
+        selected folder is treated as originals. Criterion and episode subfolders are preserved.
+      </p>
+      <form method="post" class="stack">
+        <input type="hidden" name="action" value="import_rfe_evidence">
+        <input type="hidden" name="case" value="{escape(case_id)}">
+        <label>Initial filing memorandum
+          <input name="initial_memo_path" value="{saved('initial_filing_memo')}" placeholder="C:\\path\\initial_filing_memo.docx" required{evidence_disabled}>
+        </label>
+        <label>New RFE documents folder
+          <input name="new_documents_path" value="{saved('rfe_new_documents')}" placeholder="C:\\path\\new_docs" required{evidence_disabled}>
+        </label>
+        <button{evidence_disabled}>Import, scan, partition initial filing, link translations</button>
+      </form>
+      <form method="post" class="inline-form" data-confirm-submit="Refresh the saved initial-filing memorandum and RFE evidence folders? The working memorandum will not be changed.">
+        <input type="hidden" name="action" value="refresh_intake_sources">
+        <input type="hidden" name="case" value="{escape(case_id)}">
+        <button type="submit" class="secondary"{evidence_disabled}>Refresh imported record + document index</button>
+        <span class="muted small">Reuses the saved paths and leaves the memorandum untouched.</span>
+      </form>
+      <div class="button-row">
+        <a class="action-link" href="/translations?case={quote(case_id)}">Review translation links</a>
+        <a class="action-link" href="/llm?case={quote(case_id)}">Continue to LLM drafting</a>
+      </div>
+    </section>
+    """
+
+
+def _legacy_render_rfe_panel(case_id: str) -> str:
     instructions = read_case_file(case_id, "user_case_instructions.md")
     plan = read_case_file(case_id, "rfe_response_plan.md")
     browser_notes = read_case_file_or_empty(
@@ -1679,6 +3018,55 @@ def _stage_percent(progress: CaseProgress, keys: set[str]) -> int:
     return round((sum(step.complete for step in selected) / len(selected)) * 100)
 
 
+def _case_font_settings(case_id: str) -> tuple[str, str, list[str]]:
+    config = load_case(case_id).config
+    memo_font = str(config.get("memo_font_family", "")).strip() or "Times New Roman"
+    bundle_font = str(config.get("bundle_font_family", "")).strip() or str(config.get("font_family", "")).strip() or "Times New Roman"
+    fonts = list_installed_fonts()
+    for name in (memo_font, bundle_font, "Times New Roman"):
+        if name and name not in fonts:
+            fonts.insert(0, name)
+    return memo_font, bundle_font, fonts
+
+
+def _font_select_options(fonts: list[str], selected: str) -> str:
+    return "".join(
+        f'<option value="{escape(name, quote=True)}"{" selected" if name == selected else ""}>{escape(name)}</option>'
+        for name in fonts
+    )
+
+
+def _render_case_font_settings_form(case_id: str, *, action: str, compact: bool = False) -> str:
+    memo_font, bundle_font, fonts = _case_font_settings(case_id)
+    memo_options = _font_select_options(fonts, memo_font)
+    bundle_options = _font_select_options(fonts, bundle_font)
+    note = (
+        "Memo font applies the next time working_memo.docx is built; bundle font applies when separators/text conversions are prepared again."
+    )
+    wrapper_class = "font-settings compact" if compact else "font-settings"
+    return f"""
+    <form method="post" class="{wrapper_class}">
+      <input type="hidden" name="case" value="{escape(case_id)}">
+      <input type="hidden" name="action" value="{escape(action)}">
+      <label><strong>Memo font</strong><select name="memo_font_family">{memo_options}</select></label>
+      <label><strong>Bundle / separator font</strong><select name="bundle_font_family">{bundle_options}</select></label>
+      <button class="secondary">Save font settings</button>
+      <p class="muted small">{escape(note)}</p>
+    </form>
+    """
+
+
+def _save_case_font_settings(case_id: str, *, memo_font_family: str, bundle_font_family: str) -> None:
+    loaded = load_case(case_id)
+    config = dict(loaded.config)
+    config["memo_font_family"] = memo_font_family.strip() or "Times New Roman"
+    config["bundle_font_family"] = bundle_font_family.strip() or "Times New Roman"
+    legacy_font = str(config.get("font_family", "")).strip()
+    if legacy_font:
+        config["font_family"] = config["bundle_font_family"]
+    _write_yaml_file(loaded.case_dir / "case_config.yaml", config)
+
+
 def _action_route(action: str) -> str:
     if action in {
         "apply_intake",
@@ -1687,12 +3075,43 @@ def _action_route(action: str) -> str:
         "scan_documents",
         "link_translations",
         "save_rfe_notes",
+        "build_rfe_strategy_prompt",
+        "import_rfe_strategy_output",
+        "import_rfe_evidence",
+        "refresh_intake_sources",
+        "save_intake_font_settings",
     }:
         return "/intake"
-    if action in {"run_next", "build_prompt", "import_output", "insert_section"}:
+    if action in {"run_next", "build_prompt", "import_output", "insert_section", "refresh_unit_documents"}:
         return "/llm"
-    if action in {"build_index", "separators", "separator_pdfs", "bundle_dry_run", "bundle_build"}:
+    if action in {
+        "refresh_layout_indexes",
+        "sync_layout_indexes_from_memo",
+        "build_index",
+        "separators",
+        "separator_pdfs",
+        "bundle_dry_run",
+        "save_bundle_display_titles",
+        "prepare_selected_bundle",
+        "bundle_build",
+        "final_filing_build",
+        "save_layout_font_settings",
+    }:
         return "/layout"
+    if action in {
+        "layout_pick_originals_dir",
+        "layout_pick_translations_dir",
+        "layout_pick_list_document",
+        "layout_parse_sources",
+        "layout_save_structure",
+        "layout_save_folder_scopes",
+        "layout_save_document_originals",
+        "layout_add_mapping",
+        "layout_remove_mapping",
+        "layout_preview",
+        "layout_build",
+    }:
+        return "/document-layout"
     return "/case"
 
 
@@ -1701,6 +3120,44 @@ def _safe_case_task_type(case_id: str) -> str:
         return str(load_case(case_id).config.get("task_type", ""))
     except Exception as exc:  # noqa: BLE001
         return f"[unknown: {exc}]"
+
+
+def _safe_layout_setting(case_id: str, key: str) -> str:
+    try:
+        return str(load_layout_status(case_id).settings.get(key, ""))
+    except Exception:
+        return ""
+
+
+def _pick_directory(initial: str = "") -> str:
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError("Directory picker is not available in this environment.") from exc
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    selected = filedialog.askdirectory(initialdir=initial or None)
+    root.destroy()
+    return str(selected or "")
+
+
+def _pick_file(initial: str = "") -> str:
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError("File picker is not available in this environment.") from exc
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    initial_dir = initial if Path(initial).is_dir() else str(Path(initial).parent) if initial else None
+    selected = filedialog.askopenfilename(initialdir=initial_dir)
+    root.destroy()
+    return str(selected or "")
 
 
 def _case_dir(case_id: str) -> Path:

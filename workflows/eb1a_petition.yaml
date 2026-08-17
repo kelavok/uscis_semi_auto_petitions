@@ -136,6 +136,31 @@ steps:
       - recommendation_letters
     destination: draft_sections/recommendation_letters_quotes.md
 
+  - step_id: industry_overview
+    execution: llm_manual
+    template_variants:
+      - migrator
+    title: Migrator template industry overview and U.S. benefit
+    objective: >
+      Draft the Migrator-template "Overview of the Industry" section. Explain
+      the beneficiary's field and specialization, why the specialization is
+      important to the United States, and how the record and credible sources
+      support prospective benefit. This section appears near the top of the
+      memorandum before the evidentiary criteria.
+    section_instructions: instructions/task_types/eb1a_petition/sections/industry_overview.md
+    evidence_folder_roles:
+      - identity_cv_education
+      - recommendation_letters
+      - employment_plan
+    external_research:
+      allowed: true
+      source_hierarchy:
+        - U.S. government sources
+        - major U.S. media
+        - research papers and institutional reports
+        - other credible sources
+    destination: draft_sections/industry_overview.md
+
   - step_id: criterion_awards_episode
     execution: llm_manual_repeatable
     repeat_unit: one_episode
@@ -240,6 +265,15 @@ steps:
     section_instructions: instructions/task_types/eb1a_petition/sections/two_phase_criterion_phase_1.md
     evidence_folder_roles:
       - leading_critical_role
+    phase_subfolder_terms:
+      - status employment position
+      - employment role facts
+      - role facts
+      - leading role
+      - critical role
+      - responsibilities
+      - duties
+      - position
     destination_pattern: draft_sections/criteria/leading_critical_role/{episode_id}_phase_1.md
 
   - step_id: criterion_leading_critical_role_reputation
@@ -252,6 +286,20 @@ steps:
     section_instructions: instructions/task_types/eb1a_petition/sections/two_phase_criterion_phase_2.md
     evidence_folder_roles:
       - leading_critical_role
+    phase_subfolder_terms:
+      - distinguished reputation
+      - reputation
+      - awards
+      - award
+      - ranking
+      - ratings
+      - market
+      - media
+      - brand
+      - марка
+      - мельница
+      - экспортер
+      - репутация
     destination_pattern: draft_sections/criteria/leading_critical_role/{episode_id}_phase_2.md
 
   - step_id: criterion_high_salary_fact
@@ -262,6 +310,26 @@ steps:
     section_instructions: instructions/task_types/eb1a_petition/sections/two_phase_criterion_phase_1.md
     evidence_folder_roles:
       - high_salary
+    phase_subfolder_terms:
+      - compensation fact
+      - compensation facts
+      - salary fact
+      - salary facts
+      - pay records
+      - payroll
+      - employment contract
+      - contract
+      - bonus
+      - bonuses
+      - tax
+      - income
+      - факт
+      - получение
+      - получения
+      - зарплата
+      - зп
+      - премии
+      - договор
     destination_pattern: draft_sections/criteria/high_salary/{episode_id}_phase_1.md
 
   - step_id: criterion_high_salary_comparison
@@ -272,6 +340,32 @@ steps:
     section_instructions: instructions/task_types/eb1a_petition/sections/two_phase_criterion_phase_2.md
     evidence_folder_roles:
       - high_salary
+    phase_subfolder_terms:
+      - comparison
+      - comparative
+      - benchmark
+      - benchmarks
+      - market data
+      - salary survey
+      - salary surveys
+      - survey
+      - surveys
+      - source
+      - sources
+      - rosstat
+      - hh
+      - gorodrabot
+      - citywork
+      - rbk
+      - kommersant
+      - сравнительная
+      - сравнение
+      - база
+      - источники
+      - рынок
+      - росстат
+      - городработ
+      - коммерсант
     destination_pattern: draft_sections/criteria/high_salary/{episode_id}_phase_2.md
 
   - step_id: criterion_commercial_success_episode
@@ -286,6 +380,8 @@ steps:
 
   - step_id: specialization_essay
     execution: llm_manual
+    template_variants:
+      - base
     title: Specialization essay with external source research
     objective: >
       Draft the specialization essay according to the template. The prompt must
@@ -327,8 +423,32 @@ steps:
       - recommendation_letters_roster
       - criteria_sections_selected_by_case
       - specialization_essay
+      - industry_overview
       - employment_plan
     destination: draft_sections/final_overview.md
+
+  - step_id: beneficiary_statement
+    execution: llm_manual
+    template_variants:
+      - migrator
+    output_kind: standalone_support_document
+    title: Migrator template beneficiary statement
+    objective: >
+      Draft the separate first-person beneficiary statement required by the
+      Migrator EB1A template. The statement should explain the beneficiary's
+      plans to continue working in the claimed area of expertise in the United
+      States and why those plans will benefit the United States.
+    section_instructions: instructions/task_types/eb1a_petition/sections/beneficiary_statement.md
+    evidence_folder_roles:
+      - identity_cv_education
+      - employment_plan
+      - recommendation_letters
+    include_working_memo: true
+    depends_on:
+      - industry_overview
+      - employment_plan
+      - final_overview
+    destination: draft_sections/beneficiary_statement.md
 
   - step_id: exhibit_list
     execution: deterministic

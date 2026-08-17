@@ -6,8 +6,11 @@ from .bundle_workflow import (
     build_evidence_bundle,
     build_bundle_plan,
     build_exhibit_index,
+    build_final_filing_pdf,
     generate_separator_pages,
+    refresh_layout_indexes,
     render_separator_pdfs,
+    sync_layout_indexes_from_memo,
 )
 from .cli_support import add_case_argument, configure_console
 
@@ -22,8 +25,36 @@ def build_parser() -> argparse.ArgumentParser:
     add_case_argument(build)
     build.add_argument("--dry-run", action="store_true", help="Validate and report without creating a PDF")
 
+    final_filing = commands.add_parser(
+        "final-filing",
+        help="Resolve memo PAGE placeholders and merge the memo with the evidence bundle",
+    )
+    add_case_argument(final_filing)
+    final_filing.add_argument(
+        "--memo",
+        default="",
+        help="Optional DOCX memo path; defaults to final_memo/working_memo.docx",
+    )
+
     build_index = commands.add_parser("build-index", help="Build exhibit_index.csv from document_index.csv")
     add_case_argument(build_index)
+
+    refresh_indexes = commands.add_parser(
+        "refresh-indexes",
+        help="Rescan sources and derive Exhibit assignments from validated LLM outputs",
+    )
+    add_case_argument(refresh_indexes)
+
+    sync_from_memo = commands.add_parser(
+        "sync-indexes-from-memo",
+        help="Replace Exhibit/document ordering from the working memo INDEX section",
+    )
+    add_case_argument(sync_from_memo)
+    sync_from_memo.add_argument(
+        "--memo",
+        default="",
+        help="Optional DOCX memo path; defaults to final_memo/working_memo.docx",
+    )
 
     separators = commands.add_parser("separators", help="Generate markdown separator pages from indexes")
     add_case_argument(separators)
@@ -55,6 +86,22 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Converted items: {summary.converted_items}")
         print(f"Skipped items: {summary.skipped_items}")
         return 0
+    if args.command == "final-filing":
+        summary = build_final_filing_pdf(args.case_id, memo_docx_path=args.memo)
+        print(f"Final filing PDF: {summary.final_pdf_path}")
+        print(f"Numbered memo DOCX: {summary.numbered_memo_docx_path}")
+        print(f"Numbered memo PDF: {summary.numbered_memo_pdf_path}")
+        print(f"Evidence bundle PDF: {summary.evidence_bundle_pdf_path}")
+        print(f"Report: {summary.report_path}")
+        print(f"Memo pages: {summary.memo_pages}")
+        print(f"Bundle pages: {summary.bundle_pages}")
+        print(f"Final pages: {summary.final_pages}")
+        print(
+            f"PAGE placeholders: {summary.placeholders_resolved}/"
+            f"{summary.placeholders_seen} resolved"
+        )
+        print(f"Unresolved placeholders: {summary.placeholders_unresolved}")
+        return 0
     if args.command == "build-index":
         summary = build_exhibit_index(args.case_id)
         print(f"Documents seen: {summary.documents_seen}")
@@ -67,6 +114,33 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Document index: {summary.document_index_path}")
         print(f"Exhibit index: {summary.exhibit_index_path}")
         print("Bundle order rule: original first, then translation.")
+        return 0
+    if args.command == "refresh-indexes":
+        summary = refresh_layout_indexes(args.case_id)
+        print(f"Source files scanned: {summary.scanned_files}")
+        print(f"Auxiliary index rows removed: {summary.auxiliary_rows_removed}")
+        print(f"Replacement PDFs rebound: {summary.replacement_documents_rebound}")
+        print(
+            f"Used documents assigned: {summary.status.assigned_used_documents}/"
+            f"{summary.status.unique_used_documents}"
+        )
+        print(f"Exhibits: {summary.status.exhibit_count}")
+        print(f"Stale document IDs: {', '.join(summary.status.stale_document_ids) or '[none]'}")
+        print(f"Assignment conflicts: {len(summary.status.assignment_conflicts)}")
+        print(f"Unsupported documents: {len(summary.status.unsupported_documents)}")
+        return 0
+    if args.command == "sync-indexes-from-memo":
+        summary = sync_layout_indexes_from_memo(args.case_id, memo_docx_path=args.memo)
+        print(f"Memo: {summary.memo_docx_path}")
+        print(f"Exhibits: {summary.exhibits_seen}")
+        print(f"Episodes: {summary.episodes_seen}")
+        print(f"Documents matched: {summary.documents_matched}/{summary.documents_seen}")
+        print(f"Document index: {summary.document_index_path}")
+        print(f"Exhibit index: {summary.exhibit_index_path}")
+        if summary.unmatched_titles:
+            print("Unmatched:")
+            for title in summary.unmatched_titles:
+                print(f"- {title}")
         return 0
     if args.command == "separators":
         summary = generate_separator_pages(args.case_id)
