@@ -21,6 +21,7 @@ from .workflow import (
     _case_path_value,
     _citation_plan_for_step,
     _normalize_slashes,
+    _repeatable_episode_candidates,
     extract_docx_text,
     find_step,
     format_missing_selected_documents_message,
@@ -234,6 +235,7 @@ class EvidenceLayoutPlan:
     document_order: dict[str, int]
     exhibit_order: dict[str, int]
     document_titles: dict[str, str]
+    document_episode_titles: dict[str, str]
     conflicts: list[str]
     references: int
     exhibit_metadata: dict[str, tuple[str, str]]
@@ -574,12 +576,18 @@ def refresh_layout_indexes(case_id: str) -> LayoutIndexRefreshSummary:
     for row in document_rows:
         if AUTO_DOCUMENT_INDEX_NOTE in row.get("notes", "") and not _truthy(row.get("manual_edit_lock", "")):
             row["exhibit_number"] = ""
+            row["episode_title"] = ""
             row["final_bundle_order"] = ""
 
     for document_id, title in plan.document_titles.items():
         row = rows_by_id.get(document_id)
         if row and title and not _truthy(row.get("manual_edit_lock", "")):
             row["display_title"] = title
+
+    for document_id, episode_title in plan.document_episode_titles.items():
+        row = rows_by_id.get(document_id)
+        if row and episode_title and not _truthy(row.get("manual_edit_lock", "")):
+            row["episode_title"] = episode_title
 
     numbered_context = _numbered_document_sort_context(
         (rows_by_id[document_id] for document_id in desired if document_id in rows_by_id),
@@ -958,6 +966,7 @@ def _desired_exhibit_assignments(loaded: LoadedCase) -> EvidenceLayoutPlan:
     document_order: dict[str, int] = {}
     exhibit_order: dict[str, int] = {}
     document_titles: dict[str, str] = {}
+    document_episode_titles: dict[str, str] = {}
     conflicts: list[str] = []
     exhibit_metadata: dict[str, tuple[str, str]] = {}
     references = 0
@@ -998,6 +1007,7 @@ def _desired_exhibit_assignments(loaded: LoadedCase) -> EvidenceLayoutPlan:
             exhibit_order[exhibit_number] = next_exhibit_order
             next_exhibit_order += 1
         title, memo_section = _exhibit_metadata_for_output(loaded, data)
+        episode_title = _episode_title_for_output(loaded, data)
         existing_title, existing_section = exhibit_metadata.get(exhibit_number, ("", ""))
         exhibit_metadata[exhibit_number] = (
             existing_title or title,
@@ -1013,6 +1023,8 @@ def _desired_exhibit_assignments(loaded: LoadedCase) -> EvidenceLayoutPlan:
             document_title = str(item.get("document_title", "")).strip()
             if document_title and document_id not in document_titles:
                 document_titles[document_id] = document_title
+            if episode_title and document_id not in document_episode_titles:
+                document_episode_titles[document_id] = episode_title
             existing = desired.get(document_id)
             if existing and existing != exhibit_number:
                 conflicts.append(
@@ -1028,6 +1040,7 @@ def _desired_exhibit_assignments(loaded: LoadedCase) -> EvidenceLayoutPlan:
         document_order=document_order,
         exhibit_order=exhibit_order,
         document_titles=document_titles,
+        document_episode_titles=document_episode_titles,
         conflicts=conflicts,
         references=references,
         exhibit_metadata=exhibit_metadata,
@@ -1141,6 +1154,29 @@ def _exhibit_metadata_for_output(
         step.get("memo_section", "") or step.get("criterion_role", "") or (roles[0] if len(roles) == 1 else "")
     ).strip()
     return title, memo_section
+
+
+def _episode_title_for_output(loaded: LoadedCase, data: dict[str, object]) -> str:
+    step_id = str(data.get("step_id", "")).strip()
+    episode_id = str(data.get("episode_id", "")).strip()
+    try:
+        step = find_step(loaded.workflow, step_id)
+    except SystemExit:
+        return ""
+    configured = str(step.get("episode_title", "")).strip()
+    raw_title = configured
+    if episode_id and "repeatable" in str(step.get("execution", "")):
+        raw_title = next(
+            (
+                folder
+                for candidate_id, folder in _repeatable_episode_candidates(loaded, step)
+                if candidate_id == episode_id
+            ),
+            configured or episode_id,
+        )
+        if raw_title == ".":
+            raw_title = configured or str(step.get("title", ""))
+    return _display_episode_title(raw_title)
 
 
 def _criterion_metadata_from_working_structure(
@@ -2930,6 +2966,9 @@ def _document_episode_title(document: dict[str, str], config: dict[str, object])
     document_id = document.get("document_id", "").strip()
     if isinstance(overrides, dict) and document_id in overrides:
         return str(overrides.get(document_id, "")).strip()
+    indexed_title = document.get("episode_title", "").strip()
+    if indexed_title:
+        return indexed_title
     raw_path = _normalize_slashes(document.get("file_path", "").strip())
     if not raw_path:
         return ""

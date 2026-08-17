@@ -32,6 +32,13 @@ CRITERION_LABELS = {
     "employment_plan": "Employment plan",
     "industry_overview": "Industry overview",
     "beneficiary_statement": "Beneficiary statement",
+    "identity_context": "EB-2 NIW overview",
+    "basic_eligibility": "Basic EB-2 eligibility",
+    "advanced_degree": "Advanced Degree Professional",
+    "exceptional_ability": "Exceptional Ability",
+    "prong1": "NIW Prong 1",
+    "prong2": "NIW Prong 2",
+    "prong3": "NIW Prong 3",
     "lead_starring_productions": "O-1B Criterion (i): lead/starring productions or events",
     "published_recognition": "O-1B Criterion (ii): published recognition",
     "organization_role": "O-1B Criterion (iii): organizational role",
@@ -97,7 +104,7 @@ def build_llm_stage(case_id: str) -> LLMStage:
         execution = str(step.get("execution", ""))
         if not step_id or execution.startswith("deterministic") or step_id in disabled_steps:
             continue
-        if not _step_enabled_for_case(loaded.config, step):
+        if not _step_enabled_for_case(loaded.config, step, loaded.case_dir):
             continue
         criterion = _criterion_for_step(step_id, step)
         if (
@@ -225,6 +232,14 @@ def _build_unit(
 
 def _criterion_for_step(step_id: str, step: dict[str, Any]) -> str:
     mapping = (
+        ("eb2niw_advanced_degree", "advanced_degree"),
+        ("eb2niw_exceptional", "exceptional_ability"),
+        ("eb2niw_prong1", "prong1"),
+        ("eb2niw_proposed_endeavor", "prong1"),
+        ("eb2niw_prong2", "prong2"),
+        ("eb2niw_prong3", "prong3"),
+        ("eb2niw_overview", "identity_context"),
+        ("eb2niw_basic", "basic_eligibility"),
         ("o1b_criterion_vi", "high_salary"),
         ("o1b_criterion_iii", "organization_role"),
         ("o1b_criterion_iv", "commercial_critical_success"),

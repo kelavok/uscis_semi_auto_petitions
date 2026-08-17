@@ -49,6 +49,18 @@ def build_case_progress(case_id: str) -> CaseProgress:
     intake_complete = all(_clean_value(value) for value in intake_values)
     if task_type == "eb1a_petition":
         intake_complete = intake_complete and bool(config.get("claimed_criteria"))
+    elif task_type == "eb2niw_petition":
+        endeavor = config.get("proposed_endeavor", {})
+        if not isinstance(endeavor, dict):
+            endeavor = {}
+        intake_complete = intake_complete and all(
+            _clean_value(value)
+            for value in (
+                config.get("intended_occupation"),
+                endeavor.get("title"),
+                endeavor.get("one_sentence"),
+            )
+        )
     elif task_type == "eb1a_rfe_response":
         manifest = loaded.case_dir / "case_strategy" / "strategy_manifest.json"
         intake_complete = manifest.exists() and manifest.stat().st_size > 0
@@ -82,6 +94,8 @@ def build_case_progress(case_id: str) -> CaseProgress:
             expected = 0
         rfe_drafts = [path for path in draft_files if "draft_sections\\rfe\\sections" in str(path) or "/draft_sections/rfe/sections/" in path.as_posix()]
         drafting_complete = expected > 0 and len(rfe_drafts) >= expected
+    elif task_type == "eb2niw_petition":
+        drafting_complete = any(path.name == "conclusion.md" and "eb2niw" in path.as_posix() for path in draft_files)
     else:
         drafting_complete = bool(draft_files) and final_overview
 

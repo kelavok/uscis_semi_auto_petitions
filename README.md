@@ -665,7 +665,21 @@ The initial filing is represented only by its memorandum. Documents that must be
 
 If a document folder contains `extracts.txt`, its text is added to the LLM prompt as folder-local orientation for screenshots, scans, or other partially/non-machine-readable documents. `extracts.txt` is never added to `document_index.csv`, exhibit indexes, citations, `used_documents`, or the final evidence bundle. It applies only to the underlying documents in the exact folder where it is stored.
 
-If a document folder contains `info.txt`, `info.md`, `info.docx`, `README.txt`, `README.md`, or `README.docx`, its text is added to the prompt as additional LLM instructions and explanatory context scoped only to that exact folder. Like `extracts.txt`, these files are never indexed, cited, added to `used_documents`, or included in the final evidence bundle. This rule applies uniformly to EB-1A, O-1B, and RFE prompts.
+If a document folder contains `info.txt`, `info.md`, `info.docx`, `README.txt`, `README.md`, or `README.docx`, its text is added to the prompt as additional LLM instructions and explanatory context scoped only to that exact folder. Like `extracts.txt`, these files are never indexed, cited, added to `used_documents`, or included in the final evidence bundle. This rule applies uniformly to EB-1A, EB-2 NIW, O-1B, and RFE prompts.
+
+### EB-2 NIW petition track
+
+Create an EB-2 NIW case in the local UI or with:
+
+```powershell
+python -m app.draft init-case --case niw_001 --task-type eb2niw_petition
+```
+
+At Intake, specify the beneficiary, intended occupation, proposed-endeavor title and concise description, and optionally attach a free-form TXT/MD/DOCX context or strategy file. That file is supplied whole to Stage 2 but is never indexed or cited. The EB-2 threshold route can be selected explicitly or inferred from the populated Advanced Degree and Exceptional Ability folders.
+
+Stage 2 follows the supplied EB-2 NIW instructions and general memorandum template. Exceptional Ability criteria, National Importance theses, and Prong 2 achievement categories are enabled from non-empty folders; direct subfolders become repeatable LLM units. The system still requires strict JSON and treats any XML example in the source instructions as a substantive block description only.
+
+Validated `used_documents` determine logical exhibit order. Stage 3 uses the shared deterministic index, title-review, separator, selective-bundle, and PDF assembly pipeline. EB-2 NIW uses Exhibits 1–5 for general documents, basic eligibility, Prong 1, Prong 2, and Prong 3 respectively.
 
 Для ответа на RFE создан отдельный task type:
 

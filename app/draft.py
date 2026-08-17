@@ -85,6 +85,7 @@ def build_parser() -> argparse.ArgumentParser:
     intake = commands.add_parser("apply-intake", help="Apply basic case intake fields and optionally copy a source folder")
     add_case_argument(intake)
     intake.add_argument("--case-info-file", default="", help="YAML/TXT file with key: value case information")
+    intake.add_argument("--case-context-file", default="", help="Free-form TXT/MD/DOCX case context used in LLM prompts")
     intake.add_argument("--source-folder", default="", help="Optional source folder to copy into the case workspace")
     intake.add_argument("--source-target-key", default="source_originals", help="Target paths key, e.g. source_originals")
     intake.add_argument("--beneficiary-full-name", default="")
@@ -99,6 +100,15 @@ def build_parser() -> argparse.ArgumentParser:
     intake.add_argument("--rfe-date", default="")
     intake.add_argument("--response-deadline", default="")
     intake.add_argument("--uscis-address", default="")
+    intake.add_argument("--eb2-basis", choices=["", "auto", "advanced_degree", "exceptional_ability", "both"], default="")
+    intake.add_argument("--intended-occupation", default="")
+    intake.add_argument("--proposed-endeavor-title", default="")
+    intake.add_argument("--proposed-endeavor-one-sentence", default="")
+    intake.add_argument("--proposed-endeavor-summary", default="")
+    intake.add_argument("--petition-date", default="")
+    intake.add_argument("--filing-uscis-address", default="")
+    intake.add_argument("--attorney-name", default="")
+    intake.add_argument("--law-firm", default="")
 
     working_memo = commands.add_parser("build-working-memo", help="Create final_memo/working_memo.md and .docx")
     add_case_argument(working_memo)
@@ -199,8 +209,18 @@ def main(argv: list[str] | None = None) -> int:
                 "rfe_date": args.rfe_date,
                 "response_deadline": args.response_deadline,
                 "uscis_address": args.uscis_address,
+                "eb2_basis": args.eb2_basis,
+                "intended_occupation": args.intended_occupation,
+                "proposed_endeavor_title": args.proposed_endeavor_title,
+                "proposed_endeavor_one_sentence": args.proposed_endeavor_one_sentence,
+                "proposed_endeavor_summary": args.proposed_endeavor_summary,
+                "petition_date": args.petition_date,
+                "filing_uscis_address": args.filing_uscis_address,
+                "attorney_name": args.attorney_name,
+                "law_firm": args.law_firm,
             },
             case_info_file=args.case_info_file,
+            case_context_file=args.case_context_file,
             source_folder_path=args.source_folder,
             source_target_key=args.source_target_key,
             claimed_criteria=[item.strip() for item in args.criteria.split(",") if item.strip()]

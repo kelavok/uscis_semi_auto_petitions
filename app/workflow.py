@@ -155,6 +155,10 @@ def render_prompt(
     parts.append("")
     parts.append(render_case_context(case))
     parts.append("")
+    parts.append("## Case narrative / strategy context file")
+    parts.append("")
+    parts.append(render_case_context_file(loaded))
+    parts.append("")
     parts.append("## Step objective")
     parts.append("")
     parts.append(str(step.get("objective", "")).strip())
@@ -196,6 +200,11 @@ def render_prompt(
         parts.append("## Current working memorandum context")
         parts.append("")
         parts.append(render_working_memo_context(loaded))
+        parts.append("")
+    if _truthy_config(step.get("include_all_draft_sections", False)):
+        parts.append("## All previously completed drafting blocks")
+        parts.append("")
+        parts.append(render_all_draft_context(loaded))
         parts.append("")
     parts.append("## Non-negotiable final-output guardrails")
     parts.append("")
@@ -252,6 +261,43 @@ def render_working_memo_context(loaded: LoadedCase) -> str:
                 + _fenced(read_textual_file(path, PROMPT_TEXT_LIMIT), "text")
             )
     return "[The working memorandum has not been built yet.]"
+
+
+def render_case_context_file(loaded: LoadedCase) -> str:
+    """Return the free-form case narrative copied at Intake without indexing it."""
+    path_value = str(loaded.config.get("case_context_file", "")).strip()
+    if not path_value:
+        paths = loaded.config.get("paths", {})
+        if isinstance(paths, dict):
+            path_value = str(paths.get("case_context", "")).strip()
+    if not path_value:
+        return "[No free-form case context file was supplied at Intake.]"
+    path = _resolve_project_or_case_path(loaded.case_dir, path_value)
+    if not path.exists() or not path.is_file():
+        return f"[Configured case context file is missing: {path}]"
+    return (
+        "This file is prompt-only context. Do not add it to used_documents, citations, indexes, "
+        "or the evidence bundle unless the same facts are independently supported by indexed evidence.\n\n"
+        f"Source: `{path.relative_to(loaded.case_dir).as_posix()}`\n\n"
+        + _fenced(read_textual_file(path, EVIDENCE_TEXT_LIMIT), _fence_language(path))
+    )
+
+
+def render_all_draft_context(loaded: LoadedCase) -> str:
+    root = loaded.case_dir / _case_path_value(loaded.config, "draft_sections")
+    if not root.exists():
+        return "[No completed drafting blocks are available yet.]"
+    parts: list[str] = []
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in TEXT_EXTENSIONS:
+            continue
+        if path.name.startswith("_"):
+            continue
+        parts.append(f"### {path.relative_to(root).as_posix()}")
+        parts.append("")
+        parts.append(_fenced(read_textual_file(path, EVIDENCE_TEXT_LIMIT), "text"))
+        parts.append("")
+    return "\n".join(parts).strip() or "[No completed drafting blocks are available yet.]"
 
 
 def render_prior_draft_context(loaded: LoadedCase, step_ids: list[str]) -> str:
@@ -356,6 +402,25 @@ def render_case_context(case: dict[str, Any]) -> str:
                 f"- us_work.duties_summary: {us_work.get('duties_summary', '')}",
             ]
         )
+    if str(case.get("task_type", "")) == "eb2niw_petition":
+        endeavor = case.get("proposed_endeavor", {})
+        if not isinstance(endeavor, dict):
+            endeavor = {}
+        filing = case.get("filing", {})
+        if not isinstance(filing, dict):
+            filing = {}
+        lines.extend(
+            [
+                f"- eb2_basis: {case.get('eb2_basis', 'auto')}",
+                f"- intended_occupation: {case.get('intended_occupation', '')}",
+                f"- proposed_endeavor.title: {endeavor.get('title', '')}",
+                f"- proposed_endeavor.one_sentence: {endeavor.get('one_sentence', '')}",
+                f"- proposed_endeavor.summary: {endeavor.get('summary', '')}",
+                f"- filing.uscis_address: {filing.get('uscis_address', '')}",
+                f"- filing.attorney_name: {filing.get('attorney_name', '')}",
+                f"- filing.law_firm: {filing.get('law_firm', '')}",
+            ]
+        )
     rfe_metadata = case.get("rfe_metadata", {})
     if isinstance(rfe_metadata, dict):
         lines.extend(
@@ -429,7 +494,9 @@ def render_source_file(loaded: LoadedCase, path_value: str) -> str:
     path = _resolve_project_or_case_path(loaded.case_dir, path_value)
     if not path.exists():
         return f"#### {path_value}\n\n[Missing file: {path}]"
-    text = read_textual_file(path, PROMPT_TEXT_LIMIT)
+    # Drafting instructions and templates are controlling sources. Keep them
+    # whole; only assembled working-memo context uses the compact prompt limit.
+    text = read_textual_file(path, None)
     return f"#### {path_value}\n\n{_fenced(text, _fence_language(path))}"
 
 
@@ -1045,7 +1112,7 @@ def determine_next_action(loaded: LoadedCase) -> NextAction:
             continue
         if execution.startswith("deterministic"):
             continue
-        if not _step_enabled_for_case(loaded.config, step):
+        if not _step_enabled_for_case(loaded.config, step, loaded.case_dir):
             continue
         if "repeatable" in execution:
             if enabled_steps and step_id not in enabled_steps:
@@ -1095,7 +1162,9 @@ def determine_next_action(loaded: LoadedCase) -> NextAction:
     )
 
 
-def _step_enabled_for_case(config: dict[str, Any], step: dict[str, Any]) -> bool:
+def _step_enabled_for_case(
+    config: dict[str, Any], step: dict[str, Any], case_dir: Path | None = None
+) -> bool:
     variants = _normalize_path_list(step.get("template_variants", step.get("template_variant", [])))
     if variants and eb1a_template_variant(config) not in variants:
         return False
@@ -1111,7 +1180,29 @@ def _step_enabled_for_case(config: dict[str, Any], step: dict[str, Any]) -> bool
     if role == "comparable_evidence" and str(config.get("o1b_track", "")) == "mptv":
         return False
     claimed = set(_normalize_path_list(config.get("claimed_criteria", [])))
-    return not (role in criterion_roles and claimed and role not in claimed)
+    if role in criterion_roles and claimed and role not in claimed:
+        return False
+    if _truthy_config(step.get("requires_evidence", False)):
+        if case_dir is None:
+            case_id = str(config.get("case_id", "")).strip()
+            case_dir = case_path(case_id) if case_id else None
+        if case_dir is None:
+            return False
+        role_map = folder_role_map(config)
+        activation_roles = _normalize_path_list(
+            step.get("activation_folder_roles", roles)
+        )
+        for evidence_role in activation_roles:
+            folder_name = str(role_map.get(evidence_role, evidence_role))
+            for source_key in ("source_originals", "source_translations", "source_other"):
+                try:
+                    source_root = case_dir / _case_path_value(config, source_key)
+                except SystemExit:
+                    continue
+                if _folder_has_files(source_root / folder_name):
+                    return True
+        return False
+    return True
 
 
 def _first_repeatable_gap(loaded: LoadedCase, step: dict[str, Any]) -> NextAction | None:
@@ -1192,7 +1283,7 @@ def _repeatable_episode_candidates(loaded: LoadedCase, step: dict[str, Any]) -> 
             episode_subfolders = [
                 path
                 for path in subfolders
-                if not (phase_terms and _episode_folder_matches_terms(path.name, phase_terms))
+                if not (phase_terms and _direct_folder_is_phase(path.name, phase_terms))
             ]
             if episode_subfolders:
                 for folder in episode_subfolders:
@@ -1274,6 +1365,18 @@ def _episode_folder_matches_terms(name: str, terms: tuple[str, ...]) -> bool:
         ):
             return True
     return False
+
+
+def _direct_folder_is_phase(name: str, terms: tuple[str, ...]) -> bool:
+    """Avoid mistaking an episode such as ``2025 compensation`` for its phase folder."""
+    normalized_name = _normalized_episode_name(name)
+    if not normalized_name:
+        return False
+    return any(
+        normalized_term == normalized_name or normalized_term in normalized_name
+        for term in terms
+        if (normalized_term := _normalized_episode_name(term))
+    )
 
 
 def _repeatable_candidates_from_evidence_sources(
@@ -1430,6 +1533,36 @@ def _citation_plan_for_step(
     configured_exhibit = str(step.get("exhibit_number", "")).strip()
     configured_prefix = str(step.get("item_prefix", "")).strip()
     if configured_exhibit:
+        exhibit_group = str(step.get("exhibit_group", "")).strip()
+        if exhibit_group and not configured_prefix:
+            grouped_units: list[tuple[str, str]] = []
+            for candidate_step in loaded.workflow.get("steps", []):
+                if not isinstance(candidate_step, dict):
+                    continue
+                if str(candidate_step.get("exhibit_group", "")).strip() != exhibit_group:
+                    continue
+                if not _step_enabled_for_case(loaded.config, candidate_step, loaded.case_dir):
+                    continue
+                candidate_step_id = str(candidate_step.get("step_id", ""))
+                if "repeatable" in str(candidate_step.get("execution", "")):
+                    grouped_units.extend(
+                        (candidate_step_id, candidate_episode_id)
+                        for candidate_episode_id, _folder in _repeatable_episode_candidates(
+                            loaded, candidate_step
+                        )
+                    )
+                else:
+                    grouped_units.append((candidate_step_id, ""))
+            target = (step_id, options.episode_id if "repeatable" in str(step.get("execution", "")) else "")
+            position = next(
+                (index for index, unit in enumerate(grouped_units, start=1) if unit == target),
+                1,
+            )
+            try:
+                position += int(step.get("exhibit_group_offset", 0) or 0)
+            except (TypeError, ValueError):
+                pass
+            configured_prefix = f"{configured_exhibit}.{position}."
         if "repeatable" in str(step.get("execution", "")) and not configured_prefix:
             candidates = _repeatable_episode_candidates(loaded, step)
             position = next(
@@ -1515,6 +1648,19 @@ def _first_case_config_placeholder(config: dict[str, Any]) -> str:
             "us_work.compensation",
             "us_work.work_location",
             "us_work.duties_summary",
+        ]:
+            value: Any = config
+            for part in dotted.split("."):
+                value = value.get(part, "") if isinstance(value, dict) else ""
+            if str(value).startswith("__") and str(value).endswith("__"):
+                return dotted
+    if str(config.get("task_type", "")) == "eb2niw_petition":
+        for dotted in [
+            "intended_occupation",
+            "proposed_endeavor.title",
+            "proposed_endeavor.one_sentence",
+            "proposed_endeavor.summary",
+            "filing.uscis_address",
         ]:
             value: Any = config
             for part in dotted.split("."):
@@ -1748,6 +1894,18 @@ def _validate_human_facing_draft_text(
                 + ", ".join(sorted(set(o1b_forbidden)))
                 + ". Regenerate the section under the configured O-1B Arts/MPTV rules."
             )
+    if str(loaded.config.get("task_type", "")) == "eb2niw_petition":
+        eb2_forbidden = [
+            phrase
+            for phrase in ["eb-1a", "extraordinary ability", "o-1b", "form i-129"]
+            if phrase in lowered
+        ]
+        if eb2_forbidden:
+            raise SystemExit(
+                "EB-2 NIW draft_text contains terminology from another petition framework: "
+                + ", ".join(sorted(set(eb2_forbidden)))
+                + ". Regenerate the block under the configured EB-2 threshold and Dhanasar rules."
+            )
 
     citation = _citation_plan_for_step(loaded, step, options)
     exhibit_number = citation.get("exhibit_number", "")
@@ -1975,11 +2133,12 @@ def extract_docx_text(path: Path) -> str:
 
 def folder_role_map(config: dict[str, Any]) -> dict[str, Any]:
     task_type = str(config.get("task_type", ""))
-    preferred_keys = (
-        ["o1b_folder_roles", "folder_roles", "eb1a_folder_roles"]
-        if task_type == "o1b_petition"
-        else ["eb1a_folder_roles", "folder_roles", "o1b_folder_roles"]
-    )
+    if task_type == "o1b_petition":
+        preferred_keys = ["o1b_folder_roles", "folder_roles", "eb1a_folder_roles"]
+    elif task_type == "eb2niw_petition":
+        preferred_keys = ["eb2niw_folder_roles", "folder_roles", "eb1a_folder_roles"]
+    else:
+        preferred_keys = ["eb1a_folder_roles", "folder_roles", "o1b_folder_roles"]
     for key in preferred_keys:
         value = config.get(key)
         if isinstance(value, dict):

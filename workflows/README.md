@@ -6,7 +6,7 @@
 
 ```text
 eb1a_petition.yaml
-eb2_niw_petition.yaml
+eb2niw_petition.yaml
 o1a_petition.yaml
 o1b_petition.yaml
 eb1a_rfe.yaml
@@ -15,7 +15,7 @@ o1a_rfe.yaml
 o1b_rfe.yaml
 ```
 
-Сейчас активны и проверяются три workflow: `eb1a_petition.yaml`,
-`eb1a_rfe_response.yaml` и `o1b_petition.yaml`. Остальные task types остаются планируемыми: создание
+Сейчас активны и проверяются четыре workflow: `eb1a_petition.yaml`,
+`eb1a_rfe_response.yaml`, `o1b_petition.yaml` и `eb2niw_petition.yaml`. Остальные task types остаются планируемыми: создание
 кейса для них должно быть включено только после появления и тестирования
 соответствующего YAML-файла.

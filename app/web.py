@@ -473,10 +473,19 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
                 "work_location": data.get("work_location", ""),
                 "duties_summary": data.get("duties_summary", ""),
                 "eb1a_template_variant": data.get("eb1a_template_variant", ""),
+                "eb2_basis": data.get("eb2_basis", ""),
+                "intended_occupation": data.get("intended_occupation", ""),
+                "proposed_endeavor_title": data.get("proposed_endeavor_title", ""),
+                "proposed_endeavor_one_sentence": data.get("proposed_endeavor_one_sentence", ""),
+                "proposed_endeavor_summary": data.get("proposed_endeavor_summary", ""),
+                "petition_date": data.get("petition_date", ""),
+                "attorney_name": data.get("attorney_name", ""),
+                "law_firm": data.get("law_firm", ""),
                 "memo_font_family": data.get("memo_font_family", ""),
                 "bundle_font_family": data.get("bundle_font_family", ""),
             },
             case_info_file=data.get("case_info_file", ""),
+            case_context_file=data.get("case_context_file", ""),
             source_folder_path=data.get("source_folder_path", ""),
             source_target_key=data.get("source_target_key", "source_originals"),
             source_folder_paths={
@@ -789,6 +798,7 @@ def render_home(query: str = "") -> str:
             <select name="task_type">
               <option value="eb1a_petition">EB1A petition</option>
               <option value="o1b_petition">O-1B petition</option>
+              <option value="eb2niw_petition">EB-2 NIW petition</option>
               <option value="eb1a_rfe_response">EB1A RFE response</option>
               <option value="document_layout">Document layout</option>
             </select>
@@ -1774,6 +1784,7 @@ def _task_type_label(task_type: str) -> str:
     return {
         "eb1a_petition": "EB1A petition",
         "o1b_petition": "O-1B petition",
+        "eb2niw_petition": "EB-2 NIW petition",
         "eb1a_rfe_response": "EB1A RFE response",
         "document_layout": "Document layout",
     }.get(task_type, task_type)
@@ -2461,6 +2472,7 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
     template_default = {
         "eb1a_rfe_response": "templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.yaml",
         "o1b_petition": "templates/O1B/MEMO O-1В_ver.1.0.docx",
+        "eb2niw_petition": "templates/EB2NIW/EB2_NIW_general_memo_template.md",
     }.get(task_type, eb1a_machine_template_file(config))
     if task_type == "eb1a_rfe_response":
         source_target_options = [
@@ -2549,6 +2561,29 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
         <input name="work_location" value="{field_value(us_work.get('work_location'))}" placeholder="Primary work location">
         <textarea name="duties_summary" rows="3" placeholder="Short duties summary">{field_value(us_work.get('duties_summary'))}</textarea>
         """
+    elif task_type == "eb2niw_petition":
+        filing = config.get("filing", {}) if isinstance(config.get("filing"), dict) else {}
+        endeavor = config.get("proposed_endeavor", {}) if isinstance(config.get("proposed_endeavor"), dict) else {}
+        basis = str(config.get("eb2_basis", "auto"))
+        left_extra = f"""
+        <input name="citizenship" value="{field_value(beneficiary.get('citizenship'))}" placeholder="Citizenship">
+        <select name="eb2_basis">
+          <option value="auto"{" selected" if basis == "auto" else ""}>EB-2 basis: infer from folders</option>
+          <option value="advanced_degree"{" selected" if basis == "advanced_degree" else ""}>Advanced degree</option>
+          <option value="exceptional_ability"{" selected" if basis == "exceptional_ability" else ""}>Exceptional ability</option>
+          <option value="both"{" selected" if basis == "both" else ""}>Both bases</option>
+        </select>
+        <input name="intended_occupation" value="{field_value(config.get('intended_occupation'))}" placeholder="Intended occupation">
+        """
+        right_fields = f"""
+        <input name="proposed_endeavor_title" value="{field_value(endeavor.get('title'))}" placeholder="Proposed endeavor title">
+        <textarea name="proposed_endeavor_one_sentence" rows="2" placeholder="Proposed endeavor — one precise sentence">{field_value(endeavor.get('one_sentence'))}</textarea>
+        <textarea name="proposed_endeavor_summary" rows="5" placeholder="Proposed endeavor — detailed context / implementation summary">{field_value(endeavor.get('summary'))}</textarea>
+        <input name="petition_date" value="{field_value(config.get('petition_date'))}" placeholder="Petition date">
+        <textarea name="filing_uscis_address" rows="3" placeholder="USCIS filing address">{field_value(filing.get('uscis_address'))}</textarea>
+        <input name="attorney_name" value="{field_value(filing.get('attorney_name'))}" placeholder="Attorney name (optional)">
+        <input name="law_firm" value="{field_value(filing.get('law_firm'))}" placeholder="Law firm (optional)">
+        """
     else:
         procedural_value = field_value(config.get("procedural_context")) or "Initial EB-1A petition"
         drafting_value = field_value(config.get("drafting_objective")) or "Prepare EB-1A petition memorandum"
@@ -2566,16 +2601,26 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
             (config.get("us_work", {}) or {}).get("position_or_role") if isinstance(config.get("us_work"), dict) else "",
         )
     )
-    inferred_unsaved = task_type in {"eb1a_petition", "o1b_petition"} and (
+    eb2_missing_intake = task_type == "eb2niw_petition" and any(
+        not field_value(value)
+        for value in (
+            config.get("intended_occupation"),
+            (config.get("proposed_endeavor", {}) or {}).get("title") if isinstance(config.get("proposed_endeavor"), dict) else "",
+            (config.get("proposed_endeavor", {}) or {}).get("one_sentence") if isinstance(config.get("proposed_endeavor"), dict) else "",
+        )
+    )
+    inferred_unsaved = task_type in {"eb1a_petition", "o1b_petition", "eb2niw_petition"} and (
         (bool(claimed) and not bool(configured_claimed))
         or not field_value(config.get("procedural_context"))
         or not field_value(config.get("drafting_objective"))
         or o1b_missing_intake
+        or eb2_missing_intake
     )
     submit_label = "Save inferred intake" if inferred_unsaved else "No intake changes"
     submit_disabled = "" if inferred_unsaved or not existing_intake else " disabled"
     force_dirty = "true" if inferred_unsaved or not existing_intake else "false"
     case_info_path = str(intake_sources.get("case_info_file", ""))
+    case_context_path = str(source_imports.get("case_context_file", ""))
     return f"""
     <section class="panel">
       <h2>Case intake & working file</h2>
@@ -2605,6 +2650,10 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
         <label><strong>Optional YAML/TXT case information file</strong>
           <input name="case_info_file" value="{escape(case_info_path, quote=True)}" placeholder="Optional path to YAML/TXT case info file">
         </label>
+        <label><strong>Free-form case context / strategy file</strong>
+          <input name="case_context_file" value="{escape(case_context_path, quote=True)}" placeholder="Optional TXT, MD, YAML, JSON, CSV, or DOCX; included in LLM prompts but never indexed">
+        </label>
+        <p class="muted small">The context file is copied verbatim into the case and supplied to Stage 2 as prompt-only background. It is not an exhibit and cannot be cited.</p>
         <h3>Document source folders</h3>
         <p class="muted small">External paths are remembered for later imports. The case-folder buttons open the copies actually used by the workflow.</p>
         {source_inputs_html}

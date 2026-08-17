@@ -733,8 +733,37 @@ class CliSmokeTests(unittest.TestCase):
                 patch.object(cli_support, "CASE_TEMPLATE_ROOT", template_root),
             ):
                 with self.assertRaisesRegex(SystemExit, "not implemented yet"):
-                    cli_support.create_case_from_template("niw_001", "eb2niw_petition")
-            self.assertFalse((case_root / "niw_001").exists())
+                    cli_support.create_case_from_template("unsupported_001", "eb5_petition")
+            self.assertFalse((case_root / "unsupported_001").exists())
+
+    def test_eb2niw_case_creation_and_dynamic_workflow_are_enabled(self) -> None:
+        project_root = Path(__file__).resolve().parent.parent
+        with TemporaryDirectory() as temp:
+            case_root = Path(temp) / "case_workspace"
+            with (
+                patch.object(cli_support, "CASE_ROOT", case_root),
+                patch.object(cli_support, "CASE_TEMPLATE_ROOT", project_root / "case_workspace" / "_template"),
+                patch.object(cli_support, "PROJECT_ROOT", project_root),
+            ):
+                case_dir = cli_support.create_case_from_template("niw_001", "eb2niw_petition")
+
+            config = load_yaml_file(case_dir / "case_config.yaml")
+            workflow = load_yaml_file(project_root / "workflows" / "eb2niw_petition.yaml")
+            step_ids = {str(step.get("step_id", "")) for step in workflow.get("steps", [])}
+            self.assertEqual(config["task_type"], "eb2niw_petition")
+            self.assertEqual(config["workflow"], "workflows/eb2niw_petition.yaml")
+            self.assertEqual(config["eb2_basis"], "auto")
+            self.assertTrue((case_dir / "case_context").is_dir())
+            self.assertTrue(
+                (
+                    case_dir
+                    / "source_documents/originals/3. (2) Пронг - Хорошая подготовка/3. Прочие достижения/8.Рек письма США"
+                ).is_dir()
+            )
+            self.assertIn("eb2niw_prong1_national_importance_episode", step_ids)
+            self.assertIn("eb2niw_prong2_role_episode", step_ids)
+            self.assertIn("eb2niw_prong3_balance", step_ids)
+            self.assertIn("eb2niw_conclusion", step_ids)
 
     def test_progress_detects_final_evidence_bundle_path(self) -> None:
         with TemporaryDirectory() as temp:

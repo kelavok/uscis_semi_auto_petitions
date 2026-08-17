@@ -30,6 +30,7 @@ INDEX_FIELDS = [
     "task_type_relevance",
     "memo_section_relevance",
     "exhibit_number",
+    "episode_title",
     "parent_document_id",
     "translation_status",
     "relationship_type",
@@ -806,13 +807,31 @@ def _infer_category(loaded: LoadedCase, file_path: Path, source_kind: str) -> st
     if not relative_parts:
         return source_kind
     top_folder = relative_parts[0]
-    for roles_key in ("o1b_folder_roles", "eb1a_folder_roles", "rfe_folder_roles"):
+    normalized_relative = tuple(part.casefold() for part in relative_parts)
+    best_role = ""
+    best_depth = 0
+    for roles_key in (
+        "eb2niw_folder_roles",
+        "o1b_folder_roles",
+        "eb1a_folder_roles",
+        "rfe_folder_roles",
+    ):
         roles = loaded.config.get(roles_key, {})
         if isinstance(roles, dict):
             for role, folder in roles.items():
-                if str(folder) == top_folder:
-                    return str(role)
-    return top_folder
+                folder_parts = tuple(
+                    part.casefold()
+                    for part in PurePosixPath(str(folder).replace("\\", "/")).parts
+                )
+                if (
+                    folder_parts
+                    and len(folder_parts) <= len(normalized_relative)
+                    and normalized_relative[: len(folder_parts)] == folder_parts
+                    and len(folder_parts) > best_depth
+                ):
+                    best_role = str(role)
+                    best_depth = len(folder_parts)
+    return best_role or top_folder
 
 
 def _source_key_for_kind(loaded: LoadedCase, source_kind: str) -> str:
