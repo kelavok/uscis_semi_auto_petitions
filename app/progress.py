@@ -61,7 +61,7 @@ def build_case_progress(case_id: str) -> CaseProgress:
                 endeavor.get("one_sentence"),
             )
         )
-    elif task_type == "eb1a_rfe_response":
+    elif task_type in {"eb1a_rfe_response", "eb2niw_rfe_response"}:
         manifest = loaded.case_dir / "case_strategy" / "strategy_manifest.json"
         intake_complete = manifest.exists() and manifest.stat().st_size > 0
 
@@ -80,7 +80,7 @@ def build_case_progress(case_id: str) -> CaseProgress:
     draft_root = loaded.case_dir / _configured_path(config, "draft_sections", "draft_sections")
     draft_files = _meaningful_files(draft_root, {".md", ".txt"})
     final_overview = any("final_overview" in path.name for path in draft_files)
-    if task_type == "eb1a_rfe_response":
+    if task_type in {"eb1a_rfe_response", "eb2niw_rfe_response"}:
         try:
             import json
 

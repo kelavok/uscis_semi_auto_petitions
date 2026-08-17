@@ -685,6 +685,10 @@ Validated `used_documents` determine logical exhibit order. Stage 3 uses the sha
 
 ```powershell
 python -m app.draft init-case --case rfe_001 --task-type eb1a_rfe_response
+
+# EB-2 NIW RFE response uses the same strategy-first workflow with its own
+# company templates and Basic Eligibility / Dhanasar issue groups.
+python -m app.draft init-case --case niw_rfe_001 --task-type eb2niw_rfe_response
 ```
 
 В веб-интерфейсе его можно выбрать как `EB1A RFE response`.

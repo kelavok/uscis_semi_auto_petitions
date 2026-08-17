@@ -11,9 +11,8 @@ from typing import Any
 from .cli_support import PROJECT_ROOT, case_path
 from .file_rules import is_office_temporary_file, is_prompt_sidecar
 from .workflow import (
-    EVIDENCE_TEXT_LIMIT,
-    PROMPT_TEXT_LIMIT,
     LoadedCase,
+    load_case,
     read_document_index,
     read_textual_file,
     safe_path_component,
@@ -51,6 +50,24 @@ CRITERION_FOLDER_ORDERS = {
 }
 
 NON_DRAFTING_SECTION_TYPES = {"cover_letter", "attachments"}
+RFE_TASK_TYPES = {"eb1a_rfe_response", "eb2niw_rfe_response"}
+
+RFE_TASK_SPECS: dict[str, dict[str, str]] = {
+    "eb1a_rfe_response": {
+        "label": "EB-1A",
+        "human_template": "templates/RFE/EB1/rfe draft template.docx",
+        "yaml_template": "templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.yaml",
+        "schema": "schemas/rfe_strategy_output.schema.json",
+        "bootstrap_instructions": "instructions/task_types/eb1a_rfe_response/strategy_bootstrap.md",
+    },
+    "eb2niw_rfe_response": {
+        "label": "EB-2 NIW",
+        "human_template": "templates/RFE/EB2NIW/EB2_NIW_RFE_response_human_template.docx",
+        "yaml_template": "templates/RFE/EB2NIW/EB2_NIW_RFE_response_unified_LLM_template.yaml",
+        "schema": "schemas/eb2niw_rfe_strategy_output.schema.json",
+        "bootstrap_instructions": "instructions/task_types/eb2niw_rfe_response/strategy_bootstrap.md",
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -76,7 +93,12 @@ class EvidenceImportSummary:
 
 
 def build_strategy_bootstrap_prompt(case_id: str, strategy_path: str, rfe_path: str) -> BootstrapSummary:
-    case_dir = case_path(case_id)
+    loaded = load_case(case_id)
+    case_dir = loaded.case_dir
+    task_type = str(loaded.config.get("task_type", ""))
+    spec = RFE_TASK_SPECS.get(task_type)
+    if spec is None:
+        raise ValueError(f"RFE strategy bootstrap is not available for task type {task_type!r}.")
     strategy_source = _required_source_file(strategy_path, "Strategy")
     rfe_source = _required_source_file(rfe_path, "RFE")
     strategy_copy = _copy_source_file(strategy_source, case_dir / "source_documents/rfe/strategy")
@@ -89,20 +111,20 @@ def build_strategy_bootstrap_prompt(case_id: str, strategy_path: str, rfe_path: 
     (raw_root / "human_strategy.txt").write_text(strategy_text, encoding="utf-8")
     (raw_root / "rfe_notice.txt").write_text(rfe_text, encoding="utf-8")
 
-    human_template_path = PROJECT_ROOT / "templates/RFE/EB1/rfe draft template.docx"
-    yaml_template_path = PROJECT_ROOT / "templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.yaml"
-    schema_path = PROJECT_ROOT / "schemas/rfe_strategy_output.schema.json"
-    instruction_path = PROJECT_ROOT / "instructions/task_types/eb1a_rfe_response/strategy_bootstrap.md"
+    human_template_path = PROJECT_ROOT / spec["human_template"]
+    yaml_template_path = PROJECT_ROOT / spec["yaml_template"]
+    schema_path = PROJECT_ROOT / spec["schema"]
+    instruction_path = PROJECT_ROOT / spec["bootstrap_instructions"]
     prompt = "\n".join(
         [
-            "# EXECUTE NOW: build the EB-1A RFE strategy JSON",
+            f"# EXECUTE NOW: build the {spec['label']} RFE strategy JSON",
             "",
             "You are receiving a complete task, not a file for review. Perform the task now. Do not ask what the user wants, do not offer a menu of possible actions, and do not acknowledge the prompt. Return only the completed JSON object required below.",
             "",
             "## Runtime metadata",
             "",
             f"- case_id: `{case_id}`",
-            "- task_type: `eb1a_rfe_response`",
+            f"- task_type: `{task_type}`",
             "- step_id: `rfe_strategy_bootstrap`",
             "",
             "## Required output schema",
@@ -140,7 +162,7 @@ def build_strategy_bootstrap_prompt(case_id: str, strategy_path: str, rfe_path: 
             "## Required response",
             "",
             "EXECUTE THE ANALYSIS AND GENERATE THE JSON NOW.",
-            f"Return only one JSON object. Set `case_id` to `{case_id}` and `task_type` to `eb1a_rfe_response`. Do not ask a question and do not add introductory or closing prose. Validate strict JSON before sending: escape internal double quotes as `\\\"`, encode string line breaks as `\\n`, and remove all trailing commas.",
+            f"Return only one JSON object. Set `case_id` to `{case_id}` and `task_type` to `{task_type}`. Do not ask a question and do not add introductory or closing prose. Validate strict JSON before sending: escape internal double quotes as `\\\"`, encode string line breaks as `\\n`, and remove all trailing commas.",
         ]
     )
     prompt_root = case_dir / "generated_prompts"
@@ -215,7 +237,7 @@ def apply_strategy_output(case_id: str, output: dict[str, Any]) -> StrategyImpor
     manifest = {
         "schema_version": "1.0",
         "case_id": case_id,
-        "task_type": "eb1a_rfe_response",
+        "task_type": str(output["task_type"]),
         "case_metadata": output["case_metadata"],
         "global_strategy": output["global_strategy"],
         "accepted_criteria": output.get("accepted_criteria", []),
@@ -337,6 +359,11 @@ def effective_strategy_units(case_dir: Path, config: dict[str, Any]) -> list[dic
     """
     manifest = load_strategy_manifest(case_dir)
     raw_units = [dict(unit) for unit in manifest.get("units", []) if isinstance(unit, dict)]
+    # EB-2 NIW RFE units are semantic issue blocks whose source_folder values
+    # are chosen from the actual RFE and response strategy. Unlike EB-1A's ten
+    # fixed criteria, they must not be rebuilt from a fixed ordinal folder map.
+    if str(config.get("task_type", "")) == "eb2niw_rfe_response":
+        return raw_units
     roots = _new_evidence_roots(case_dir, config)
     if not any(_folder_has_meaningful_files(root) for root in roots if root.exists()):
         return raw_units
@@ -569,12 +596,45 @@ def render_strategy_unit_context(loaded: LoadedCase, unit_id: str) -> str:
                 "",
             ]
         )
+    raw_root = loaded.case_dir / STRATEGY_ROOT / "raw"
+    raw_strategy = raw_root / "human_strategy.txt"
+    if raw_strategy.exists():
+        parts.extend(
+            [
+                "### Original human strategy (case-specific authority)",
+                "",
+                _fenced(raw_strategy.read_text(encoding="utf-8-sig", errors="replace"), "text"),
+                "",
+            ]
+        )
+    raw_rfe = raw_root / "rfe_notice.txt"
+    if raw_rfe.exists():
+        parts.extend(
+            [
+                "### Full RFE notice context",
+                "",
+                "The exact issue quotations above control this unit's scope; use the full notice only to preserve context and avoid contradiction.",
+                "",
+                _fenced(raw_rfe.read_text(encoding="utf-8-sig", errors="replace"), "text"),
+                "",
+            ]
+        )
     criterion = str(unit.get("criterion_role", ""))
     partition = loaded.case_dir / STRATEGY_ROOT / "initial_filing_sections" / f"{safe_path_component(criterion)}.txt" if criterion else None
     if partition and partition.exists():
-        parts.extend(["### Relevant initial filing memorandum section", "", _fenced(partition.read_text(encoding="utf-8-sig")[:PROMPT_TEXT_LIMIT], "text"), ""])
+        parts.extend(["### Relevant initial filing memorandum section", "", _fenced(partition.read_text(encoding="utf-8-sig"), "text"), ""])
     elif criterion:
         parts.extend(["### Relevant initial filing memorandum section", "", "[No criterion-specific partition was found. Review the partition report before final drafting.]", ""])
+    full_initial = loaded.case_dir / STRATEGY_ROOT / "initial_filing_sections" / "_full_initial_filing.txt"
+    if full_initial.exists():
+        parts.extend(
+            [
+                "### Full initial filing memorandum (context; do not contradict)",
+                "",
+                _fenced(full_initial.read_text(encoding="utf-8-sig", errors="replace"), "text"),
+                "",
+            ]
+        )
 
     source_folder = str(unit.get("source_folder", "")).strip("/\\")
     files: list[Path] = []
@@ -694,8 +754,11 @@ def _validate_strategy_output(case_id: str, output: dict[str, Any]) -> None:
         raise ValueError("Strategy output must be one JSON object.")
     if output.get("case_id") != case_id:
         raise ValueError(f"case_id must be {case_id!r}.")
-    if output.get("task_type") != "eb1a_rfe_response":
-        raise ValueError("task_type must be 'eb1a_rfe_response'.")
+    expected_task_type = str(load_case(case_id).config.get("task_type", ""))
+    if expected_task_type not in RFE_TASK_TYPES:
+        raise ValueError(f"Case task type {expected_task_type!r} is not an RFE workflow.")
+    if output.get("task_type") != expected_task_type:
+        raise ValueError(f"task_type must be {expected_task_type!r}.")
     for key in ["case_metadata", "global_strategy", "rfe_issues", "sections", "template_decisions", "open_questions"]:
         if key not in output:
             raise ValueError(f"Missing required strategy field: {key}")
@@ -709,6 +772,10 @@ def _validate_strategy_output(case_id: str, output: dict[str, Any]) -> None:
     ]:
         if not str(metadata.get(key, "")).strip():
             raise ValueError(f"case_metadata.{key} is required.")
+    if expected_task_type == "eb2niw_rfe_response":
+        for key in ["intended_occupation", "proposed_endeavor_title", "one_sentence_endeavor"]:
+            if key not in metadata:
+                raise ValueError(f"case_metadata.{key} must be present (use an empty string if unknown).")
     for key in [
         "rfe_response_date", "uscis_office_or_service_center", "officer_name",
         "office_chief_name", "submitter_name", "submitter_title",
@@ -803,8 +870,18 @@ def _update_case_config(case_dir: Path, manifest: dict[str, Any]) -> None:
     beneficiary["preferred_reference"] = meta["preferred_reference"]
     config["field"] = meta["field"]
     config["specialization"] = meta["specialization"]
-    config["procedural_context"] = "EB-1A Request for Evidence response"
-    config["drafting_objective"] = "Prepare a strategy-controlled EB-1A RFE response"
+    task_type = str(manifest.get("task_type", config.get("task_type", "")))
+    if task_type == "eb2niw_rfe_response":
+        config["procedural_context"] = "EB-2 NIW Request for Evidence response"
+        config["drafting_objective"] = "Prepare a strategy-controlled EB-2 NIW RFE response"
+        config["intended_occupation"] = str(meta.get("intended_occupation", ""))
+        endeavor = config.setdefault("proposed_endeavor", {})
+        if isinstance(endeavor, dict):
+            endeavor["title"] = str(meta.get("proposed_endeavor_title", ""))
+            endeavor["one_sentence"] = str(meta.get("one_sentence_endeavor", ""))
+    else:
+        config["procedural_context"] = "EB-1A Request for Evidence response"
+        config["drafting_objective"] = "Prepare a strategy-controlled EB-1A RFE response"
     rfe_metadata = config.setdefault("rfe_metadata", {})
     for key in [
         "case_number", "receipt_date", "rfe_date", "response_deadline", "uscis_address",
@@ -835,8 +912,9 @@ def _update_case_config(case_dir: Path, manifest: dict[str, Any]) -> None:
     )
     response = config.setdefault("rfe_response", {})
     response["strategy_manifest"] = f"{STRATEGY_ROOT}/{MANIFEST_NAME}"
-    response["template_file"] = "templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.yaml"
-    response["human_template_file"] = "templates/RFE/EB1/rfe draft template.docx"
+    spec = RFE_TASK_SPECS[task_type]
+    response["template_file"] = spec["yaml_template"]
+    response["human_template_file"] = spec["human_template"]
     response["attachment_label"] = manifest.get("template_decisions", {}).get("attachment_label", "Attachment")
     config["rfe_enabled_issues"] = [unit["unit_id"] for unit in manifest["units"]]
     _write_yaml_file(config_path, config)

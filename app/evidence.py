@@ -705,7 +705,7 @@ def _iter_source_files(loaded: LoadedCase) -> list[tuple[Path, str]]:
 
 
 def _configured_source_paths(loaded: LoadedCase) -> list[tuple[str, str]]:
-    if str(loaded.config.get("task_type", "")) == "eb1a_rfe_response":
+    if str(loaded.config.get("task_type", "")) in {"eb1a_rfe_response", "eb2niw_rfe_response"}:
         rfe_paths = [
             ("source_rfe_new_originals", "original"),
             ("source_rfe_new_translations", "translation"),

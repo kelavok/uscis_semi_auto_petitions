@@ -16,6 +16,6 @@ o1b_rfe.yaml
 ```
 
 Сейчас активны и проверяются четыре workflow: `eb1a_petition.yaml`,
-`eb1a_rfe_response.yaml`, `o1b_petition.yaml` и `eb2niw_petition.yaml`. Остальные task types остаются планируемыми: создание
+`eb1a_rfe_response.yaml`, `eb2niw_rfe_response.yaml`, `o1b_petition.yaml` и `eb2niw_petition.yaml`. Остальные task types остаются планируемыми: создание
 кейса для них должно быть включено только после появления и тестирования
 соответствующего YAML-файла.

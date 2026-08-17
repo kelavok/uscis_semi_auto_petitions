@@ -69,6 +69,26 @@ EXHIBIT_NUMBER_BY_ROLE = {
     "high_salary": "9",
     "commercial_success": "10",
     "employment_plan": "11",
+    "basic_eligibility": "1",
+    "advanced_degree": "1",
+    "exceptional_ability": "1",
+    "exceptional_academic_record": "1",
+    "exceptional_ten_years": "1",
+    "exceptional_license": "1",
+    "exceptional_remuneration": "1",
+    "exceptional_membership": "1",
+    "exceptional_recognition": "1",
+    "exceptional_final_merits": "1",
+    "prong1": "2",
+    "prong2": "3",
+    "prong3": "4",
+}
+RFE_TASK_TYPES = {"eb1a_rfe_response", "eb2niw_rfe_response"}
+EB2NIW_RFE_EXHIBIT_TITLE_BY_NUMBER = {
+    "1": "Basic Eligibility for EB-2",
+    "2": "First Prong: The Proposed Endeavor Has Both Substantial Merit and National Importance",
+    "3": "Second Prong: The Petitioner Is Well Positioned to Advance the Proposed Endeavor",
+    "4": "Third Prong: On Balance, It Would Be Beneficial to Waive the Job Offer and Labor Certification Requirements",
 }
 
 
@@ -1132,12 +1152,16 @@ def _exhibit_metadata_for_output(
 ) -> tuple[str, str]:
     step_id = str(data.get("step_id", ""))
     episode_id = str(data.get("episode_id", ""))
-    if str(loaded.config.get("task_type", "")) == "eb1a_rfe_response" and episode_id:
+    if str(loaded.config.get("task_type", "")) in RFE_TASK_TYPES and episode_id:
         from .rfe_strategy import get_strategy_unit
 
         unit = get_strategy_unit(loaded.case_dir, episode_id, loaded.config)
         section_title = str(unit.get("section_title", "")).strip()
         role = str(unit.get("criterion_role", "")).strip()
+        if str(loaded.config.get("task_type", "")) == "eb2niw_rfe_response":
+            exhibit_number = EXHIBIT_NUMBER_BY_ROLE.get(role, "")
+            group_title = EB2NIW_RFE_EXHIBIT_TITLE_BY_NUMBER.get(exhibit_number, "")
+            return group_title or section_title or str(unit.get("title", "")).strip(), role
         return section_title or str(unit.get("title", "")).strip(), role
     title_from_structure, role_from_structure = _criterion_metadata_from_working_structure(
         loaded, step_id
@@ -1159,6 +1183,12 @@ def _exhibit_metadata_for_output(
 def _episode_title_for_output(loaded: LoadedCase, data: dict[str, object]) -> str:
     step_id = str(data.get("step_id", "")).strip()
     episode_id = str(data.get("episode_id", "")).strip()
+    if str(loaded.config.get("task_type", "")) in RFE_TASK_TYPES and episode_id:
+        from .rfe_strategy import get_strategy_unit
+
+        unit = get_strategy_unit(loaded.case_dir, episode_id, loaded.config)
+        if unit:
+            return _display_episode_title(str(unit.get("title", "")).strip())
     try:
         step = find_step(loaded.workflow, step_id)
     except SystemExit:
@@ -1222,7 +1252,7 @@ def _normalize_step_roles(step: dict[str, object]) -> list[str]:
 def _exhibit_number_for_output(loaded: LoadedCase, data: dict[str, object]) -> str:
     step_id = str(data.get("step_id", ""))
     episode_id = str(data.get("episode_id", ""))
-    if str(loaded.config.get("task_type", "")) == "eb1a_rfe_response" and episode_id:
+    if str(loaded.config.get("task_type", "")) in RFE_TASK_TYPES and episode_id:
         from .rfe_strategy import get_strategy_unit
 
         unit = get_strategy_unit(loaded.case_dir, episode_id, loaded.config)

@@ -1629,7 +1629,7 @@ def _first_case_config_placeholder(config: dict[str, Any]) -> str:
         value = str(config.get(key, ""))
         if value.startswith("__") and value.endswith("__"):
             return key
-    if str(config.get("task_type", "")) == "eb1a_rfe_response":
+    if str(config.get("task_type", "")) in {"eb1a_rfe_response", "eb2niw_rfe_response"}:
         metadata = config.get("rfe_metadata", {})
         if isinstance(metadata, dict):
             for key in ["case_number", "receipt_date", "rfe_date", "response_deadline", "uscis_address"]:
@@ -2135,7 +2135,7 @@ def folder_role_map(config: dict[str, Any]) -> dict[str, Any]:
     task_type = str(config.get("task_type", ""))
     if task_type == "o1b_petition":
         preferred_keys = ["o1b_folder_roles", "folder_roles", "eb1a_folder_roles"]
-    elif task_type == "eb2niw_petition":
+    elif task_type in {"eb2niw_petition", "eb2niw_rfe_response"}:
         preferred_keys = ["eb2niw_folder_roles", "folder_roles", "eb1a_folder_roles"]
     else:
         preferred_keys = ["eb1a_folder_roles", "folder_roles", "o1b_folder_roles"]

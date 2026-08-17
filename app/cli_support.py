@@ -56,6 +56,8 @@ def create_case_from_template(case_id: str, task_type: str) -> Path:
         text = text.replace("workflow: workflows/eb1a_petition.yaml", workflow_value)
         if task_type == "eb1a_rfe_response":
             text = _rfe_case_config_text(text)
+        elif task_type == "eb2niw_rfe_response":
+            text = _eb2niw_rfe_case_config_text(text)
         elif task_type == "o1b_petition":
             text = _o1b_case_config_text(text)
         elif task_type == "eb2niw_petition":
@@ -74,8 +76,8 @@ def create_case_from_template(case_id: str, task_type: str) -> Path:
                     shutil.copytree(child, child_destination)
                 else:
                     shutil.copy2(child, child_destination)
-    elif task_type == "eb1a_rfe_response":
-        _create_eb1a_rfe_structure(target)
+    elif task_type in {"eb1a_rfe_response", "eb2niw_rfe_response"}:
+        _create_rfe_structure(target, task_type)
     elif task_type == "o1b_petition":
         source = PROJECT_ROOT / "templates" / "O1B" / "case_folders_template"
         destination = target / "source_documents" / "originals"
@@ -109,6 +111,7 @@ def workflow_for(task_type: str) -> str:
     mapping = {
         "eb1a_petition": "workflow: workflows/eb1a_petition.yaml",
         "eb1a_rfe_response": "workflow: workflows/eb1a_rfe_response.yaml",
+        "eb2niw_rfe_response": "workflow: workflows/eb2niw_rfe_response.yaml",
         "o1b_petition": "workflow: workflows/o1b_petition.yaml",
         "eb2niw_petition": "workflow: workflows/eb2niw_petition.yaml",
         "document_layout": "workflow: workflows/document_layout.yaml",
@@ -330,6 +333,62 @@ def _rfe_case_config_text(text: str) -> str:
     return text
 
 
+def _eb2niw_rfe_case_config_text(text: str) -> str:
+    text = _rfe_case_config_text(text)
+    text = text.replace(
+        "source_folder_template: templates/RFE/EB1",
+        "source_folder_template: templates/RFE/EB2NIW",
+    )
+    text = text.replace(
+        "working_document_template: templates/EB1A/EB1A_working_document_structure.yaml",
+        "working_document_template: templates/RFE/EB2NIW/EB2_NIW_RFE_response_unified_LLM_template.yaml",
+    )
+    text = text.replace(
+        "drafting_objective: Prepare EB-1A RFE response",
+        "drafting_objective: Prepare EB-2 NIW RFE response",
+    )
+    text = text.replace(
+        "petition_type: EB-1A Form I-140",
+        "petition_type: EB-2 NIW Form I-140",
+    )
+    text = text.replace(
+        "template_file: templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.yaml",
+        "template_file: templates/RFE/EB2NIW/EB2_NIW_RFE_response_unified_LLM_template.yaml",
+    )
+    text = text.replace(
+        "human_template_file: templates/RFE/EB1/rfe draft template.docx",
+        "human_template_file: templates/RFE/EB2NIW/EB2_NIW_RFE_response_human_template.docx",
+    )
+    marker = "drafting_objective: Prepare EB-2 NIW RFE response\n"
+    if marker in text and "proposed_endeavor:" not in text:
+        text = text.replace(
+            marker,
+            marker
+            + "eb2_basis: auto\n"
+            + "intended_occupation: __REQUIRED__\n"
+            + "proposed_endeavor:\n"
+            + "  title: __REQUIRED__\n"
+            + "  one_sentence: __REQUIRED__\n\n",
+            1,
+        )
+    roles = (
+        "eb2niw_folder_roles:\n"
+        '  basic_eligibility: "1. Basic Eligibility"\n'
+        '  advanced_degree: "1. Basic Eligibility/Магистр"\n'
+        '  exceptional_ability: "1. Basic Eligibility/Исключительные способности"\n'
+        '  prong1: "2. (1) Пронг - Нац важность"\n'
+        '  prong2: "3. (2) Пронг - Хорошая подготовка"\n'
+        '  prong3: "4. (3) Пронг - Выгодно отказаться от трудоустройства"\n\n'
+    )
+    text = re.sub(
+        r"(?ms)^eb1a_folder_roles:\n.*?(?=^approvals:)",
+        roles,
+        text,
+        count=1,
+    )
+    return text
+
+
 def _document_layout_case_config_text(text: str) -> str:
     text = _remove_eb1a_template_variant_fields(text)
     text = re.sub(
@@ -368,7 +427,7 @@ def _remove_eb1a_template_variant_fields(text: str) -> str:
     )
 
 
-def _create_eb1a_rfe_structure(target: Path) -> None:
+def _create_rfe_structure(target: Path, task_type: str) -> None:
     rfe_directories = [
         "source_documents/rfe/notice",
         "source_documents/rfe/strategy",
@@ -388,7 +447,24 @@ def _create_eb1a_rfe_structure(target: Path) -> None:
             keep.write_text("", encoding="utf-8")
 
     source = PROJECT_ROOT / "templates" / "RFE" / "EB1" / "case_folders_template" / "new_docs"
-    if not source.exists():
+    if task_type == "eb2niw_rfe_response":
+        source = PROJECT_ROOT / "templates" / "RFE" / "EB2NIW" / "case_folders_template" / "new_docs"
+        manifest = PROJECT_ROOT / "templates" / "RFE" / "EB2NIW" / "case_folder_tree.txt"
+        if manifest.exists():
+            for raw_line in manifest.read_text(encoding="utf-8-sig").splitlines():
+                if not raw_line.strip() or raw_line.lstrip().startswith("#"):
+                    continue
+                parts = [
+                    part
+                    for part in raw_line.strip().replace("\\", "/").split("/")
+                    if part
+                ]
+                for destination in [
+                    target / "source_documents" / "rfe_response" / "new_documents" / "originals",
+                    target / "source_documents" / "rfe_response" / "new_documents" / "translations",
+                ]:
+                    destination.joinpath(*parts).mkdir(parents=True, exist_ok=True)
+    elif not source.exists():
         source = PROJECT_ROOT / "templates" / "EB1A" / "case_folders_template"
     if source.exists():
         for destination in [
@@ -402,19 +478,36 @@ def _create_eb1a_rfe_structure(target: Path) -> None:
         "# RFE response plan\n\n"
         "Use this file to define the order of sections and issue-level strategy.\n\n"
         "## Suggested structure\n\n"
-        "1. Cover letter / procedural introduction\n"
-        "2. Continued work / U.S. plans, if challenged\n"
-        "3. Prospective substantial benefit, if challenged\n"
-        "4. Criteria challenged in the RFE, in strategic order\n"
-        "5. Final merits determination, if challenged\n"
-        "6. Conclusion\n\n"
-        "## Issue list\n\n"
-        "- issue_id: continued_work\n"
-        "  folder: continued_work\n"
-        "  strategy: [write instructions]\n\n"
-        "- issue_id: awards_1\n"
-        "  folder: 1. Награды/1 episode\n"
-        "  strategy: [write instructions]\n",
+        + (
+            "1. Cover letter / procedural introduction\n"
+            "2. Basic EB-2 eligibility, only to the extent challenged\n"
+            "3. Dhanasar Prong 1 issues, in the RFE's logical order\n"
+            "4. Dhanasar Prong 2 issues, in the RFE's logical order\n"
+            "5. Dhanasar Prong 3 issues, in the RFE's logical order\n"
+            "6. Summary and request\n\n"
+            if task_type == "eb2niw_rfe_response"
+            else
+            "1. Cover letter / procedural introduction\n"
+            "2. Continued work / U.S. plans, if challenged\n"
+            "3. Prospective substantial benefit, if challenged\n"
+            "4. Criteria challenged in the RFE, in strategic order\n"
+            "5. Final merits determination, if challenged\n"
+            "6. Conclusion\n\n"
+        )
+        + "## Issue list\n\n"
+        + (
+            "- issue_id: prong1_national_importance\n"
+            "  folder: 2. Prong 1/National Importance\n"
+            "  strategy: [write instructions]\n"
+            if task_type == "eb2niw_rfe_response"
+            else
+            "- issue_id: continued_work\n"
+            "  folder: continued_work\n"
+            "  strategy: [write instructions]\n\n"
+            "- issue_id: awards_1\n"
+            "  folder: 1. Награды/1 episode\n"
+            "  strategy: [write instructions]\n"
+        ),
     )
     _write_if_missing(
         target / "source_documents" / "rfe" / "strategy" / "README.md",
@@ -422,6 +515,11 @@ def _create_eb1a_rfe_structure(target: Path) -> None:
         "Put additional strategy notes here if they should be included in RFE prompts.\n"
         "Highest-priority custom instructions should also go into `user_case_instructions.md`.\n",
     )
+
+
+def _create_eb1a_rfe_structure(target: Path) -> None:
+    """Backward-compatible helper retained for external callers and tests."""
+    _create_rfe_structure(target, "eb1a_rfe_response")
 
 
 def _copy_children_if_missing(source: Path, destination: Path) -> None:

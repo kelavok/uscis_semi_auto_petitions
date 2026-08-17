@@ -35,6 +35,7 @@ from .template_variants import (
 DEFAULT_TEMPLATE_BY_TASK_TYPE = {
     "eb1a_petition": "templates/EB1A/EB1A_unified_template_LLM.docx",
     "eb1a_rfe_response": "templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.yaml",
+    "eb2niw_rfe_response": "templates/RFE/EB2NIW/EB2_NIW_RFE_response_unified_LLM_template.yaml",
     "o1b_petition": "templates/O1B/MEMO O-1В_ver.1.0.docx",
     "eb2niw_petition": "templates/EB2NIW/EB2_NIW_general_memo_template.md",
 }
@@ -115,6 +116,23 @@ RFE_CRITERION_HEADING_BY_ROLE = {
     "leading_critical_role": "Criterion 8. The person has performed in a leading or critical role for organizations or establishments that have a distinguished reputation.",
     "high_salary": "Criterion 9. The person has commanded a high salary, or other significantly high remuneration for services, in relation to others in the field.",
     "commercial_success": "Criterion 10. Commercial successes in the performing arts, as shown by box office receipts or record, cassette, compact disk, or video sales.",
+}
+
+EB2NIW_RFE_HEADING_BY_ROLE = {
+    "basic_eligibility": "Basic Eligibility for EB-2",
+    "advanced_degree": "Advanced Degree Professional",
+    "exceptional_ability": "Exceptional Ability",
+    "exceptional_academic_record": "Exceptional Ability Criterion R1: Academic Record",
+    "exceptional_ten_years": "Exceptional Ability Criterion R2: Ten Years of Full-Time Experience",
+    "exceptional_license": "Exceptional Ability Criterion R3: License or Certification",
+    "exceptional_remuneration": "Exceptional Ability Criterion R4: Salary or Remuneration",
+    "exceptional_membership": "Exceptional Ability Criterion R5: Professional Association Membership",
+    "exceptional_recognition": "Exceptional Ability Criterion R6: Recognition for Achievements and Significant Contributions",
+    "exceptional_final_merits": "Exceptional Ability Final Merits Determination",
+    "prong1": "First Prong: The Proposed Endeavor Has Both Substantial Merit and National Importance",
+    "prong2": "Second Prong: The Petitioner Is Well Positioned to Advance the Proposed Endeavor",
+    "prong3": "Third Prong: On Balance, It Would Be Beneficial to Waive the Job Offer and Labor Certification Requirements",
+    "summary": "Summary and Request for Favorable Adjudication",
 }
 
 # Backward-compatible alias for EB-1A-specific callers and tests.
@@ -352,7 +370,7 @@ def build_memo_skeleton(
     config: dict[str, Any], report: TemplateParseReport, case_dir: Path
 ) -> list[dict[str, Any]]:
     task_type = str(config.get("task_type", ""))
-    if task_type == "eb1a_rfe_response":
+    if task_type in {"eb1a_rfe_response", "eb2niw_rfe_response"}:
         return _rfe_skeleton(config, case_dir, report)
     if task_type == "o1b_petition":
         return _o1b_skeleton(config, case_dir, report)
@@ -413,7 +431,7 @@ def render_markdown_skeleton(
 
 def write_docx(path: Path, case_id: str, config: dict[str, Any], skeleton: list[dict[str, Any]]) -> None:
     task_type = str(config.get("task_type", ""))
-    if task_type == "eb1a_rfe_response":
+    if task_type in {"eb1a_rfe_response", "eb2niw_rfe_response"}:
         _write_rfe_company_docx(path, config, path.parent.parent)
         return
     if task_type == "eb1a_petition":
@@ -487,6 +505,8 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
     yaml_template = load_yaml_file(yaml_path) if yaml_path.exists() else {}
     manifest = load_strategy_manifest(case_dir)
     manifest["units"] = effective_strategy_units(case_dir, config)
+    task_type = str(config.get("task_type", ""))
+    is_eb2niw = task_type == "eb2niw_rfe_response"
 
     document = Document(str(human_template))
     body = document._element.body
@@ -575,6 +595,14 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
         return paragraph
 
     def add_criterion_line(role: str):
+        if is_eb2niw:
+            paragraph = document.add_paragraph(style="Normal")
+            run = paragraph.add_run(
+                EB2NIW_RFE_HEADING_BY_ROLE.get(role, role.replace("_", " ").title())
+            )
+            run.bold = True
+            apply_run_font(run)
+            return paragraph
         roman = RFE_CRITERION_ROMAN_BY_ROLE.get(role, "")
         title = _rfe_criterion_heading(yaml_template, role)
         description = re.sub(r"^Criterion\s+\d+\.\s*", "", title).strip()
@@ -584,14 +612,37 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
         paragraph.add_run(f" {description}")
         return paragraph
 
+    if is_eb2niw:
+        add_text("INDEX", style="Heading 1")
+        evidence_entries = _evidence_index_entries(case_dir, config)
+        if evidence_entries:
+            for exhibit_heading, evidence_items in evidence_entries:
+                add_text(exhibit_heading, style="Heading 2")
+                for item_kind, item_title in evidence_items:
+                    add_text(
+                        item_title,
+                        style="Heading 3" if item_kind == "episode" else "Evidence Index Item",
+                    )
+        else:
+            add_text(
+                "[SCRIPT PLACEHOLDER: generated from the exhibit and document indexes after LLM drafting]",
+                style="Script Placeholder",
+            )
+        document.add_page_break()
+
     response_date = str(metadata.get("rfe_response_date", "")).strip()
     add_text(response_date or "[RFE RESPONSE DATE TO BE CONFIRMED]")
     add_text("TO USCIS", bold=True)
+    re_line = (
+        f"Response to Request for Evidence Regarding Form I-140 Petition under EB-2 National Interest Waiver in {field or '[FIELD]'} - {specialization or '[SPECIALIZATION]'}"
+        if is_eb2niw
+        else f"I-140 Petition for Alien of Extraordinary Ability in {field or '[FIELD]'} (EB-1A) - {specialization or '[SPECIALIZATION]'}"
+    )
+    add_label_value("RE: ", re_line).paragraph_format.space_before = Pt(10)
     add_label_value(
-        "RE: ",
-        f"I-140 Petition for Alien of Extraordinary Ability in {field or '[FIELD]'} (EB-1A) - {specialization or '[SPECIALIZATION]'}",
-    ).paragraph_format.space_before = Pt(10)
-    add_label_value("Petitioner: ", full_name or "[BENEFICIARY NAME]")
+        "Petitioner/Beneficiary: " if is_eb2niw else "Petitioner: ",
+        full_name or "[BENEFICIARY NAME]",
+    )
     add_label_value("Case No.: ", case_number or "[CASE NUMBER]")
     office = str(metadata.get("uscis_office_or_service_center", "")).strip()
     if office:
@@ -604,10 +655,18 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
         add_label_value("Response Deadline: ", deadline)
     add_text(str(metadata.get("salutation", "")).strip() or "Dear Officer:")
     add_text(
-        f"Please accept this response to the Request for Evidence regarding the Form I-140 petition filed on behalf of {full_name or '[BENEFICIARY NAME]'} under INA § 203(b)(1)(A), who is a specialist in the field of {field or '[FIELD]'}, and especially in {specialization or '[SPECIALIZATION]'}."
+        (
+            f"Please accept this response to the Request for Evidence regarding the Form I-140 petition filed on behalf of {full_name or '[BENEFICIARY NAME]'} under INA § 203(b)(2)(B)(i), seeking EB-2 classification and a National Interest Waiver in the field of {field or '[FIELD]'}, with particular specialization in {specialization or '[SPECIALIZATION]'}."
+            if is_eb2niw
+            else f"Please accept this response to the Request for Evidence regarding the Form I-140 petition filed on behalf of {full_name or '[BENEFICIARY NAME]'} under INA § 203(b)(1)(A), who is a specialist in the field of {field or '[FIELD]'}, and especially in {specialization or '[SPECIALIZATION]'}."
+        )
     )
     add_text(
-        "We respectfully submit the enclosed additional evidence and explanations in response to the issues raised in the Request for Evidence. This response provides additional documentary evidence and legal explanation in support of the remaining criteria addressed in the RFE, namely:"
+        (
+            "We respectfully submit the enclosed additional evidence and explanations in response to the issues raised in the Request for Evidence. This response addresses only the disputed EB-2 NIW requirements identified by USCIS, namely:"
+            if is_eb2niw
+            else "We respectfully submit the enclosed additional evidence and explanations in response to the issues raised in the Request for Evidence. This response provides additional documentary evidence and legal explanation in support of the remaining criteria addressed in the RFE, namely:"
+        )
     )
     addressed_roles = list(
         dict.fromkeys(
@@ -621,11 +680,15 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
     accepted = [
         str(role)
         for role in manifest.get("accepted_criteria", [])
-        if str(role) in RFE_CRITERION_ROMAN_BY_ROLE
+        if is_eb2niw or str(role) in RFE_CRITERION_ROMAN_BY_ROLE
     ]
     if accepted:
         paragraph = add_text(
-            f"USCIS recognized that {preferred or full_name or '[BENEFICIARY]'} satisfies the following criteria:",
+            (
+                f"USCIS made the following favorable findings regarding {preferred or full_name or '[BENEFICIARY]'}:"
+                if is_eb2niw
+                else f"USCIS recognized that {preferred or full_name or '[BENEFICIARY]'} satisfies the following criteria:"
+            ),
             bold=True,
         )
         paragraph.paragraph_format.space_before = Pt(12)
@@ -666,8 +729,16 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
         document.add_page_break()
         first = group[0]
         role = str(first.get("criterion_role", ""))
-        section_type = str(first.get("section_type", ""))
-        heading = _rfe_criterion_heading(yaml_template, role) if role else str(first.get("section_title") or first.get("title") or "RFE Response Section")
+        heading = (
+            EB2NIW_RFE_HEADING_BY_ROLE.get(
+                role,
+                str(first.get("section_title") or first.get("title") or "RFE Response Section"),
+            )
+            if is_eb2niw and role
+            else _rfe_criterion_heading(yaml_template, role)
+            if role
+            else str(first.get("section_title") or first.get("title") or "RFE Response Section")
+        )
         add_text(heading, style="Heading 1")
         if role:
             add_text(
@@ -713,16 +784,17 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
             for paragraph_text in draft_paragraphs:
                 add_text(paragraph_text)
 
-    document.add_page_break()
-    add_text("Attachments / Evidence Index", style="Heading 1")
-    evidence_entries = _evidence_index_entries(case_dir, config)
-    for exhibit_heading, evidence_items in evidence_entries:
-        add_text(exhibit_heading, style="Heading 2")
-        for item_kind, item_title in evidence_items:
-            if item_kind == "episode":
-                add_text(item_title, style="Heading 3")
-            else:
-                add_text(item_title, style="Evidence Index Item")
+    if not is_eb2niw:
+        document.add_page_break()
+        add_text("Attachments / Evidence Index", style="Heading 1")
+        evidence_entries = _evidence_index_entries(case_dir, config)
+        for exhibit_heading, evidence_items in evidence_entries:
+            add_text(exhibit_heading, style="Heading 2")
+            for item_kind, item_title in evidence_items:
+                if item_kind == "episode":
+                    add_text(item_title, style="Heading 3")
+                else:
+                    add_text(item_title, style="Evidence Index Item")
 
     for section in document.sections:
         section.top_margin = Inches(1)
@@ -1103,10 +1175,22 @@ def _eb2niw_basis_flags(config: dict[str, Any], case_dir: Path) -> tuple[bool, b
 def _rfe_skeleton(
     config: dict[str, Any], case_dir: Path, report: TemplateParseReport
 ) -> list[dict[str, Any]]:
-    skeleton: list[dict[str, Any]] = [
+    is_eb2niw = str(config.get("task_type", "")) == "eb2niw_rfe_response"
+    skeleton: list[dict[str, Any]] = []
+    if is_eb2niw:
+        skeleton.append(
+            {
+                "level": 1,
+                "title": "INDEX",
+                "paragraphs": [
+                    "[SCRIPT-CONTROLLED CONTENT: generated from the exhibit and document indexes.]"
+                ],
+            }
+        )
+    skeleton.append(
         {
             "level": 1,
-            "title": "RFE Response",
+            "title": "EB-2 NIW RFE Response" if is_eb2niw else "RFE Response",
             "paragraphs": [
                 _substitute("Case No. __CASE_NO__", config),
                 _substitute("Accepted for review on __RECEIPT_DATE__", config),
@@ -1114,8 +1198,8 @@ def _rfe_skeleton(
                 _substitute("Area: __FIELD__", config),
                 _substitute("Specialization: __SPECIALIZATION__", config),
             ],
-        },
-    ]
+        }
+    )
     from .rfe_strategy import effective_strategy_units
 
     units = effective_strategy_units(case_dir, config)
@@ -1141,19 +1225,20 @@ def _rfe_skeleton(
                 "criterion_role": str(unit.get("criterion_role", "")),
             }
         )
-    skeleton.append({"level": 1, "title": "Attachments / Evidence Index", "paragraphs": []})
-    for exhibit_heading, evidence_items in _evidence_index_entries(case_dir, config):
-        skeleton.append(
-            {
-                "level": 2,
-                "title": exhibit_heading,
-                "paragraphs": [],
-                "bullets": [
-                    title if kind != "episode" else f"Episode: {title}"
-                    for kind, title in evidence_items
-                ],
-            }
-        )
+    if not is_eb2niw:
+        skeleton.append({"level": 1, "title": "Attachments / Evidence Index", "paragraphs": []})
+        for exhibit_heading, evidence_items in _evidence_index_entries(case_dir, config):
+            skeleton.append(
+                {
+                    "level": 2,
+                    "title": exhibit_heading,
+                    "paragraphs": [],
+                    "bullets": [
+                        title if kind != "episode" else f"Episode: {title}"
+                        for kind, title in evidence_items
+                    ],
+                }
+            )
     if not any(item.get("inferred") for item in skeleton):
         skeleton.append(
             {
@@ -1329,10 +1414,10 @@ def _resolve_template_path(config: dict[str, Any], template_path: str) -> Path:
     if template_path.strip():
         path = Path(template_path.strip())
         resolved = path if path.is_absolute() else PROJECT_ROOT / path
-        if task_type != "eb1a_rfe_response" or resolved.exists():
+        if task_type not in {"eb1a_rfe_response", "eb2niw_rfe_response"} or resolved.exists():
             return resolved
         # Existing browser forms/case configs may still submit the retired TXT path.
-        return PROJECT_ROOT / DEFAULT_TEMPLATE_BY_TASK_TYPE["eb1a_rfe_response"]
+        return PROJECT_ROOT / DEFAULT_TEMPLATE_BY_TASK_TYPE[task_type]
     configured = config.get("rfe_response", {}).get("template_file", "") if isinstance(config.get("rfe_response"), dict) else ""
     if task_type == "eb1a_petition":
         value = eb1a_machine_template_file(config)
@@ -1340,8 +1425,8 @@ def _resolve_template_path(config: dict[str, Any], template_path: str) -> Path:
         value = configured or DEFAULT_TEMPLATE_BY_TASK_TYPE.get(task_type, DEFAULT_TEMPLATE_BY_TASK_TYPE["eb1a_petition"])
     path = Path(str(value))
     resolved = path if path.is_absolute() else PROJECT_ROOT / path
-    if task_type == "eb1a_rfe_response" and not resolved.exists():
-        return PROJECT_ROOT / DEFAULT_TEMPLATE_BY_TASK_TYPE["eb1a_rfe_response"]
+    if task_type in {"eb1a_rfe_response", "eb2niw_rfe_response"} and not resolved.exists():
+        return PROJECT_ROOT / DEFAULT_TEMPLATE_BY_TASK_TYPE[task_type]
     return resolved
 
 

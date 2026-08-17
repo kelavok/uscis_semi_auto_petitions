@@ -84,6 +84,8 @@ from .workflow import (
     validate_llm_output,
 )
 
+RFE_TASK_TYPES = {"eb1a_rfe_response", "eb2niw_rfe_response"}
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -372,7 +374,7 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
         )
     if action == "refresh_intake_sources":
         loaded = load_case(case_id)
-        if str(loaded.config.get("task_type", "")) == "eb1a_rfe_response":
+        if str(loaded.config.get("task_type", "")) in RFE_TASK_TYPES:
             imports = loaded.config.get("source_imports", {})
             if not isinstance(imports, dict):
                 imports = {}
@@ -800,6 +802,7 @@ def render_home(query: str = "") -> str:
               <option value="o1b_petition">O-1B petition</option>
               <option value="eb2niw_petition">EB-2 NIW petition</option>
               <option value="eb1a_rfe_response">EB1A RFE response</option>
+              <option value="eb2niw_rfe_response">EB-2 NIW RFE response</option>
               <option value="document_layout">Document layout</option>
             </select>
             <button>Create case</button>
@@ -889,15 +892,15 @@ def render_intake_page(case_id: str, params: dict[str, list[str]]) -> str:
         {alert(_single(params, 'error'), 'error')}
         <section class="panel">
           <h1>Intake & evidence</h1>
-          {'' if task_type == 'eb1a_rfe_response' else '<div class="button-row">'}
-          {'' if task_type == 'eb1a_rfe_response' else post_button(case_id, "build_working_memo", "Build working memo")}
-          {'' if task_type == 'eb1a_rfe_response' else post_button(case_id, "scan_documents", "Scan documents")}
-          {'' if task_type == 'eb1a_rfe_response' else post_button(case_id, "link_translations", "Auto-link translations")}
-          {'' if task_type == 'eb1a_rfe_response' else f'<a class="action-link" href="/translations?case={quote(case_id)}">Review translation links</a>'}
-          {'' if task_type == 'eb1a_rfe_response' else '</div>'}
+          {'' if task_type in RFE_TASK_TYPES else '<div class="button-row">'}
+          {'' if task_type in RFE_TASK_TYPES else post_button(case_id, "build_working_memo", "Build working memo")}
+          {'' if task_type in RFE_TASK_TYPES else post_button(case_id, "scan_documents", "Scan documents")}
+          {'' if task_type in RFE_TASK_TYPES else post_button(case_id, "link_translations", "Auto-link translations")}
+          {'' if task_type in RFE_TASK_TYPES else f'<a class="action-link" href="/translations?case={quote(case_id)}">Review translation links</a>'}
+          {'' if task_type in RFE_TASK_TYPES else '</div>'}
           {_render_case_font_settings_form(case_id, action="save_intake_font_settings", compact=True)}
         </section>
-        {render_rfe_panel(case_id) if task_type == 'eb1a_rfe_response' else render_intake_panel(case_id, task_type)}
+        {render_rfe_panel(case_id) if task_type in RFE_TASK_TYPES else render_intake_panel(case_id, task_type)}
         <section class="panel"><h2>Evidence status</h2><pre>{escape(status)}</pre></section>
         """,
     )
@@ -1786,6 +1789,7 @@ def _task_type_label(task_type: str) -> str:
         "o1b_petition": "O-1B petition",
         "eb2niw_petition": "EB-2 NIW petition",
         "eb1a_rfe_response": "EB1A RFE response",
+        "eb2niw_rfe_response": "EB-2 NIW RFE response",
         "document_layout": "Document layout",
     }.get(task_type, task_type)
 
@@ -2471,10 +2475,11 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
         """
     template_default = {
         "eb1a_rfe_response": "templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.yaml",
+        "eb2niw_rfe_response": "templates/RFE/EB2NIW/EB2_NIW_RFE_response_unified_LLM_template.yaml",
         "o1b_petition": "templates/O1B/MEMO O-1В_ver.1.0.docx",
         "eb2niw_petition": "templates/EB2NIW/EB2_NIW_general_memo_template.md",
     }.get(task_type, eb1a_machine_template_file(config))
-    if task_type == "eb1a_rfe_response":
+    if task_type in RFE_TASK_TYPES:
         source_target_options = [
             ("source_rfe_notice", "RFE notice"),
             ("source_rfe_issues", "RFE issue folders"),
@@ -2516,7 +2521,7 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
             )
         source_inputs_html = '<div class="source-folders">' + "".join(source_rows) + "</div>"
 
-    if task_type == "eb1a_rfe_response":
+    if task_type in RFE_TASK_TYPES:
         right_fields = f"""
         <input name="case_number" value="{field_value(rfe_metadata.get('case_number'))}" placeholder="RFE/case number">
         <input name="receipt_date" value="{field_value(rfe_metadata.get('receipt_date'))}" placeholder="Receipt / accepted date">
@@ -2682,6 +2687,7 @@ def render_rfe_panel(case_id: str) -> str:
 
 def _render_rfe_strategy_panel(case_id: str) -> str:
     loaded = load_case(case_id)
+    task_label = _task_type_label(str(loaded.config.get("task_type", "")))
     imports = loaded.config.get("source_imports", {})
     if not isinstance(imports, dict):
         imports = {}
@@ -2716,7 +2722,7 @@ def _render_rfe_strategy_panel(case_id: str) -> str:
     evidence_disabled = "" if manifest else " disabled"
     return f"""
     <section class="panel">
-      <h2>RFE Stage 1A - strategy bootstrap</h2>
+      <h2>RFE Stage 1A - strategy bootstrap <span class="muted small">({escape(task_label)})</span></h2>
       <p class="muted small">
         Select the human strategy and the full RFE notice. The script copies both into the case,
         extracts their text, combines them with the base RFE template and produces one prompt.
