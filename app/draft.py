@@ -114,10 +114,15 @@ def build_parser() -> argparse.ArgumentParser:
     add_case_argument(working_memo)
     working_memo.add_argument("--template", default="", help="Machine template path; defaults by task type")
 
-    rfe_bootstrap = commands.add_parser("rfe-bootstrap-prompt", help="Import strategy/RFE and build the strategy bootstrap prompt")
+    rfe_bootstrap = commands.add_parser("rfe-bootstrap-prompt", help="Import strategy/RFE/initial filing and build the strategy bootstrap prompt")
     add_case_argument(rfe_bootstrap)
     rfe_bootstrap.add_argument("--strategy", required=True, help="Human strategy DOCX/TXT/MD")
     rfe_bootstrap.add_argument("--rfe", required=True, help="Full RFE PDF/DOCX/TXT")
+    rfe_bootstrap.add_argument(
+        "--initial-memo",
+        default="",
+        help="Initial filing memorandum DOCX/PDF/TXT; required for the EB-1A Migrator RFE variant",
+    )
 
     rfe_strategy = commands.add_parser("rfe-import-strategy", help="Validate strategy JSON and build the RFE working template")
     add_case_argument(rfe_strategy)
@@ -241,7 +246,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Placeholders seen: {summary.placeholders_seen}")
         return 0
     if args.command == "rfe-bootstrap-prompt":
-        summary = build_strategy_bootstrap_prompt(args.case_id, args.strategy, args.rfe)
+        summary = build_strategy_bootstrap_prompt(
+            args.case_id, args.strategy, args.rfe, args.initial_memo
+        )
         print(f"Strategy prompt: {summary.prompt_path}")
         return 0
     if args.command == "rfe-import-strategy":

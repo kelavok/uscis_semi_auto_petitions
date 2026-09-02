@@ -649,14 +649,14 @@ available and receive the full episode as a safe fallback.
 
 The RFE track is strategy-first. Its three stages are:
 
-1. Stage 1A/1B: provide a human strategy file and the full RFE, run the generated bootstrap prompt, then paste the standardized JSON output. The accepted output is stored in `case_strategy/strategy_manifest.json` and generates the case-specific working memorandum structure.
+1. Stage 1A/1B: provide a human strategy file, the full RFE, and the initial-filing memorandum, run the generated bootstrap prompt, then paste the standardized JSON output. The accepted output is stored in `case_strategy/strategy_manifest.json` and generates the case-specific working memorandum structure.
 2. Stage 1C/2: provide the initial filing memorandum and new RFE documents. The scanner partitions the memorandum by criterion, extracts its positions and document lists, preserves `originals`/`translations` for new evidence, and builds prompts for the ordered drafting units from the strategy manifest.
 3. Stage 3: build indexes, separator pages, and the final evidence bundle using the existing EB-1A layout process.
 
 The browser UI is the preferred path. CLI equivalents are:
 
 ```powershell
-python -m app.draft rfe-bootstrap-prompt --case rfe_001 --strategy "C:\path\strategy.docx" --rfe "C:\path\RFE.pdf"
+python -m app.draft rfe-bootstrap-prompt --case rfe_001 --strategy "C:\path\strategy.docx" --rfe "C:\path\RFE.pdf" --initial-memo "C:\path\initial-memo.docx"
 python -m app.draft rfe-import-strategy --case rfe_001 --file "C:\path\strategy-output.json"
 python -m app.draft rfe-import-evidence --case rfe_001 --initial-memo "C:\path\initial-memo.docx" --new-docs "C:\path\new-docs"
 ```
@@ -692,6 +692,14 @@ python -m app.draft init-case --case niw_rfe_001 --task-type eb2niw_rfe_response
 ```
 
 В веб-интерфейсе его можно выбрать как `EB1A RFE response`.
+
+Для `EB1A RFE response` на intake доступны варианты `Базовый` и `Мигратор`. Вариант
+`Мигратор` использует `Шаблон ответа на RFE EB-1A ver.1.0.docx`: техническая первая
+страница исключается, INDEX формируется первым, первый LLM-запрос обязательно получает
+стратегию, RFE и initial filing. Он также извлекает зачтённые/оспоренные критерии,
+руководителя USCIS и номер офицера. Отдельный раздел Recommendation Letters запрещён;
+Industry Overview и employment/prospective-benefit включаются только когда это одновременно
+требуют RFE и стратегия.
 
 Модель папок:
 

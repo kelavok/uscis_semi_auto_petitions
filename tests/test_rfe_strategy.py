@@ -22,6 +22,171 @@ from app.workflow import build_prompt
 
 
 class RfeStrategyTests(unittest.TestCase):
+    def test_migrator_variant_uses_three_source_bootstrap_and_front_index(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            case_root = root / "case_workspace"
+            template_root = case_root / "_template"
+            shutil.copytree(cli_support.CASE_TEMPLATE_ROOT, template_root)
+            strategy = root / "strategy.txt"
+            rfe = root / "rfe.txt"
+            initial = root / "initial.txt"
+            strategy.write_text("Challenge only the awards finding; omit industry and employment.", encoding="utf-8")
+            rfe.write_text("Chief Jane Smith, Officer 1234. Awards were not accepted; judging was accepted.", encoding="utf-8")
+            initial.write_text("Initial filing awards argument and Initial Filing Exhibit 2.1.", encoding="utf-8")
+
+            with (
+                patch.object(cli_support, "CASE_ROOT", case_root),
+                patch.object(cli_support, "CASE_TEMPLATE_ROOT", template_root),
+                patch.object(web, "CASE_ROOT", case_root),
+            ):
+                case_dir = cli_support.create_case_from_template("migrator_rfe", "eb1a_rfe_response")
+                from app.memo_builder import apply_case_intake
+
+                apply_case_intake(
+                    "migrator_rfe",
+                    {
+                        "beneficiary_full_name": "Ivan Ivanov",
+                        "preferred_reference": "Mr. Ivanov",
+                        "field": "Technology",
+                        "specialization": "AI product engineering",
+                        "case_number": "IOE1234567890",
+                        "eb1a_rfe_template_variant": "migrator",
+                    },
+                )
+                bootstrap = build_strategy_bootstrap_prompt(
+                    "migrator_rfe", str(strategy), str(rfe), str(initial)
+                )
+                prompt_text = bootstrap.prompt_path.read_text(encoding="utf-8")
+                self.assertIn("Full initial-filing memorandum", prompt_text)
+                self.assertIn("Initial filing awards argument", prompt_text)
+                self.assertIn("accepted_criteria_count", prompt_text)
+                self.assertIn("officer_number", prompt_text)
+                self.assertIn("EB1A_RFE_response_migrator_LLM_template.yaml", prompt_text)
+                self.assertIn('"case_number": "IOE1234567890"', prompt_text)
+
+                output = {
+                    "case_id": "migrator_rfe",
+                    "task_type": "eb1a_rfe_response",
+                    "case_metadata": {
+                        "beneficiary_full_name": "Ivan Ivanov",
+                        "preferred_reference": "Mr. Ivanov",
+                        "field": "Technology",
+                        "specialization": "AI product engineering",
+                        "case_number": "IOE1234567890",
+                        "receipt_date": "January 1, 2026",
+                        "rfe_date": "August 1, 2026",
+                        "response_deadline": "October 1, 2026",
+                        "uscis_address": "USCIS Test Address",
+                        "rfe_response_date": "September 1, 2026",
+                        "uscis_office_or_service_center": "Texas Service Center",
+                        "officer_name": "",
+                        "office_chief_name": "Ms. Jane Smith",
+                        "officer_number": "1234",
+                        "salutation": "Dear Ms. Jane Smith and Officer 1234:",
+                        "submitter_name": "Attorney Alex Doe",
+                        "submitter_title": "Attorney",
+                        "petition_type": "EB-1A Form I-140",
+                    },
+                    "global_strategy": "Answer only the disputed national-recognition element.",
+                    "accepted_criteria": ["judging"],
+                    "accepted_criteria_count": 1,
+                    "challenged_criteria": ["awards"],
+                    "challenged_criteria_count": 1,
+                    "rfe_issues": [
+                        {
+                            "issue_id": "awards_recognition",
+                            "topic": "National recognition of the award",
+                            "issue_type": "criterion",
+                            "status": "not_accepted",
+                            "criterion_role": "awards",
+                            "exact_rfe_quote": "Awards were not accepted because national recognition was not established.",
+                            "defect": "National recognition was not established.",
+                            "response_strategy": "Use independent organizer and media evidence.",
+                            "elements_not_disputed_do_not_discuss": ["Receipt of the award"],
+                            "evidence_actions": [],
+                        }
+                    ],
+                    "sections": [
+                        {
+                            "section_id": "cover",
+                            "order": 1,
+                            "title": "Cover Letter",
+                            "section_type": "cover_letter",
+                            "required": True,
+                            "strategy": "Summarize the findings.",
+                            "rfe_issue_ids": [],
+                            "starter_text": "",
+                            "episodes": [],
+                        },
+                        {
+                            "section_id": "awards",
+                            "order": 2,
+                            "title": "Awards",
+                            "section_type": "criterion",
+                            "criterion_role": "awards",
+                            "required": True,
+                            "strategy": "Rebut only national recognition.",
+                            "rfe_issue_ids": ["awards_recognition"],
+                            "starter_text": "",
+                            "episodes": [
+                                {
+                                    "episode_id": "award_one",
+                                    "title": "National Technology Award",
+                                    "source_folder": "1. Награды/1 episode",
+                                    "strategy": "Lead with independent recognition.",
+                                    "rfe_issue_ids": ["awards_recognition"],
+                                    "planned_subheadings": ["The Award Has National Recognition"],
+                                }
+                            ],
+                        },
+                    ],
+                    "template_decisions": {
+                        "structure_rationale": "Front index, cover letter, challenged criterion.",
+                        "include_general_response": False,
+                        "include_industry_overview": False,
+                        "include_employment_section": False,
+                        "include_final_merits": False,
+                        "include_recommendation_letters": False,
+                        "attachment_label": "Exhibit",
+                    },
+                    "open_questions": [],
+                }
+                apply_strategy_output("migrator_rfe", output)
+                (case_dir / "indexes/document_index.csv").write_text(
+                    "document_id,original_file_name,display_title,file_path,parent_document_id,translation_status,relationship_type,episode_title\n"
+                    "DOC0001,award.pdf,Independent award confirmation,source_documents/rfe_response/new_documents/originals/1. Награды/1 episode/award.pdf,,,,National Technology Award\n",
+                    encoding="utf-8-sig",
+                )
+                (case_dir / "indexes/exhibit_index.csv").write_text(
+                    "exhibit_number,display_title,document_ids\n"
+                    "1,Awards,DOC0001\n",
+                    encoding="utf-8-sig",
+                )
+                memo = build_working_memo("migrator_rfe")
+                html = web.render_intake_panel("migrator_rfe", "eb1a_rfe_response")
+
+            saved_config = (case_dir / "case_config.yaml").read_text(encoding="utf-8")
+            self.assertIn("eb1a_rfe_template_variant: migrator", saved_config)
+            self.assertIn("Шаблон ответа на RFE EB-1A ver.1.0.docx", saved_config)
+            self.assertIn("EB-1A RFE response template", html)
+            self.assertIn(">Мигратор</option>", html)
+            document = Document(memo.docx_path)
+            paragraphs = [paragraph.text for paragraph in document.paragraphs if paragraph.text.strip()]
+            self.assertEqual(paragraphs[0], "INDEX:")
+            self.assertTrue(
+                any("Independent award confirmation" in paragraph for paragraph in paragraphs)
+            )
+            self.assertIn("Dear Ms. Jane Smith and Officer 1234:", paragraphs)
+            self.assertIn("the following 1 criterion", " ".join(paragraphs))
+            self.assertNotIn("TEXT FORMATTING SETTINGS", " ".join(paragraphs))
+            self.assertNotIn("Recommendation Letters", " ".join(paragraphs))
+            self.assertNotIn("Attachments / Evidence Index", " ".join(paragraphs))
+            normal = next(
+                style for style in document.styles if style.name.casefold() == "normal"
+            )
+            self.assertEqual(normal.font.name, "Times New Roman")
+
     def test_strategy_manifest_drives_template_units_and_prompt_context(self) -> None:
         with TemporaryDirectory() as temp:
             root = Path(temp)

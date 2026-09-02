@@ -303,12 +303,19 @@ def _rfe_case_config_text(text: str) -> str:
     if "rfe_metadata:" not in text:
         text += (
             "\n"
+            "eb1a_rfe_template_variant: base\n"
+            "\n"
             "rfe_metadata:\n"
             "  case_number: __REQUIRED__\n"
             "  receipt_date: __REQUIRED__\n"
             "  rfe_date: __REQUIRED__\n"
             "  response_deadline: __REQUIRED__\n"
             "  uscis_address: __REQUIRED__\n"
+            "  rfe_response_date: __REQUIRED__\n"
+            "  uscis_office_or_service_center: __REQUIRED__\n"
+            "  officer_number: __REQUIRED__\n"
+            "  submitter_name: __REQUIRED__\n"
+            "  submitter_title: __REQUIRED__\n"
             "  petition_type: EB-1A Form I-140\n"
             "\n"
             "rfe_response:\n"
@@ -335,6 +342,7 @@ def _rfe_case_config_text(text: str) -> str:
 
 def _eb2niw_rfe_case_config_text(text: str) -> str:
     text = _rfe_case_config_text(text)
+    text = re.sub(r"(?m)^eb1a_rfe_template_variant:.*\n", "", text)
     text = text.replace(
         "source_folder_template: templates/RFE/EB1",
         "source_folder_template: templates/RFE/EB2NIW",
@@ -421,7 +429,7 @@ def _document_layout_case_config_text(text: str) -> str:
 
 def _remove_eb1a_template_variant_fields(text: str) -> str:
     return re.sub(
-        r"(?m)^(?:eb1a_template_variant|eb1a_llm_template_file|eb1a_human_template_file):.*\n",
+        r"(?m)^(?:eb1a_template_variant|eb1a_llm_template_file|eb1a_human_template_file|eb1a_rfe_template_variant):.*\n",
         "",
         text,
     )

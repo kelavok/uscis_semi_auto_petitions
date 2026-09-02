@@ -15,7 +15,11 @@ from .cli_support import CASE_ROOT, PROJECT_ROOT, case_path
 from .simple_yaml import load_yaml_subset
 from .json_input import parse_llm_json_object
 from .file_rules import is_office_temporary_file, prompt_sidecar_kind
-from .template_variants import eb1a_template_variant, eb1a_variant_source_path
+from .template_variants import (
+    eb1a_rfe_variant_source_path,
+    eb1a_template_variant,
+    eb1a_variant_source_path,
+)
 
 
 TEXT_EXTENSIONS = {".txt", ".md", ".csv", ".json", ".yaml", ".yml"}
@@ -483,6 +487,7 @@ def _variant_instruction_sources(loaded: LoadedCase, paths: list[str]) -> list[s
     seen: set[str] = set()
     for path_value in paths:
         selected = eb1a_variant_source_path(loaded.config, path_value)
+        selected = eb1a_rfe_variant_source_path(loaded.config, selected)
         if selected in seen:
             continue
         result.append(selected)

@@ -10,6 +10,7 @@ from typing import Any
 
 from .cli_support import PROJECT_ROOT, case_path
 from .file_rules import is_office_temporary_file, is_prompt_sidecar
+from .template_variants import EB1A_RFE_TEMPLATE_VARIANTS, eb1a_rfe_template_variant
 from .workflow import (
     LoadedCase,
     load_case,
@@ -70,11 +71,58 @@ RFE_TASK_SPECS: dict[str, dict[str, str]] = {
 }
 
 
+def _rfe_task_spec(config: dict[str, Any]) -> dict[str, str] | None:
+    task_type = str(config.get("task_type", ""))
+    base = RFE_TASK_SPECS.get(task_type)
+    if base is None:
+        return None
+    if task_type != "eb1a_rfe_response":
+        return dict(base)
+    variant = EB1A_RFE_TEMPLATE_VARIANTS[eb1a_rfe_template_variant(config)]
+    return {
+        **base,
+        "human_template": variant["human_template_file"],
+        "yaml_template": variant["llm_template_file"],
+        "schema": variant["strategy_schema_file"],
+        "bootstrap_instructions": variant["bootstrap_instructions_file"],
+    }
+
+
+def _bootstrap_intake_metadata(config: dict[str, Any]) -> dict[str, str]:
+    beneficiary = config.get("beneficiary", {})
+    if not isinstance(beneficiary, dict):
+        beneficiary = {}
+    rfe = config.get("rfe_metadata", {})
+    if not isinstance(rfe, dict):
+        rfe = {}
+
+    def clean(value: object) -> str:
+        text = str(value or "").strip()
+        return "" if text.startswith("__") else text
+
+    return {
+        "beneficiary_full_name": clean(beneficiary.get("full_name")),
+        "preferred_reference": clean(beneficiary.get("preferred_reference")),
+        "field": clean(config.get("field")),
+        "specialization": clean(config.get("specialization")),
+        "case_number": clean(rfe.get("case_number")),
+        "receipt_date": clean(rfe.get("receipt_date")),
+        "rfe_date": clean(rfe.get("rfe_date")),
+        "response_deadline": clean(rfe.get("response_deadline")),
+        "uscis_address": clean(rfe.get("uscis_address")),
+        "rfe_response_date": clean(rfe.get("rfe_response_date")),
+        "uscis_office_or_service_center": clean(rfe.get("uscis_office_or_service_center")),
+        "submitter_name": clean(rfe.get("submitter_name")),
+        "submitter_title": clean(rfe.get("submitter_title")),
+    }
+
+
 @dataclass(frozen=True)
 class BootstrapSummary:
     prompt_path: Path
     strategy_copy: Path
     rfe_copy: Path
+    initial_memo_copy: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -92,11 +140,16 @@ class EvidenceImportSummary:
     report_path: Path
 
 
-def build_strategy_bootstrap_prompt(case_id: str, strategy_path: str, rfe_path: str) -> BootstrapSummary:
+def build_strategy_bootstrap_prompt(
+    case_id: str,
+    strategy_path: str,
+    rfe_path: str,
+    initial_memo_path: str = "",
+) -> BootstrapSummary:
     loaded = load_case(case_id)
     case_dir = loaded.case_dir
     task_type = str(loaded.config.get("task_type", ""))
-    spec = RFE_TASK_SPECS.get(task_type)
+    spec = _rfe_task_spec(loaded.config)
     if spec is None:
         raise ValueError(f"RFE strategy bootstrap is not available for task type {task_type!r}.")
     strategy_source = _required_source_file(strategy_path, "Strategy")
@@ -104,12 +157,44 @@ def build_strategy_bootstrap_prompt(case_id: str, strategy_path: str, rfe_path: 
     strategy_copy = _copy_source_file(strategy_source, case_dir / "source_documents/rfe/strategy")
     rfe_copy = _copy_source_file(rfe_source, case_dir / "source_documents/rfe/notice")
 
+    initial_memo_copy: Path | None = None
+    initial_memo_text = ""
+    cleaned_initial_path = initial_memo_path.strip()
+    if cleaned_initial_path:
+        initial_source = _required_source_file(cleaned_initial_path, "Initial filing memorandum")
+        initial_memo_copy = _copy_source_file(
+            initial_source, case_dir / "source_documents/initial_filing/memorandum"
+        )
+        initial_memo_text = _extract_text(initial_memo_copy)
+    else:
+        initial_root = case_dir / "source_documents/initial_filing/memorandum"
+        existing_initial = [
+            path
+            for path in sorted(initial_root.glob("*"))
+            if path.is_file() and path.name != ".gitkeep" and not is_office_temporary_file(path)
+        ]
+        if len(existing_initial) == 1:
+            initial_memo_copy = existing_initial[0]
+            initial_memo_text = _extract_text(initial_memo_copy)
+    if (
+        task_type == "eb1a_rfe_response"
+        and eb1a_rfe_template_variant(loaded.config) == "migrator"
+        and initial_memo_copy is None
+    ):
+        raise ValueError(
+            "The Migrator EB-1A RFE bootstrap requires the initial-filing memorandum."
+        )
+
     raw_root = case_dir / STRATEGY_ROOT / "raw"
     raw_root.mkdir(parents=True, exist_ok=True)
     strategy_text = _extract_text(strategy_copy)
     rfe_text = _extract_text(rfe_copy)
     (raw_root / "human_strategy.txt").write_text(strategy_text, encoding="utf-8")
     (raw_root / "rfe_notice.txt").write_text(rfe_text, encoding="utf-8")
+    if initial_memo_text:
+        (raw_root / "initial_filing_memorandum.txt").write_text(
+            initial_memo_text, encoding="utf-8"
+        )
 
     human_template_path = PROJECT_ROOT / spec["human_template"]
     yaml_template_path = PROJECT_ROOT / spec["yaml_template"]
@@ -126,6 +211,14 @@ def build_strategy_bootstrap_prompt(case_id: str, strategy_path: str, rfe_path: 
             f"- case_id: `{case_id}`",
             f"- task_type: `{task_type}`",
             "- step_id: `rfe_strategy_bootstrap`",
+            f"- template_variant: `{eb1a_rfe_template_variant(loaded.config) if task_type == 'eb1a_rfe_response' else 'base'}`",
+            "",
+            "## Web intake metadata (authoritative when populated)",
+            "",
+            _fenced(
+                json.dumps(_bootstrap_intake_metadata(loaded.config), ensure_ascii=False, indent=2),
+                "json",
+            ),
             "",
             "## Required output schema",
             "",
@@ -146,6 +239,16 @@ def build_strategy_bootstrap_prompt(case_id: str, strategy_path: str, rfe_path: 
             f"Source: `{rfe_copy.relative_to(case_dir).as_posix()}`",
             "",
             _fenced(rfe_text, "text"),
+            "",
+            "## Full initial-filing memorandum",
+            "",
+            (
+                f"Source: `{initial_memo_copy.relative_to(case_dir).as_posix()}`"
+                if initial_memo_copy is not None
+                else "[No initial-filing memorandum supplied for this base-template bootstrap.]"
+            ),
+            "",
+            _fenced(initial_memo_text, "text") if initial_memo_text else "[Not supplied.]",
             "",
             "## Human company Word template (visual and structural authority)",
             "",
@@ -169,8 +272,16 @@ def build_strategy_bootstrap_prompt(case_id: str, strategy_path: str, rfe_path: 
     prompt_root.mkdir(parents=True, exist_ok=True)
     prompt_path = prompt_root / f"{BOOTSTRAP_PROMPT_STEM}.latest.prompt.md"
     prompt_path.write_text(prompt, encoding="utf-8")
-    _remember_source_paths(case_dir, {"rfe_strategy_file": strategy_source, "rfe_notice_file": rfe_source})
-    return BootstrapSummary(prompt_path=prompt_path, strategy_copy=strategy_copy, rfe_copy=rfe_copy)
+    remembered = {"rfe_strategy_file": strategy_source, "rfe_notice_file": rfe_source}
+    if initial_memo_copy is not None and cleaned_initial_path:
+        remembered["initial_filing_memo"] = Path(cleaned_initial_path)
+    _remember_source_paths(case_dir, remembered)
+    return BootstrapSummary(
+        prompt_path=prompt_path,
+        strategy_copy=strategy_copy,
+        rfe_copy=rfe_copy,
+        initial_memo_copy=initial_memo_copy,
+    )
 
 
 def apply_strategy_output(case_id: str, output: dict[str, Any]) -> StrategyImportSummary:
@@ -242,6 +353,12 @@ def apply_strategy_output(case_id: str, output: dict[str, Any]) -> StrategyImpor
         "global_strategy": output["global_strategy"],
         "accepted_criteria": output.get("accepted_criteria", []),
         "challenged_criteria": output.get("challenged_criteria", []),
+        "accepted_criteria_count": output.get(
+            "accepted_criteria_count", len(output.get("accepted_criteria", []))
+        ),
+        "challenged_criteria_count": output.get(
+            "challenged_criteria_count", len(output.get("challenged_criteria", []))
+        ),
         "rfe_issues": output["rfe_issues"],
         "template_decisions": output["template_decisions"],
         "open_questions": output["open_questions"],
@@ -754,7 +871,8 @@ def _validate_strategy_output(case_id: str, output: dict[str, Any]) -> None:
         raise ValueError("Strategy output must be one JSON object.")
     if output.get("case_id") != case_id:
         raise ValueError(f"case_id must be {case_id!r}.")
-    expected_task_type = str(load_case(case_id).config.get("task_type", ""))
+    loaded = load_case(case_id)
+    expected_task_type = str(loaded.config.get("task_type", ""))
     if expected_task_type not in RFE_TASK_TYPES:
         raise ValueError(f"Case task type {expected_task_type!r} is not an RFE workflow.")
     if output.get("task_type") != expected_task_type:
@@ -838,6 +956,59 @@ def _validate_strategy_output(case_id: str, output: dict[str, Any]) -> None:
         raise ValueError("template_decisions must be an object.")
     if not isinstance(output["open_questions"], list):
         raise ValueError("open_questions must be an array.")
+    if (
+        expected_task_type == "eb1a_rfe_response"
+        and eb1a_rfe_template_variant(loaded.config) == "migrator"
+    ):
+        _validate_migrator_strategy_output(output)
+
+
+def _validate_migrator_strategy_output(output: dict[str, Any]) -> None:
+    accepted = list(dict.fromkeys(str(item) for item in output.get("accepted_criteria", [])))
+    challenged = list(dict.fromkeys(str(item) for item in output.get("challenged_criteria", [])))
+    for key, expected in (
+        ("accepted_criteria_count", len(accepted)),
+        ("challenged_criteria_count", len(challenged)),
+    ):
+        try:
+            actual = int(output.get(key))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{key} must be an integer.") from exc
+        if actual != expected:
+            raise ValueError(f"{key} must equal the number of unique listed criteria ({expected}).")
+
+    metadata = output.get("case_metadata", {})
+    if not isinstance(metadata, dict) or "officer_number" not in metadata:
+        raise ValueError("case_metadata.officer_number must be present (use an empty string if unavailable).")
+
+    decisions = output.get("template_decisions", {})
+    if not isinstance(decisions, dict):
+        raise ValueError("template_decisions must be an object.")
+    if decisions.get("include_recommendation_letters") is not False:
+        raise ValueError("Migrator RFE responses must set include_recommendation_letters to false.")
+    for key in ("include_industry_overview", "include_employment_section"):
+        if key not in decisions or not isinstance(decisions[key], bool):
+            raise ValueError(f"template_decisions.{key} must be a boolean.")
+
+    sections = [item for item in output.get("sections", []) if isinstance(item, dict)]
+    for section in sections:
+        identity = " ".join(
+            str(section.get(key, "")) for key in ("section_id", "title")
+        ).casefold()
+        if "recommend" in identity or "рекоменда" in identity:
+            raise ValueError("Migrator RFE responses cannot contain a standalone recommendation-letter section.")
+        if "industry" in identity or "индустр" in identity:
+            if section.get("required", True):
+                if not decisions["include_industry_overview"]:
+                    raise ValueError("Industry Overview is present but include_industry_overview is false.")
+                if not section.get("rfe_issue_ids") or not str(section.get("strategy", "")).strip():
+                    raise ValueError("Industry Overview requires both a mapped RFE issue and section strategy.")
+        if section.get("section_type") == "employment":
+            if section.get("required", True):
+                if not decisions["include_employment_section"]:
+                    raise ValueError("Employment section is present but include_employment_section is false.")
+                if not section.get("rfe_issue_ids") or not str(section.get("strategy", "")).strip():
+                    raise ValueError("Employment section requires both a mapped RFE issue and section strategy.")
 
 
 def _write_unit_files(case_dir: Path, manifest: dict[str, Any]) -> None:
@@ -886,7 +1057,7 @@ def _update_case_config(case_dir: Path, manifest: dict[str, Any]) -> None:
     for key in [
         "case_number", "receipt_date", "rfe_date", "response_deadline", "uscis_address",
         "petition_type", "rfe_response_date", "uscis_office_or_service_center",
-        "officer_name", "office_chief_name", "salutation", "submitter_name", "submitter_title",
+        "officer_name", "office_chief_name", "officer_number", "salutation", "submitter_name", "submitter_title",
     ]:
         if meta.get(key):
             rfe_metadata[key] = meta[key]
@@ -912,7 +1083,9 @@ def _update_case_config(case_dir: Path, manifest: dict[str, Any]) -> None:
     )
     response = config.setdefault("rfe_response", {})
     response["strategy_manifest"] = f"{STRATEGY_ROOT}/{MANIFEST_NAME}"
-    spec = RFE_TASK_SPECS[task_type]
+    spec = _rfe_task_spec(config)
+    if spec is None:
+        raise ValueError(f"No RFE template specification for task type {task_type!r}.")
     response["template_file"] = spec["yaml_template"]
     response["human_template_file"] = spec["human_template"]
     response["attachment_label"] = manifest.get("template_decisions", {}).get("attachment_label", "Attachment")

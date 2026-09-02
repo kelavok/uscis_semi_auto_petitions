@@ -1,0 +1,156 @@
+schema_version: 1.0
+template_role: company_specific_eb1a_rfe_response_llm_and_assembly_map
+template_name: Migrator EB-1A RFE Response
+source_human_template: templates/RFE/EB1/Шаблон ответа на RFE EB-1A ver.1.0.docx
+
+document_rules:
+  body_font: Times New Roman
+  body_size_pt: 12
+  line_spacing: 1.5
+  alignment: justified
+  paragraph_spacing_before_pt: 0
+  paragraph_spacing_after_pt: 10
+  heading_1_size_pt: 16
+  heading_1_bold: true
+  heading_2_size_pt: 14
+  heading_2_bold: true
+  page_numbers: footer_right
+  remove_source_instruction_page: true
+  first_output_section: evidence_index
+  recommendation_letters_section: prohibited
+
+source_policy:
+  first_bootstrap_sources:
+    - populated web intake metadata
+    - full RFE notice
+    - full human strategy memorandum
+    - full initial-filing memorandum
+  intake_owned_fields:
+    - beneficiary_full_name
+    - preferred_reference
+    - field
+    - specialization
+    - case_number
+    - receipt_date
+    - rfe_date
+    - response_deadline
+    - uscis_address
+    - rfe_response_date
+    - uscis_office_or_service_center
+    - submitter_name
+    - submitter_title
+  rfe_derived_fields:
+    - accepted_criteria
+    - accepted_criteria_count
+    - challenged_criteria
+    - challenged_criteria_count
+    - office_chief_name
+    - officer_name
+    - officer_number
+    - exact_rfe_quotes
+  initial_filing_role: context_and_prior_exhibit_map_only
+  strategy_role: controlling_case_specific_response_plan
+
+sections:
+  evidence_index:
+    order: 1
+    heading: "INDEX:"
+    generated_by_script: true
+    content: current exhibit groups and every included exhibit/document title
+    location: before_cover_letter
+
+  cover_letter:
+    order: 2
+    fields:
+      - response date
+      - TO USCIS
+      - field and specialization/subfield
+      - beneficiary name
+      - case number
+      - office chief and officer number salutation
+    required_summary:
+      - challenged criteria count and names
+      - accepted criteria count and names
+      - only non-criterion issues actually addressed
+    closing:
+      - request consideration of the response with the initial filing record
+      - submitter name and title
+
+  optional_noncriterion_sections:
+    industry_overview:
+      section_type: general
+      include_only_if:
+        - the RFE contains a specific adverse industry or field concern
+        - the human strategy contains a concrete response strategy for that concern
+    employment_or_prospective_benefit:
+      section_type: employment
+      include_only_if:
+        - the RFE contains a specific continued-work, employment, or prospective-benefit concern
+        - the human strategy contains a concrete response strategy for that concern
+    recommendation_letters:
+      include: false
+      rule: letters may be cited only as evidence inside another triggered section
+
+  criteria:
+    criterion_1_awards:
+      role: awards
+      heading: Criterion 1. Evidence of receipt of lesser nationally or internationally recognized prizes or awards for excellence
+      focus: answer only disputed receipt, eligibility, selection, or national/international recognition elements
+    criterion_2_memberships:
+      role: memberships
+      heading: Criterion 2. Evidence of petitioner's membership in associations in the field for which classification is sought that require outstanding achievement of their members, as judged by recognized national or international experts in their disciplines or fields.
+      focus: address only disputed membership, outstanding-achievement threshold, or recognized-expert judging elements
+    criterion_3_published_material:
+      role: media
+      heading: Criterion 3. Published material about the petitioner in professional or major trade publications or other major media. The materials must relate to the petitioner's work in the field for which classification is sought.
+      focus: address only disputed subject, authorship/date/title, publication status, audience, circulation, or source-authenticity elements
+    criterion_4_judging:
+      role: judging
+      heading: Criterion 4. Evidence of the petitioner's participation on a panel, or individually, as a judge of the work of others in the same or in an allied field of specialization for which classification is sought.
+      focus: distinguish genuine judging from routine employment and prove appointment and actual judging activity when disputed
+    criterion_5_original_contributions:
+      role: original_contribution
+      heading: Criterion 5. Evidence of the petitioner's original scientific, scholarly, artistic, athletic, or business-related contributions of major significance in the field.
+      focus: separately establish contribution, originality, and major significance with independent implementation or reliance evidence
+    criterion_6_scholarly_articles:
+      role: scholarly_articles
+      heading: Criterion 6. The person's authorship of scholarly articles in the field, in professional or major trade publications or other major media.
+      focus: address disputed authorship, scholarly character, field relationship, publication status, and independent source reliability
+    criterion_7_display:
+      role: exhibitions
+      heading: Criterion 7. Display of the person's work in the field at artistic exhibitions or showcases.
+      focus: establish the artistic nature of the venue/event and identify the beneficiary's displayed work when disputed
+    criterion_8_leading_or_critical_role:
+      role: leading_critical_role
+      heading: Criterion 8. The person has performed in a leading or critical role for organizations or establishments that have a distinguished reputation.
+      focus: analyze the role and the organization's distinguished reputation as separate required elements
+    criterion_9_high_salary:
+      role: high_salary
+      heading: Criterion 9. The person has commanded a high salary, or other significantly high remuneration for services, in relation to others in the field.
+      focus: use objective, geographically and occupationally appropriate comparison data and quantify the comparison
+    criterion_10_commercial_success_performing_arts:
+      role: commercial_success
+      heading: Criterion 10. Commercial successes in the performing arts, as shown by box office receipts or record, cassette, compact disk, or video sales.
+      focus: answer only the commercial-success elements actually disputed in the RFE
+
+  criterion_block_pattern:
+    - criterion Heading 1
+    - centered exhibit/page range line generated from indexes when available
+    - bold label "In the RFE, the officer states:"
+    - exact RFE quotation
+    - bold label "Answer:"
+    - episode/project Heading 2
+    - targeted rebuttal subheadings and evidence analysis
+    - criterion conclusion tied to successfully rebutted points
+
+  final_merits:
+    heading: FINAL MERITS DETERMINATION
+    include_only_if: required by the RFE or human strategy
+    method: synthesize the strongest facts across the complete record to establish sustained acclaim and top-of-field standing without mechanically repeating criterion sections
+
+quality_controls:
+  - Never draft a section that is not triggered by both the RFE and accepted strategy manifest.
+  - Never repeat an element USCIS expressly accepted unless needed for a short logical bridge.
+  - Never treat an initial-filing exhibit as newly submitted evidence.
+  - Never invent an officer name, officer number, exhibit, page range, fact, or citation.
+  - Every factual assertion must trace to the initial filing, new indexed evidence, or the RFE itself.

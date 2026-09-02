@@ -66,7 +66,14 @@ from .rfe_strategy import (
     load_strategy_manifest,
 )
 from .stages import LLMStage, LLMUnit, build_llm_stage
-from .template_variants import EB1A_TEMPLATE_VARIANTS, eb1a_machine_template_file, eb1a_template_variant
+from .template_variants import (
+    EB1A_RFE_TEMPLATE_VARIANTS,
+    EB1A_TEMPLATE_VARIANTS,
+    eb1a_machine_template_file,
+    eb1a_rfe_machine_template_file,
+    eb1a_rfe_template_variant,
+    eb1a_template_variant,
+)
 from .workflow import (
     _case_path_value,
     build_prompt,
@@ -407,6 +414,7 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
             case_id,
             data.get("strategy_path", ""),
             data.get("rfe_path", ""),
+            data.get("initial_memo_path", ""),
         )
         return f"Created strategy bootstrap prompt {summary.prompt_path.name}."
     if action == "import_rfe_strategy_output":
@@ -458,6 +466,10 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
                 "rfe_date": data.get("rfe_date", ""),
                 "response_deadline": data.get("response_deadline", ""),
                 "uscis_address": data.get("uscis_address", ""),
+                "rfe_response_date": data.get("rfe_response_date", ""),
+                "uscis_office_or_service_center": data.get("uscis_office_or_service_center", ""),
+                "submitter_name": data.get("submitter_name", ""),
+                "submitter_title": data.get("submitter_title", ""),
                 "procedural_context": data.get("procedural_context", ""),
                 "drafting_objective": data.get("drafting_objective", ""),
                 "citizenship": data.get("citizenship", ""),
@@ -475,6 +487,7 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
                 "work_location": data.get("work_location", ""),
                 "duties_summary": data.get("duties_summary", ""),
                 "eb1a_template_variant": data.get("eb1a_template_variant", ""),
+                "eb1a_rfe_template_variant": data.get("eb1a_rfe_template_variant", ""),
                 "eb2_basis": data.get("eb2_basis", ""),
                 "intended_occupation": data.get("intended_occupation", ""),
                 "proposed_endeavor_title": data.get("proposed_endeavor_title", ""),
@@ -2473,8 +2486,20 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
         </label>
         <p class="muted small">Controls Stage 2 drafting units and the working memo structure for this case.</p>
         """
+    elif task_type == "eb1a_rfe_response":
+        current_variant = eb1a_rfe_template_variant(config)
+        options = "".join(
+            f'<option value="{escape(value)}"{" selected" if current_variant == value else ""}>{escape(meta["label"])}</option>'
+            for value, meta in EB1A_RFE_TEMPLATE_VARIANTS.items()
+        )
+        eb1a_template_selector = f"""
+        <label><strong>EB-1A RFE response template</strong>
+          <select name="eb1a_rfe_template_variant">{options}</select>
+        </label>
+        <p class="muted small">Controls the strategy bootstrap, Stage 2 instructions, index placement, and working response structure.</p>
+        """
     template_default = {
-        "eb1a_rfe_response": "templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.yaml",
+        "eb1a_rfe_response": eb1a_rfe_machine_template_file(config),
         "eb2niw_rfe_response": "templates/RFE/EB2NIW/EB2_NIW_RFE_response_unified_LLM_template.yaml",
         "o1b_petition": "templates/O1B/MEMO O-1В_ver.1.0.docx",
         "eb2niw_petition": "templates/EB2NIW/EB2_NIW_general_memo_template.md",
@@ -2528,6 +2553,10 @@ def render_intake_panel(case_id: str, task_type: str) -> str:
         <input name="rfe_date" value="{field_value(rfe_metadata.get('rfe_date'))}" placeholder="RFE date">
         <input name="response_deadline" value="{field_value(rfe_metadata.get('response_deadline'))}" placeholder="RFE response deadline">
         <input name="uscis_address" value="{field_value(rfe_metadata.get('uscis_address'))}" placeholder="USCIS address">
+        <input name="rfe_response_date" value="{field_value(rfe_metadata.get('rfe_response_date'))}" placeholder="RFE response date">
+        <input name="uscis_office_or_service_center" value="{field_value(rfe_metadata.get('uscis_office_or_service_center'))}" placeholder="USCIS office / service center">
+        <input name="submitter_name" value="{field_value(rfe_metadata.get('submitter_name'))}" placeholder="Attorney / submitter name">
+        <input name="submitter_title" value="{field_value(rfe_metadata.get('submitter_title'))}" placeholder="Attorney / submitter title">
         """
         left_extra = ""
     elif task_type == "o1b_petition":
@@ -2688,6 +2717,10 @@ def render_rfe_panel(case_id: str) -> str:
 def _render_rfe_strategy_panel(case_id: str) -> str:
     loaded = load_case(case_id)
     task_label = _task_type_label(str(loaded.config.get("task_type", "")))
+    is_migrator = (
+        str(loaded.config.get("task_type", "")) == "eb1a_rfe_response"
+        and eb1a_rfe_template_variant(loaded.config) == "migrator"
+    )
     imports = loaded.config.get("source_imports", {})
     if not isinstance(imports, dict):
         imports = {}
@@ -2709,6 +2742,7 @@ def _render_rfe_strategy_panel(case_id: str) -> str:
             <form method="post" data-confirm-submit="Refresh the strategy prompt from the saved strategy and RFE files?">
               <input type="hidden" name="action" value="build_rfe_strategy_prompt"><input type="hidden" name="case" value="{escape(case_id)}">
               <input type="hidden" name="strategy_path" value="{saved('rfe_strategy_file')}"><input type="hidden" name="rfe_path" value="{saved('rfe_notice_file')}">
+              <input type="hidden" name="initial_memo_path" value="{saved('initial_filing_memo')}">
               <button type="submit" class="secondary">Refresh prompt</button>
             </form>
             <button type="button" class="secondary" data-copy-target="rfe-bootstrap-prompt">Copy prompt</button>
@@ -2724,8 +2758,8 @@ def _render_rfe_strategy_panel(case_id: str) -> str:
     <section class="panel">
       <h2>RFE Stage 1A - strategy bootstrap <span class="muted small">({escape(task_label)})</span></h2>
       <p class="muted small">
-        Select the human strategy and the full RFE notice. The script copies both into the case,
-        extracts their text, combines them with the base RFE template and produces one prompt.
+        Select the human strategy, the full RFE notice, and the initial-filing memorandum. The script copies them into the case,
+        extracts their full text, combines them with the selected RFE template and produces one prompt.
       </p>
       <form method="post" class="stack" data-dirty-watch="true">
         <input type="hidden" name="action" value="build_rfe_strategy_prompt">
@@ -2735,6 +2769,9 @@ def _render_rfe_strategy_panel(case_id: str) -> str:
         </label>
         <label>Full RFE notice (.pdf/.docx/.txt)
           <input name="rfe_path" value="{saved('rfe_notice_file')}" placeholder="C:\\path\\RFE.pdf" required>
+        </label>
+        <label>Initial filing memorandum (.docx/.pdf/.txt){' — required for Migrator' if is_migrator else ' — recommended'}
+          <input name="initial_memo_path" value="{saved('initial_filing_memo')}" placeholder="C:\\path\\initial_filing_memo.docx"{' required' if is_migrator else ''}>
         </label>
         <button>Import sources + build strategy prompt</button>
       </form>

@@ -27,7 +27,9 @@ from .workflow import (
 )
 from .template_variants import (
     apply_eb1a_template_variant,
+    apply_eb1a_rfe_template_variant,
     eb1a_machine_template_file,
+    eb1a_rfe_template_variant,
     eb1a_template_variant,
 )
 
@@ -233,6 +235,10 @@ def apply_case_intake(
     fields_updated += _apply_gender_defaults(config)
     if "eb1a_template_variant" in merged:
         fields_updated += apply_eb1a_template_variant(config, merged.get("eb1a_template_variant", "base"))
+    if "eb1a_rfe_template_variant" in merged:
+        fields_updated += apply_eb1a_rfe_template_variant(
+            config, merged.get("eb1a_rfe_template_variant", "base")
+        )
     if case_info_file.strip():
         intake_sources = config.get("intake_sources")
         if not isinstance(intake_sources, dict):
@@ -507,6 +513,10 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
     manifest["units"] = effective_strategy_units(case_dir, config)
     task_type = str(config.get("task_type", ""))
     is_eb2niw = task_type == "eb2niw_rfe_response"
+    is_eb1a_migrator = (
+        task_type == "eb1a_rfe_response"
+        and eb1a_rfe_template_variant(config) == "migrator"
+    )
 
     document = Document(str(human_template))
     body = document._element.body
@@ -529,7 +539,12 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
         r_fonts.set(qn("w:hAnsi"), memo_font)
         r_fonts.set(qn("w:eastAsia"), memo_font)
 
-    normal = document.styles["Normal"]
+    normal = next(
+        (style for style in document.styles if style.name.casefold() == "normal"),
+        None,
+    )
+    if normal is None:
+        normal = document.styles["Normal"]
     apply_font(normal)
     normal.font.size = Pt(12)
     normal.paragraph_format.line_spacing = 1.5
@@ -612,8 +627,8 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
         paragraph.add_run(f" {description}")
         return paragraph
 
-    if is_eb2niw:
-        add_text("INDEX", style="Heading 1")
+    if is_eb2niw or is_eb1a_migrator:
+        add_text("INDEX:" if is_eb1a_migrator else "INDEX", style="Heading 1")
         evidence_entries = _evidence_index_entries(case_dir, config)
         if evidence_entries:
             for exhibit_heading, evidence_items in evidence_entries:
@@ -653,7 +668,19 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
     deadline = str(metadata.get("response_deadline", "")).strip()
     if deadline:
         add_label_value("Response Deadline: ", deadline)
-    add_text(str(metadata.get("salutation", "")).strip() or "Dear Officer:")
+    salutation = str(metadata.get("salutation", "")).strip()
+    if not salutation and is_eb1a_migrator:
+        chief = str(metadata.get("office_chief_name", "")).strip()
+        officer_number = str(metadata.get("officer_number", "")).strip()
+        addressees = " and ".join(
+            part for part in (chief, f"Officer {officer_number}" if officer_number else "") if part
+        )
+        salutation = f"Dear {addressees}:" if addressees else "Dear Officer:"
+    add_text(salutation or "Dear Officer:")
+    challenged_count = int(
+        manifest.get("challenged_criteria_count", len(manifest.get("challenged_criteria", [])))
+        or 0
+    )
     add_text(
         (
             f"Please accept this response to the Request for Evidence regarding the Form I-140 petition filed on behalf of {full_name or '[BENEFICIARY NAME]'} under INA § 203(b)(2)(B)(i), seeking EB-2 classification and a National Interest Waiver in the field of {field or '[FIELD]'}, with particular specialization in {specialization or '[SPECIALIZATION]'}."
@@ -665,7 +692,11 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
         (
             "We respectfully submit the enclosed additional evidence and explanations in response to the issues raised in the Request for Evidence. This response addresses only the disputed EB-2 NIW requirements identified by USCIS, namely:"
             if is_eb2niw
-            else "We respectfully submit the enclosed additional evidence and explanations in response to the issues raised in the Request for Evidence. This response provides additional documentary evidence and legal explanation in support of the remaining criteria addressed in the RFE, namely:"
+            else (
+                "We respectfully submit the enclosed additional evidence and explanations in response to the issues raised in the Request for Evidence. "
+                f"This response provides additional documentary evidence and legal explanation in support of the {challenged_count or 'remaining'} "
+                f"{'criterion' if challenged_count == 1 else 'criteria'} addressed in the RFE, namely:"
+            )
         )
     )
     addressed_roles = list(
@@ -683,11 +714,15 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
         if is_eb2niw or str(role) in RFE_CRITERION_ROMAN_BY_ROLE
     ]
     if accepted:
+        accepted_count = int(manifest.get("accepted_criteria_count", len(accepted)) or len(accepted))
         paragraph = add_text(
             (
                 f"USCIS made the following favorable findings regarding {preferred or full_name or '[BENEFICIARY]'}:"
                 if is_eb2niw
-                else f"USCIS recognized that {preferred or full_name or '[BENEFICIARY]'} satisfies the following criteria:"
+                else (
+                    f"USCIS recognized that {preferred or full_name or '[BENEFICIARY]'} satisfies "
+                    f"the following {accepted_count} {'criterion' if accepted_count == 1 else 'criteria'}:"
+                )
             ),
             bold=True,
         )
@@ -784,7 +819,7 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
             for paragraph_text in draft_paragraphs:
                 add_text(paragraph_text)
 
-    if not is_eb2niw:
+    if not is_eb2niw and not is_eb1a_migrator:
         document.add_page_break()
         add_text("Attachments / Evidence Index", style="Heading 1")
         evidence_entries = _evidence_index_entries(case_dir, config)
@@ -1481,6 +1516,10 @@ def _normalize_intake_fields(fields: dict[str, str]) -> dict[str, str]:
         "rfe_date": "rfe_metadata.rfe_date",
         "response_deadline": "rfe_metadata.response_deadline",
         "uscis_address": "rfe_metadata.uscis_address",
+        "rfe_response_date": "rfe_metadata.rfe_response_date",
+        "uscis_office_or_service_center": "rfe_metadata.uscis_office_or_service_center",
+        "submitter_name": "rfe_metadata.submitter_name",
+        "submitter_title": "rfe_metadata.submitter_title",
         "o1b_track": "o1b_track",
         "petitioner_company_name": "petitioner.company_name",
         "petitioner_company_address": "petitioner.company_address",
@@ -1502,6 +1541,7 @@ def _normalize_intake_fields(fields: dict[str, str]) -> dict[str, str]:
         "attorney_name": "filing.attorney_name",
         "law_firm": "filing.law_firm",
         "eb1a_template_variant": "eb1a_template_variant",
+        "eb1a_rfe_template_variant": "eb1a_rfe_template_variant",
         "memo_font_family": "memo_font_family",
         "bundle_font_family": "bundle_font_family",
     }
