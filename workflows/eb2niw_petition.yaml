@@ -460,6 +460,19 @@ steps:
     episode_title: On-Balance National Interest Waiver Analysis
     destination: draft_sections/eb2niw/prong3/balance.md
 
+  - step_id: comparable_evidence_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_episode
+    title: Comparable evidence episode
+    objective: >
+      Draft one episode describing favorable documented circumstances or
+      achievements that do not formally fit the petition's threshold criteria
+      or Dhanasar prongs, while explaining their relevance to the total record.
+    section_instructions: instructions/universal/comparable_evidence_episode.md
+    evidence_folder_roles: [comparable_evidence]
+    requires_evidence: true
+    destination_pattern: draft_sections/comparable_evidence/{episode_id}.md
+
   - step_id: eb2niw_conclusion
     execution: llm_manual
     title: EB-2 NIW conclusion

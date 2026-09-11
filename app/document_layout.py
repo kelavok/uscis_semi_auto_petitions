@@ -1133,19 +1133,9 @@ def _escape_html(text: str) -> str:
 
 
 def _merge_pdfs(paths: Iterable[Path], target: Path) -> None:
-    try:
-        from pypdf import PdfReader, PdfWriter  # type: ignore
-    except ModuleNotFoundError as exc:
-        raise SystemExit("Missing pypdf for PDF assembly.") from exc
+    from .pdf_assembly import merge_pdfs
 
-    writer = PdfWriter()
-    for path in paths:
-        reader = PdfReader(str(path))
-        for page in reader.pages:
-            writer.add_page(page)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    with target.open("wb") as handle:
-        writer.write(handle)
+    merge_pdfs(paths, target)
 
 
 def _prepare_pdf_source(source_path: Path, target_pdf: Path) -> Path:

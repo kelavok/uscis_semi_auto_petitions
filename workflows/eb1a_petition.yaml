@@ -152,6 +152,7 @@ steps:
       - identity_cv_education
       - recommendation_letters
       - employment_plan
+      - about_the_industry
     external_research:
       allowed: true
       source_hierarchy:
@@ -378,6 +379,21 @@ steps:
       - commercial_success
     destination_pattern: draft_sections/criteria/commercial_success/{episode_id}.md
 
+  - step_id: comparable_evidence_episode
+    execution: llm_manual_repeatable
+    repeat_unit: one_episode
+    title: Comparable evidence episode
+    objective: >
+      Draft one episode describing documented circumstances or achievements
+      that reflect positively on the beneficiary but do not formally satisfy a
+      regulatory evidentiary criterion. Do not present this material as an
+      additional criterion or claim that it independently satisfies one.
+    section_instructions: instructions/task_types/eb1a_petition/sections/comparable_evidence_episode.md
+    evidence_folder_roles:
+      - comparable_evidence
+    requires_evidence: true
+    destination_pattern: draft_sections/comparable_evidence/{episode_id}.md
+
   - step_id: specialization_essay
     execution: llm_manual
     template_variants:
@@ -389,6 +405,8 @@ steps:
       major media, research/reports, then other credible sources. The essay
       usually covers definition, economic value, effect, and cross-sector value.
     section_instructions: instructions/task_types/eb1a_petition/sections/specialization_essay.md
+    evidence_folder_roles:
+      - about_the_industry
     external_research:
       allowed: true
       source_hierarchy:

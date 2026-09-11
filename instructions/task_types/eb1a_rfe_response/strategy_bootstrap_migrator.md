@@ -9,7 +9,8 @@ This is a planning and extraction step, not final RFE drafting. Read all three s
 1. Populated web-intake metadata is authoritative for beneficiary name, preferred reference, field, specialization/subfield, case number, dates, USCIS address, office, and submitter data. Do not replace a populated intake value merely because OCR differs.
 2. The human strategy controls what arguments will be made and which RFE concerns will be answered.
 3. The RFE controls the exact adverse findings, favorable findings, adjudicator information, and quoted language.
-4. The initial filing supplies prior arguments and exhibit context; do not treat it as new evidence.
+4. For every section and episode, set `include_rfe_quote` to `true` only when the human strategy affirmatively calls for quoting/citing the RFE in that location. Final merits and conclusion default to `false`.
+5. The initial filing supplies prior arguments and exhibit context; do not treat it as new evidence.
 
 ## Required extraction
 

@@ -64,6 +64,8 @@ eb1a_folder_roles:
   leading_critical_role: "8. Лид-Крит роль в организации"
   high_salary: "9. Зарплата"
   commercial_success: "10. Коммерческий успех"
+  comparable_evidence: "comparable evidence"
+  about_the_industry: "about the industry"
   employment_plan: "План трудоустройства"
   recommendation_letters: "Рекомендательные письма"
 

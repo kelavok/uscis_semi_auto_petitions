@@ -342,6 +342,13 @@ def apply_strategy_output(case_id: str, output: dict[str, Any]) -> StrategyImpor
                     )
                 ),
                 "planned_subheadings": list(episode.get("planned_subheadings", [])),
+                "include_rfe_quote": episode.get(
+                    "include_rfe_quote",
+                    section.get(
+                        "include_rfe_quote",
+                        str(section.get("section_type", "")) == "criterion",
+                    ),
+                ),
             }
             units.append(unit)
 
@@ -676,6 +683,16 @@ def _merge_strategy_templates(
         else []
     )
     merged["starter_text"] = str(selected[0].get("starter_text", ""))
+    explicit_quote_flags = [
+        item.get("include_rfe_quote")
+        for item in selected
+        if "include_rfe_quote" in item
+    ]
+    merged["include_rfe_quote"] = (
+        any(bool(value) for value in explicit_quote_flags)
+        if explicit_quote_flags
+        else bool(str(merged.get("criterion_role", "")).strip())
+    )
     return merged
 
 

@@ -533,7 +533,11 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
             if data.get("claimed_criteria_present") == "1"
             else None,
         )
-        return f"Updated {summary.fields_updated} field(s); copied {summary.source_files_copied} source file(s)."
+        scanned = scan_documents(case_id)
+        return (
+            f"Updated {summary.fields_updated} field(s); copied {summary.source_files_copied} source file(s); "
+            f"indexed {scanned.scanned_files} document(s)."
+        )
     if action in {"save_intake_font_settings", "save_layout_font_settings"}:
         _save_case_font_settings(
             case_id,
@@ -681,6 +685,10 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
         return f"Inserted section {target.name} and refreshed working_memo.docx.\n\n{next_report}"
     if action == "refresh_layout_indexes":
         summary = refresh_layout_indexes(case_id)
+        memo_note = ""
+        if load_case(case_id).config.get("task_type") == "o1b_petition":
+            build_working_memo(case_id)
+            memo_note = " Updated the memo index; the previous Word file is saved in final_memo/backups."
         status = summary.status
         warning = ""
         if status.stale_document_ids or status.assignment_conflicts:
@@ -692,7 +700,7 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
             f"{summary.auxiliary_rows_removed} auxiliary row(s), rebound "
             f"{summary.replacement_documents_rebound} replacement PDF(s), assigned "
             f"{status.assigned_used_documents}/{status.unique_used_documents} used document(s), "
-            f"and built {status.exhibit_count} exhibit(s).{warning}"
+            f"and built {status.exhibit_count} exhibit(s).{warning}{memo_note}"
         )
     if action == "sync_layout_indexes_from_memo":
         summary = sync_layout_indexes_from_memo(case_id)

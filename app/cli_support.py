@@ -192,6 +192,7 @@ def _eb2niw_case_config_text(text: str) -> str:
         '  prong2_conferences: "3. (2) Пронг - Хорошая подготовка/3. Прочие достижения/7.Конференции"\n'
         '  prong2_recommendations: "3. (2) Пронг - Хорошая подготовка/3. Прочие достижения/8.Рек письма США"\n'
         '  prong3: "4. (3) Пронг - Выгодно отказаться от трудоустройства"\n\n'
+        '  comparable_evidence: "comparable evidence"\n\n'
     )
     text = re.sub(
         r"(?ms)^eb1a_folder_roles:\n.*?(?=^approvals:)",

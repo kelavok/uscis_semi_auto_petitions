@@ -6,6 +6,11 @@ dist/
 build/
 *.egg-info/
 ~$*.docx
+tmp/
+desktop.ini
+
+# Local duplicate/template-audit staging folder; canonical files live under templates/.
+/EB2NIW/
 
 # Real case workspaces may contain personal and confidential records.
 case_workspace/*

@@ -74,7 +74,7 @@ steps:
     destination: draft_sections/_context_notes.md
 
   - step_id: template_review
-    execution: llm_manual
+    execution: deterministic
     title: Review the company O-1B template and drafting rules
     objective: >
       Understand the required company section order, O-1B legal tests,
@@ -203,6 +203,7 @@ steps:
       - organization_role
     phase_subfolder_terms:
       - 1 role and contribution
+      - leading role and corporate docs
       - role facts
       - employment evidence
       - contribution to development

@@ -17,6 +17,7 @@ document_rules:
   page_numbers: footer_right
   remove_source_instruction_page: true
   first_output_section: evidence_index
+  exhibit_numbering: consecutive_by_first_appearance_starting_at_1
   recommendation_letters_section: prohibited
 
 source_policy:
@@ -142,6 +143,12 @@ sections:
     - episode/project Heading 2
     - targeted rebuttal subheadings and evidence analysis
     - criterion conclusion tied to successfully rebutted points
+
+  rfe_quote_policy:
+    criterion_default: true
+    final_merits_default: false
+    conclusion_default: false
+    rule: include an RFE quotation only when the accepted strategy sets include_rfe_quote to true
 
   final_merits:
     heading: FINAL MERITS DETERMINATION

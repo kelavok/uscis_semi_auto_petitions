@@ -536,7 +536,7 @@ class CliSmokeTests(unittest.TestCase):
             self.assertIn("Treat the org chart and project screenshot as one evidence set", role_prompt)
             self.assertIn("prompt-only folder sidecar (README.md)", role_prompt)
             self.assertIn("do not add to document/exhibit indexes", role_prompt)
-            self.assertIn("primary exhibit for this section is Exhibit 4", role_prompt)
+            self.assertIn("primary exhibit for this section is Exhibit 1", role_prompt)
             step_order = [str(step.get("step_id")) for step in loaded.workflow["steps"]]
             self.assertLess(
                 step_order.index("o1b_petitioner_support_letter"),
@@ -909,6 +909,27 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(workflow["task_type"], "eb1a_petition")
         step = find_step(workflow, "professional_biography")
         self.assertEqual(step["execution"], "llm_manual")
+
+    def test_eb1a_optional_folders_are_wired_and_case_insensitive(self) -> None:
+        workflow = load_yaml_file(Path("workflows/eb1a_petition.yaml"))
+        comparable = find_step(workflow, "comparable_evidence_episode")
+        self.assertTrue(comparable["requires_evidence"])
+        self.assertEqual(comparable["evidence_folder_roles"], ["comparable_evidence"])
+        self.assertIn(
+            "about_the_industry",
+            find_step(workflow, "industry_overview")["evidence_folder_roles"],
+        )
+        self.assertEqual(
+            find_step(workflow, "specialization_essay")["evidence_folder_roles"],
+            ["about_the_industry"],
+        )
+
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            actual = root / "CoMpArAbLe EvIdEnCe"
+            actual.mkdir()
+            resolved = workflow_module._case_insensitive_path(root, "comparable evidence")
+        self.assertEqual(resolved.name, actual.name)
 
     def test_machine_templates_are_parseable_for_working_memo_builder(self) -> None:
         eb1a = parse_machine_template(Path("templates/EB1A/EB1A_unified_template_LLM.docx"))

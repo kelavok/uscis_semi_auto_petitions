@@ -22,6 +22,7 @@ from .workflow import (
     _citation_plan_for_step,
     _normalize_slashes,
     _repeatable_episode_candidates,
+    _rfe_strategy_citation_plan,
     extract_docx_text,
     find_step,
     format_missing_selected_documents_message,
@@ -447,13 +448,22 @@ def load_bundle_selection(case_id: str) -> BundleSelection:
         data = json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, ValueError, TypeError):
         return BundleSelection(all_exhibits, all_documents)
-    valid_exhibits = set(all_exhibits)
     valid_documents = set(all_documents)
-    exhibits = tuple(
-        value for value in (str(item) for item in data.get("selected_exhibits", [])) if value in valid_exhibits
-    )
     documents = tuple(
         value for value in (str(item) for item in data.get("selected_document_ids", [])) if value in valid_documents
+    )
+    selected_documents = set(documents)
+    # Exhibit numbers may be regenerated (notably when an O-1B case drops an
+    # unclaimed criterion).  Document IDs are stable, so derive the current
+    # exhibit selection from the saved documents instead of trusting stale
+    # top-level labels.
+    exhibits = tuple(
+        str(exhibit["exhibit_number"])
+        for exhibit in catalog
+        if any(
+            str(document.get("document_id", "")) in selected_documents
+            for document in exhibit["documents"]
+        )
     )
     return BundleSelection(exhibits, documents)
 
@@ -581,6 +591,11 @@ def inspect_layout_index_status(case_id: str) -> LayoutIndexStatus:
 
 
 def refresh_layout_indexes(case_id: str) -> LayoutIndexRefreshSummary:
+    before = load_case(case_id)
+    if before.config.get("task_type") == "o1b_petition":
+        from .o1b_exhibits import capture_draft_citations
+
+        capture_draft_citations(before)
     scan = scan_documents(case_id)
     loaded = load_case(case_id)
     document_index_path = loaded.case_dir / _case_path_value(loaded.config, "document_index")
@@ -973,6 +988,10 @@ def _write_yaml_config(path: Path, data: dict[str, object]) -> None:
 
 
 def _desired_exhibit_assignments(loaded: LoadedCase) -> EvidenceLayoutPlan:
+    if loaded.config.get("task_type") == "o1b_petition":
+        from .o1b_exhibits import layout_plan
+
+        return layout_plan(loaded)
     validated_root = loaded.case_dir / _case_path_value(loaded.config, "validated_outputs")
     files = {path.stem: path for path in validated_root.glob("*.json")}
     try:
@@ -1253,6 +1272,9 @@ def _exhibit_number_for_output(loaded: LoadedCase, data: dict[str, object]) -> s
     step_id = str(data.get("step_id", ""))
     episode_id = str(data.get("episode_id", ""))
     if str(loaded.config.get("task_type", "")) in RFE_TASK_TYPES and episode_id:
+        strategy_plan = _rfe_strategy_citation_plan(loaded, episode_id)
+        if strategy_plan:
+            return strategy_plan["exhibit_number"]
         from .rfe_strategy import get_strategy_unit
 
         unit = get_strategy_unit(loaded.case_dir, episode_id, loaded.config)
@@ -1849,7 +1871,7 @@ def build_evidence_bundle(case_id: str) -> BundleBuildSummary:
         "evidence_bundle.pdf" if is_full_bundle else "evidence_bundle_selected.pdf"
     )
 
-    writer = PdfWriter()
+    pdf_paths: list[Path] = []
     merged_items = 0
     converted_items = 0
     skipped_items = 0
@@ -1868,17 +1890,12 @@ def build_evidence_bundle(case_id: str) -> BundleBuildSummary:
             skipped_items += 1
             continue
 
-        _add_pdf_pages(writer, PdfReader, pdf_path, strip_annotations=True)
+        pdf_paths.append(pdf_path)
         merged_items += 1
 
-    try:
-        with final_pdf_path.open("wb") as handle:
-            writer.write(handle)
-    except PermissionError:
-        final_pdf_path = final_pdf_path.with_name(final_pdf_path.stem + "_updated.pdf")
-        with final_pdf_path.open("wb") as handle:
-            writer.write(handle)
-    final_pdf_path = _clean_pdf_if_possible(final_pdf_path)
+    from .pdf_assembly import merge_pdfs
+
+    final_pdf_path = merge_pdfs(pdf_paths, final_pdf_path, strip_annotations=True)
     return BundleBuildSummary(
         final_pdf_path=final_pdf_path,
         plan_csv_path=plan_summary.plan_csv_path,
@@ -2327,35 +2344,17 @@ def _find_soffice() -> str:
 
 
 def _pdf_page_count(path: Path) -> int:
-    try:
-        from pypdf import PdfReader  # type: ignore
-    except ModuleNotFoundError as exc:
-        raise SystemExit("pypdf is required to count PDF pages.") from exc
-    return len(PdfReader(str(path)).pages)
+    import pikepdf
+
+    with pikepdf.open(path) as pdf:
+        return len(pdf.pages)
 
 
 def _merge_memo_and_bundle(memo_pdf: Path, evidence_pdf: Path, final_pdf: Path, *, memo_pages: int) -> Path:
-    try:
-        from pypdf import PdfReader, PdfWriter  # type: ignore
-    except ModuleNotFoundError as exc:
-        raise SystemExit("pypdf is required to merge the final filing PDF.") from exc
-    writer = PdfWriter()
-    _add_pdf_pages(writer, PdfReader, memo_pdf, strip_annotations=True)
-    _add_pdf_pages(
-        writer,
-        PdfReader,
-        evidence_pdf,
-        strip_annotations=True,
-        page_number_start=memo_pages + 1,
-    )
-    try:
-        with final_pdf.open("wb") as handle:
-            writer.write(handle)
-    except PermissionError:
-        final_pdf = final_pdf.with_name(final_pdf.stem + "_updated.pdf")
-        with final_pdf.open("wb") as handle:
-            writer.write(handle)
-    return _clean_pdf_if_possible(final_pdf)
+    from .pdf_assembly import merge_pdfs
+
+    return merge_pdfs([memo_pdf, evidence_pdf], final_pdf, strip_annotations=True,
+                      number_from_page=memo_pages + 1)
 
 
 def _add_pdf_pages(

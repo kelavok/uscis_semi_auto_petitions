@@ -17,6 +17,7 @@ from .workflow import (
     TEXT_EXTENSIONS,
     PromptOptions,
     _repeatable_episode_candidates,
+    _case_insensitive_path,
     destination_for_step,
     extract_docx_text,
     find_step,
@@ -307,6 +308,9 @@ def apply_case_intake(
         source_files_copied += copied
         source_files_skipped += skipped
 
+    from .o1b_folders import resolve_o1b_folders
+
+    fields_updated += resolve_o1b_folders(config, loaded.case_dir)
     config_path = loaded.case_dir / "case_config.yaml"
     _write_yaml_file(config_path, config)
     return IntakeSummary(
@@ -344,6 +348,10 @@ def build_working_memo(case_id: str, *, template_path: str = "") -> WorkingMemoS
 
     markdown_path.write_text(render_markdown_skeleton(loaded.case_id, loaded.config, skeleton), encoding="utf-8")
     report_path.write_text(render_template_report(report), encoding="utf-8")
+    if docx_path.exists():
+        backup_dir = final_dir / "backups"
+        backup_dir.mkdir(exist_ok=True)
+        shutil.copy2(docx_path, backup_dir / f"working_memo_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.docx")
     write_docx(docx_path, loaded.case_id, loaded.config, skeleton)
     return WorkingMemoSummary(
         markdown_path=markdown_path,
@@ -778,6 +786,8 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
         if role:
             add_text(
                 "Exhibits from XX to XX, Pages from XX to XX.",
+                bold=True,
+                italic=True,
                 align=WD_ALIGN_PARAGRAPH.CENTER,
             )
 
@@ -789,7 +799,11 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
                 if issue_id and issue_id not in seen_issues:
                     issues.append(issue)
                     seen_issues.add(issue_id)
-        if issues:
+        if (
+            issues
+            and _rfe_group_requests_quote(group)
+            and not _rfe_group_has_drafted_quote(group, case_dir)
+        ):
             label = add_text("In the RFE, the officer states:", bold=True)
             label.paragraph_format.space_before = Pt(12)
             label.paragraph_format.space_after = Pt(6)
@@ -817,7 +831,16 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
             }:
                 draft_paragraphs = draft_paragraphs[1:]
             for paragraph_text in draft_paragraphs:
-                add_text(paragraph_text)
+                paragraph = document.add_paragraph(
+                    style="Heading 3" if _is_rfe_thesis_heading(paragraph_text) else "Normal"
+                )
+                if _is_standalone_exhibit_reference(paragraph_text):
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                for run_text, properties in _rfe_draft_runs(paragraph_text):
+                    run = paragraph.add_run(run_text)
+                    run.bold = bool(properties.get("bold"))
+                    run.italic = bool(properties.get("italic"))
+                    apply_run_font(run)
 
     if not is_eb2niw and not is_eb1a_migrator:
         document.add_page_break()
@@ -945,6 +968,15 @@ def _eb1a_skeleton(
     ]
     for item in _eb1a_criteria_from_config_and_folders(config, case_dir, structure):
         skeleton.append(item)
+    if _role_has_documents(config, case_dir, "comparable_evidence"):
+        skeleton.append(
+            {
+                "level": 2,
+                "title": "Comparable Evidence",
+                "paragraphs": ["[LLM SECTION PLACEHOLDER: comparable_evidence_episode]"],
+                "inferred": True,
+            }
+        )
     skeleton.extend(
         [
             {
@@ -1009,6 +1041,15 @@ def _eb1a_migrator_skeleton(
         {"level": 1, "title": "EVIDENTIAL CRITERIA OF ELIGIBILITY", "paragraphs": []},
     ]
     skeleton.extend(_eb1a_criteria_from_config_and_folders(config, case_dir, structure))
+    if _role_has_documents(config, case_dir, "comparable_evidence"):
+        skeleton.append(
+            {
+                "level": 1,
+                "title": "COMPARABLE EVIDENCE",
+                "paragraphs": ["[LLM SECTION PLACEHOLDER: comparable_evidence_episode]"],
+                "inferred": True,
+            }
+        )
     skeleton.extend(
         [
             {
@@ -1184,6 +1225,16 @@ def _eb2niw_skeleton(
             },
         ]
     )
+    if _role_has_documents(config, case_dir, "comparable_evidence"):
+        skeleton.insert(
+            -1,
+            {
+                "level": 1,
+                "title": "Comparable Evidence",
+                "paragraphs": ["[LLM SECTION PLACEHOLDER: comparable_evidence_episode]"],
+                "inferred": True,
+            },
+        )
     if len(skeleton) <= 8:
         skeleton.extend(_template_fallback_sections(report, prefix="[TEMPLATE STRUCTURE PLACEHOLDER]"))
     return skeleton
@@ -1211,8 +1262,12 @@ def _rfe_skeleton(
     config: dict[str, Any], case_dir: Path, report: TemplateParseReport
 ) -> list[dict[str, Any]]:
     is_eb2niw = str(config.get("task_type", "")) == "eb2niw_rfe_response"
+    is_eb1a_migrator = (
+        str(config.get("task_type", "")) == "eb1a_rfe_response"
+        and eb1a_rfe_template_variant(config) == "migrator"
+    )
     skeleton: list[dict[str, Any]] = []
-    if is_eb2niw:
+    if is_eb2niw or is_eb1a_migrator:
         skeleton.append(
             {
                 "level": 1,
@@ -1260,7 +1315,7 @@ def _rfe_skeleton(
                 "criterion_role": str(unit.get("criterion_role", "")),
             }
         )
-    if not is_eb2niw:
+    if not is_eb2niw and not is_eb1a_migrator:
         skeleton.append({"level": 1, "title": "Attachments / Evidence Index", "paragraphs": []})
         for exhibit_heading, evidence_items in _evidence_index_entries(case_dir, config):
             skeleton.append(
@@ -1302,7 +1357,7 @@ def _eb1a_criteria_from_config_and_folders(
         role = str(role)
         if role not in EB1A_CRITERION_STEP_BY_ROLE or role not in selected:
             continue
-        folder_path = source_root / str(folder)
+        folder_path = _case_insensitive_path(source_root, str(folder))
         criterion = criteria_template.get(role, {})
         if not isinstance(criterion, dict):
             criterion = {}
@@ -1404,6 +1459,8 @@ def _selected_criteria(config: dict[str, Any], case_dir: Path) -> list[str]:
     criterion_map = _criterion_step_map(config)
     claimed = [str(item) for item in config.get("claimed_criteria", []) or []]
     if claimed:
+        if config.get("task_type") == "o1b_petition":
+            return [role for role in claimed if role in criterion_map]
         return [role for role in criterion_map if role in claimed]
     roles = folder_role_map(config)
     source_root = case_dir / _path_from_config(config, "source_originals")
@@ -1797,6 +1854,105 @@ def _clean_memo_paragraphs(text: str) -> list[str]:
     ]
 
 
+def _rfe_group_requests_quote(group: list[dict[str, Any]]) -> bool:
+    explicit = [unit.get("include_rfe_quote") for unit in group if "include_rfe_quote" in unit]
+    if explicit:
+        return any(bool(value) for value in explicit)
+    if any(str(unit.get("criterion_role", "")).strip() for unit in group):
+        return True
+    strategy = "\n".join(str(unit.get("strategy", "")) for unit in group)
+    return bool(
+        re.search(
+            r"(?:quote|quotation|cite|citation|reproduce).{0,50}\bRFE\b|\bRFE\b.{0,50}(?:quote|quotation|cite|citation|reproduce)",
+            strategy,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+    )
+
+
+def _rfe_group_has_drafted_quote(group: list[dict[str, Any]], case_dir: Path) -> bool:
+    for unit in group:
+        unit_id = str(unit.get("unit_id", "")).strip()
+        if not unit_id:
+            continue
+        draft_path = case_dir / "draft_sections/rfe/sections" / f"{unit_id}.md"
+        if not draft_path.exists():
+            continue
+        text = draft_path.read_text(encoding="utf-8-sig", errors="replace")
+        if re.search(
+            r"\b(?:In the RFE, the officer states|The RFE (?:further )?states)\s*:\s*[“\"]",
+            text,
+            flags=re.IGNORECASE,
+        ):
+            return True
+    return False
+
+
+def _is_standalone_exhibit_reference(text: str) -> bool:
+    return bool(re.match(r"^Exhibits?\s+\S+.*Pages?\b", text.strip(), flags=re.IGNORECASE))
+
+
+def _is_rfe_thesis_heading(text: str) -> bool:
+    value = " ".join(text.strip().split())
+    if not value or "\n" in text or len(value) > 180 or len(value.split()) > 22:
+        return False
+    if value.startswith(("[", "(", "“", '"', "- ", "* ")):
+        return False
+    if re.match(r"^\d+(?:\.\d+)*[.)]?\s", value):
+        return False
+    if _is_standalone_exhibit_reference(value):
+        return False
+    if re.search(r"\((?=[^)]*\bExhibits?\b)[^)]*\)", value, flags=re.IGNORECASE):
+        return False
+    if value.casefold() in {"answer:", "response:"}:
+        return False
+    if re.match(
+        r"^(?:In the RFE, the officer states|The RFE (?:further )?(?:states|explains))\s*:",
+        value,
+        flags=re.IGNORECASE,
+    ):
+        return False
+    return value[-1] not in ".?!;:"
+
+
+def _rfe_draft_runs(text: str) -> list[tuple[str, dict[str, bool]]]:
+    value = text
+    if _is_standalone_exhibit_reference(value):
+        return [(value, {"bold": True, "italic": True})]
+    if value.strip().casefold() in {"answer:", "response:"}:
+        return [(value, {"bold": True})]
+    if _is_rfe_thesis_heading(value):
+        return [(value, {"bold": True})]
+
+    spans: list[tuple[int, int, dict[str, bool]]] = []
+    for match in re.finditer(r"\((?=[^)]*\bExhibits?\b)[^)]*\)", value, flags=re.IGNORECASE):
+        spans.append((match.start(), match.end(), {"bold": True, "italic": True}))
+    if re.search(r"\bRFE\b", value, flags=re.IGNORECASE):
+        for match in re.finditer(r"“[^”]+”|\"[^\"]+\"", value):
+            spans.append((match.start(), match.end(), {"italic": True}))
+        label = re.match(
+            r"^(In the RFE, the officer states:|The RFE (?:further )?(?:states|explains):)",
+            value,
+            flags=re.IGNORECASE,
+        )
+        if label:
+            spans.append((label.start(), label.end(), {"bold": True}))
+    if not spans:
+        return [(value, {})]
+
+    boundaries = sorted({0, len(value), *(point for start, end, _ in spans for point in (start, end))})
+    runs: list[tuple[str, dict[str, bool]]] = []
+    for start, end in zip(boundaries, boundaries[1:]):
+        if start == end:
+            continue
+        properties: dict[str, bool] = {}
+        for span_start, span_end, span_properties in spans:
+            if start >= span_start and end <= span_end:
+                properties.update(span_properties)
+        runs.append((value[start:end], properties))
+    return runs
+
+
 def _normalized_heading(value: str) -> str:
     return " ".join(
         "".join(character if character.isalnum() else " " for character in value.casefold()).split()
@@ -1971,11 +2127,13 @@ def _o1b_document_xml(config: dict[str, Any], case_dir: Path) -> str:
     body: list[str] = []
 
     body.append(_rich_paragraph([("INDEX:", {"bold": True})], style="Heading1"))
-    index_rows = structure.get("index_rows", [])
-    if isinstance(index_rows, list):
-        for row in index_rows:
-            body.append(_rich_paragraph([(_format_case_text(str(row), tokens), {})]))
-    body.append(_placeholder_paragraph("[SCRIPT PLACEHOLDER: final exhibit titles and page ranges are generated from indexes after PDF assembly.]"))
+    evidence_entries = _evidence_index_entries(case_dir, config)
+    for exhibit_heading, evidence_items in evidence_entries:
+        body.append(_rich_paragraph([(exhibit_heading, {"bold": True})], style="Heading2"))
+        for kind, title in evidence_items:
+            body.append(_rich_paragraph([(title, {})], style="Heading3" if kind == "episode" else "Normal"))
+    if not evidence_entries:
+        body.append(_placeholder_paragraph("[Import evidence and refresh indexes to populate the evidence list.]"))
     body.append(_page_break_paragraph())
 
     body.append(_rich_paragraph([(tokens["petition_date"], {})]))
@@ -2055,7 +2213,10 @@ def _o1b_document_xml(config: dict[str, Any], case_dir: Path) -> str:
         body.append(_page_break_paragraph())
         title = _format_case_text(str(criterion.get("title", "")), tokens)
         body.append(_rich_paragraph([(title, {"bold": True})], style="Heading1"))
-        exhibit_range = str(criterion.get("exhibit_range", "Exhibits from XX to XX, Pages from XX to XX."))
+        from .o1b_exhibits import exhibit_roles
+
+        number = exhibit_roles(load_case(case_dir.name)).get(role)
+        exhibit_range = f"Exhibit {number}." if number is not None else "[No evidence indexed for this criterion.]"
         body.append(_rich_paragraph([(exhibit_range, {"italic": True})]))
         step_ids = criterion.get("step_ids", [])
         if not isinstance(step_ids, list):
@@ -2073,7 +2234,11 @@ def _o1b_document_xml(config: dict[str, Any], case_dir: Path) -> str:
 
     body.append(_page_break_paragraph())
     body.append(_rich_paragraph([("ADVISORY OPINION", {"bold": True})], style="Heading1"))
-    body.append(_rich_paragraph([("Exhibit 9.1, pages from XX to XX.", {"italic": True})]))
+    from .o1b_exhibits import exhibit_roles
+
+    advisory_number = exhibit_roles(load_case(case_dir.name)).get("advisory_opinion")
+    if advisory_number is not None:
+        body.append(_rich_paragraph([(f"Exhibit {advisory_number}.", {"italic": True})]))
     body.append(
         _draft_step_xml(case_dir, "o1b_advisory_opinion")
         or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: O-1 consultation under 8 C.F.R. § 214.2(o)(5).]"))
@@ -2099,9 +2264,6 @@ def _o1b_document_xml(config: dict[str, Any], case_dir: Path) -> str:
     body.append(
         _draft_step_xml(case_dir, "o1b_conclusions")
         or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: conclusion listing only the claimed and supported criteria.]"))
-    body.append(_page_break_paragraph())
-    body.append(_rich_paragraph([("Exhibit List", {"bold": True})], style="Heading1"))
-    body.append(_placeholder_paragraph("[SCRIPT PLACEHOLDER: generated from indexes/exhibit_index.csv]"))
     body.append(_o1b_section_properties())
     return _wrap_document_xml("".join(body))
 
@@ -2323,6 +2485,19 @@ def _eb2niw_document_xml(config: dict[str, Any], case_dir: Path) -> str:
         or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: evidence-based Dhanasar balancing analysis without a crude U.S.-worker comparison.]" )
     )
 
+    if _role_has_documents(config, case_dir, "comparable_evidence"):
+        body.append(_page_break_paragraph())
+        body.append(_rich_paragraph([("Comparable Evidence", {"bold": True})], style="Heading1"))
+        body.append(
+            _draft_step_xml(
+                case_dir,
+                "comparable_evidence_episode",
+                episode_style="Heading2",
+                episode_label="",
+            )
+            or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: comparable_evidence_episode]")
+        )
+
     body.append(_page_break_paragraph())
     body.append(_rich_paragraph([("Conclusion", {"bold": True})], style="Heading1"))
     body.append(
@@ -2337,6 +2512,10 @@ def _eb2niw_document_xml(config: dict[str, Any], case_dir: Path) -> str:
 
 
 def _eb2niw_role_has_documents(config: dict[str, Any], case_dir: Path, role: str) -> bool:
+    return _role_has_documents(config, case_dir, role)
+
+
+def _role_has_documents(config: dict[str, Any], case_dir: Path, role: str) -> bool:
     roles = folder_role_map(config)
     folder_name = str(roles.get(role, role))
     for source_key in ("source_originals", "source_translations", "source_other"):
@@ -2344,7 +2523,7 @@ def _eb2niw_role_has_documents(config: dict[str, Any], case_dir: Path, role: str
             root = case_dir / _path_from_config(config, source_key)
         except SystemExit:
             continue
-        if _folder_has_documents(root / folder_name):
+        if _folder_has_documents(_case_insensitive_path(root, folder_name)):
             return True
     return False
 
@@ -2495,6 +2674,19 @@ def _eb1a_migrator_document_xml(config: dict[str, Any], case_dir: Path) -> str:
                 _draft_step_xml(case_dir, str(step_id), episode_style="Heading2", episode_label="")
                 or _placeholder_paragraph(f"[LLM SECTION PLACEHOLDER: {step_id}]")
             )
+
+    if _role_has_documents(config, case_dir, "comparable_evidence"):
+        body.append(_page_break_paragraph())
+        body.append(_rich_paragraph([("COMPARABLE EVIDENCE", {"bold": True})], style="Heading1"))
+        body.append(
+            _draft_step_xml(
+                case_dir,
+                "comparable_evidence_episode",
+                episode_style="Heading2",
+                episode_label="",
+            )
+            or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: comparable_evidence_episode]")
+        )
 
     body.append(_page_break_paragraph())
     body.append(
@@ -2728,6 +2920,14 @@ def _eb1a_document_xml(config: dict[str, Any], case_dir: Path) -> str:
                 or _placeholder_paragraph(f"[LLM SECTION PLACEHOLDER: {step_id}]")
             )
 
+    if _role_has_documents(config, case_dir, "comparable_evidence"):
+        body.append(_page_break_paragraph())
+        body.append(_rich_paragraph([("Comparable Evidence", {"bold": True})], style="Heading2"))
+        body.append(
+            _draft_step_xml(case_dir, "comparable_evidence_episode")
+            or _placeholder_paragraph("[LLM SECTION PLACEHOLDER: comparable_evidence_episode]")
+        )
+
     body.append(_page_break_paragraph())
     body.append(
         _rich_paragraph(
@@ -2793,6 +2993,10 @@ def _draft_step_xml(
     parts: list[str] = []
     for index, path in enumerate(paths):
         text = path.read_text(encoding="utf-8-sig", errors="replace").strip()
+        if step_id.startswith("o1b_"):
+            from .o1b_exhibits import render_draft_citations
+
+            text = render_draft_citations(load_case(case_dir.name), path, text)
         if not text:
             continue
         if len(paths) > 1:
@@ -2849,6 +3053,7 @@ def _draft_paths_for_step(case_dir: Path, step_id: str) -> list[Path]:
         "criterion_high_salary_fact": ("criteria/high_salary", "*_phase_1.md"),
         "criterion_high_salary_comparison": ("criteria/high_salary", "*_phase_2.md"),
         "criterion_commercial_success_episode": ("criteria/commercial_success", "*.md"),
+        "comparable_evidence_episode": ("comparable_evidence", "*.md"),
         "employment_plan": ("employment_plan", "*.md"),
         "o1b_petitioner_support_letter": ("supporting_documents", "petitioner_support_letter.md"),
         "o1b_itinerary": ("supporting_documents", "itinerary.md"),

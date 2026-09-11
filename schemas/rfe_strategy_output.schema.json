@@ -85,6 +85,7 @@
           "criterion_role": {"type": "string"},
           "required": {"type": "boolean"},
           "strategy": {"type": "string"},
+          "include_rfe_quote": {"type": "boolean"},
           "rfe_issue_ids": {"type": "array", "items": {"type": "string"}},
           "starter_text": {"type": "string"},
           "source_folder": {"type": "string"},
@@ -100,6 +101,7 @@
                 "title": {"type": "string", "minLength": 1},
                 "source_folder": {"type": "string"},
                 "strategy": {"type": "string"},
+                "include_rfe_quote": {"type": "boolean"},
                 "rfe_issue_ids": {"type": "array", "items": {"type": "string"}},
                 "planned_subheadings": {"type": "array", "items": {"type": "string"}},
                 "initial_filing_heading_hints": {"type": "array", "items": {"type": "string"}}

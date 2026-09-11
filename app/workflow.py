@@ -16,6 +16,7 @@ from .simple_yaml import load_yaml_subset
 from .json_input import parse_llm_json_object
 from .file_rules import is_office_temporary_file, prompt_sidecar_kind
 from .template_variants import (
+    eb1a_rfe_template_variant,
     eb1a_rfe_variant_source_path,
     eb1a_template_variant,
     eb1a_variant_source_path,
@@ -59,6 +60,9 @@ def load_case(case_id: str) -> LoadedCase:
     if not config_path.exists():
         raise SystemExit(f"Missing case_config.yaml: {config_path}")
     config = load_yaml_file(config_path)
+    from .o1b_folders import resolve_o1b_folders
+
+    resolve_o1b_folders(config, case_dir)
     workflow_value = str(config.get("workflow", "workflows/eb1a_petition.yaml"))
     workflow_path = PROJECT_ROOT / workflow_value
     if not workflow_path.exists():
@@ -349,8 +353,12 @@ def render_final_output_guardrails(
         "Do not use the word `episode` in petition text. Use `criterion`, `section`, `submitted evidence`, or `record` as appropriate.",
         "In `used_documents`, provide a concise, descriptive English `document_title` for every cited document. Do not copy a raw filename or leave a Russian-only title.",
         "Every `used_documents[].document_id` must be copied exactly from the Technical document selection in this prompt (format `DOC####`). Never invent semantic IDs for an RFE quote, strategy, exhibit group, or explanatory material. If no indexed documents are listed, return `used_documents: []`.",
-        "Every document listed in the Technical document selection must appear exactly once in `used_documents`, even if it is background, corroborating, duplicative, or less important. The filing bundle is built from `used_documents`; omitting a selected document will omit it from the final exhibit package.",
-        "`used_documents` is the authoritative source for exhibit ordering after validation: list documents in the same logical order in which they are used in `draft_text` and in the exhibit document list. Do not sort by DOC identifier, filename, source folder, upload order, or technical index order.",
+        "Every document listed in the Technical document selection must appear exactly once in `used_documents`, even if it is background, corroborating, duplicative, or less important.",
+        (
+            "O-1B exhibit numbers are assigned by the system in case order, with general documents in Exhibit 0. Folder-defined episodes and the technical index control item numbers."
+            if loaded.config.get("task_type") == "o1b_petition"
+            else "`used_documents` is the authoritative source for exhibit ordering after validation: list documents in the same logical order in which they are used in `draft_text` and in the exhibit document list. Do not sort by DOC identifier, filename, source folder, upload order, or technical index order."
+        ),
     ]
     if technical_step:
         lines.append("This is a technical intake/review step, so concise internal notes are allowed in `draft_text`.")
@@ -527,7 +535,7 @@ def render_evidence_context(
         missing_folders: list[Path] = []
         for source_key in ["source_originals", "source_translations", "source_other"]:
             source_root = loaded.case_dir / _case_path_value(loaded.config, source_key)
-            folder = source_root / folder_name
+            folder = _case_insensitive_path(source_root, folder_name)
             evidence_folders = _episode_folders_for(folder, options, step)
             if evidence_folders:
                 for evidence_folder in evidence_folders:
@@ -734,7 +742,9 @@ def selected_documents_for_step(
                     source_root = loaded.case_dir / _case_path_value(loaded.config, source_key)
                 except SystemExit:
                     continue
-                for evidence_folder in _episode_folders_for(source_root / folder_name, options, step):
+                for evidence_folder in _episode_folders_for(
+                    _case_insensitive_path(source_root, folder_name), options, step
+                ):
                     files.extend(path for path in evidence_folder.rglob("*") if path.is_file())
 
     document_index = read_document_index(loaded)
@@ -1180,8 +1190,9 @@ def _step_enabled_for_case(
         "scholarly_articles", "exhibitions", "leading_critical_role", "high_salary",
         "commercial_success", "lead_starring_productions", "published_recognition",
         "organization_role", "commercial_critical_success", "significant_recognition",
-        "comparable_evidence",
     }
+    if str(config.get("task_type", "")) == "o1b_petition":
+        criterion_roles.add("comparable_evidence")
     if role == "comparable_evidence" and str(config.get("o1b_track", "")) == "mptv":
         return False
     claimed = set(_normalize_path_list(config.get("claimed_criteria", [])))
@@ -1204,7 +1215,7 @@ def _step_enabled_for_case(
                     source_root = case_dir / _case_path_value(config, source_key)
                 except SystemExit:
                     continue
-                if _folder_has_files(source_root / folder_name):
+                if _folder_has_files(_case_insensitive_path(source_root, folder_name)):
                     return True
         return False
     return True
@@ -1279,7 +1290,7 @@ def _repeatable_episode_candidates(loaded: LoadedCase, step: dict[str, Any]) -> 
         folder_name = str(role_map.get(role, role))
         for priority, source_key in enumerate(["source_originals", "source_translations", "source_other"]):
             source_root = loaded.case_dir / _case_path_value(loaded.config, source_key)
-            role_folder = source_root / folder_name
+            role_folder = _case_insensitive_path(source_root, folder_name)
             if not role_folder.exists():
                 continue
             subfolders = [
@@ -1293,8 +1304,18 @@ def _repeatable_episode_candidates(loaded: LoadedCase, step: dict[str, Any]) -> 
             if episode_subfolders:
                 for folder in episode_subfolders:
                     display_name = folder.name
-                    existing_key = _matching_episode_group_key(grouped_candidates, display_name)
-                    group_key = existing_key or _episode_group_key(display_name)
+                    match_candidates = grouped_candidates
+                    if loaded.config.get("task_type") == "o1b_petition":
+                        # Distinct folders in one source tree are distinct episodes.
+                        match_candidates = {
+                            key: value for key, value in grouped_candidates.items()
+                            if value[2] != priority
+                        }
+                    existing_key = _matching_episode_group_key(match_candidates, display_name)
+                    group_key = existing_key or (
+                        display_name.casefold() if loaded.config.get("task_type") == "o1b_petition"
+                        else _episode_group_key(display_name)
+                    )
                     episode_id = _episode_id_from_folder_name(display_name)
                     current = grouped_candidates.get(group_key)
                     if current is None or _prefer_episode_display_name(display_name, current[1], priority, current[2]):
@@ -1303,6 +1324,16 @@ def _repeatable_episode_candidates(loaded: LoadedCase, step: dict[str, Any]) -> 
                 candidate = ("1", ".")
                 grouped_candidates.setdefault(".", (candidate[0], candidate[1], priority))
     ordered = sorted(grouped_candidates.values(), key=lambda item: (item[2], item[1].casefold()))
+    if loaded.config.get("task_type") == "o1b_petition":
+        ordered.sort(
+            key=lambda item: (
+                item[2],
+                tuple(
+                    (0, int(part)) if part.isdigit() else (1, part.casefold())
+                    for part in re.split(r"(\d+)", item[1])
+                ),
+            )
+        )
     return [(episode_id, folder_name) for episode_id, folder_name, _priority in ordered]
 
 
@@ -1335,7 +1366,7 @@ def _scoped_repeatable_episode_candidate(
         folder_name = str(role_map.get(role, role))
         for priority, source_key in enumerate(["source_originals", "source_translations", "source_other"]):
             source_root = loaded.case_dir / _case_path_value(loaded.config, source_key)
-            role_folder = source_root / folder_name
+            role_folder = _case_insensitive_path(source_root, folder_name)
             if not role_folder.exists():
                 continue
             for child in sorted(role_folder.iterdir()):
@@ -1492,6 +1523,23 @@ def _folder_has_files(path: Path) -> bool:
     return any(item.is_file() and item.name != ".gitkeep" for item in path.rglob("*"))
 
 
+def _case_insensitive_path(root: Path, relative: str | Path) -> Path:
+    """Resolve configured evidence folders without depending on filesystem casing."""
+    current = root
+    for part in Path(relative).parts:
+        candidate = current / part
+        if not current.is_dir():
+            current = candidate
+            continue
+        folded = part.casefold()
+        match = next(
+            (child for child in current.iterdir() if child.name.casefold() == folded),
+            None,
+        )
+        current = match or candidate
+    return current
+
+
 def _prefer_episode_display_name(new_name: str, old_name: str, new_priority: int, old_priority: int) -> bool:
     if new_priority != old_priority:
         return new_priority < old_priority
@@ -1535,6 +1583,13 @@ def _citation_plan_for_step(
     loaded: LoadedCase, step: dict[str, Any], options: PromptOptions
 ) -> dict[str, str]:
     step_id = str(step.get("step_id", ""))
+    if loaded.config.get("task_type") == "o1b_petition":
+        from .o1b_exhibits import citation_plan
+
+        return citation_plan(loaded, step, options)
+    strategy_plan = _rfe_strategy_citation_plan(loaded, options.episode_id)
+    if strategy_plan:
+        return strategy_plan
     configured_exhibit = str(step.get("exhibit_number", "")).strip()
     configured_prefix = str(step.get("item_prefix", "")).strip()
     if configured_exhibit:
@@ -1613,6 +1668,93 @@ def _citation_plan_for_step(
             index
             for index, (episode_id, _folder) in enumerate(candidates, start=1)
             if episode_id == options.episode_id
+        ),
+        1,
+    )
+    return {
+        "exhibit_number": exhibit_number,
+        "item_prefix": f"{exhibit_number}.{episode_position}.",
+    }
+
+
+def _rfe_strategy_citation_plan(
+    loaded: LoadedCase, episode_id: str
+) -> dict[str, str]:
+    """Return the exhibit and episode prefix for a strategy-driven RFE unit.
+
+    Migrator EB-1A responses number top-level exhibits by first appearance in
+    the accepted strategy, while retaining the statutory criterion number in
+    the exhibit title. Other tracks keep their established role mapping.
+    """
+    task_type = str(loaded.config.get("task_type", ""))
+    if task_type not in {"eb1a_rfe_response", "eb2niw_rfe_response"} or not episode_id:
+        return {}
+
+    from .rfe_strategy import effective_strategy_units
+
+    units = [
+        unit
+        for unit in effective_strategy_units(loaded.case_dir, loaded.config)
+        if isinstance(unit, dict)
+    ]
+    target = next(
+        (unit for unit in units if str(unit.get("unit_id", "")) == episode_id),
+        None,
+    )
+    if not target:
+        return {}
+    role = str(target.get("criterion_role", "")).strip()
+    if not role:
+        return {}
+
+    if task_type == "eb1a_rfe_response" and eb1a_rfe_template_variant(loaded.config) == "migrator":
+        ordered_roles = list(
+            dict.fromkeys(
+                str(unit.get("criterion_role", "")).strip()
+                for unit in units
+                if str(unit.get("criterion_role", "")).strip()
+            )
+        )
+        exhibit_number = str(ordered_roles.index(role) + 1)
+    else:
+        role_map = {
+            "awards": "1",
+            "memberships": "2",
+            "media": "3",
+            "judging": "4",
+            "original_contribution": "5",
+            "scholarly_articles": "6",
+            "exhibitions": "7",
+            "leading_critical_role": "8",
+            "high_salary": "9",
+            "commercial_success": "10",
+            "employment_plan": "11",
+            "basic_eligibility": "1",
+            "advanced_degree": "1",
+            "exceptional_ability": "1",
+            "exceptional_academic_record": "1",
+            "exceptional_ten_years": "1",
+            "exceptional_license": "1",
+            "exceptional_remuneration": "1",
+            "exceptional_membership": "1",
+            "exceptional_recognition": "1",
+            "exceptional_final_merits": "1",
+            "prong1": "2",
+            "prong2": "3",
+            "prong3": "4",
+        }
+        exhibit_number = role_map.get(role, "")
+    if not exhibit_number:
+        return {}
+
+    same_role_units = [
+        unit for unit in units if str(unit.get("criterion_role", "")).strip() == role
+    ]
+    episode_position = next(
+        (
+            index
+            for index, unit in enumerate(same_role_units, start=1)
+            if str(unit.get("unit_id", "")) == episode_id
         ),
         1,
     )
@@ -2073,6 +2215,8 @@ def _episode_folders_for(
     matched: list[Path] = []
     seen: set[Path] = set()
     if exact.exists() and exact.is_dir() and _folder_has_files(exact):
+        if str((step or {}).get("step_id", "")).startswith("o1b_"):
+            return _phase_folders_for([exact], step or {})
         matched.append(exact)
         seen.add(exact.resolve())
 
