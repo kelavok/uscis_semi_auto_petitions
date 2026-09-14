@@ -285,6 +285,8 @@ steps:
     section_instructions: instructions/task_types/eb1a_petition/sections/two_phase_criterion_phase_2.md
     evidence_folder_roles:
       - leading_critical_role
+    include_prior_episode_steps:
+      - criterion_leading_critical_role_fact
     phase_subfolder_terms:
       - distinguished reputation
       - reputation

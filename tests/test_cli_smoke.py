@@ -243,6 +243,28 @@ class CliSmokeTests(unittest.TestCase):
             ["1. One", "2. Two", "9. Nine", "10. Ten", "11. Eleven"],
         )
 
+    def test_repeatable_second_phase_includes_matching_first_phase_draft(self) -> None:
+        with TemporaryDirectory() as temp:
+            case_dir = Path(temp)
+            draft = case_dir / "draft_sections" / "criteria" / "leading_critical_role"
+            draft.mkdir(parents=True)
+            (draft / "Company_phase_1.md").write_text("Accepted phase-one text", encoding="utf-8")
+            loaded = workflow_module.LoadedCase(
+                case_id="case_001",
+                case_dir=case_dir,
+                config={"paths": {"draft_sections": "draft_sections"}},
+                workflow={"steps": [{
+                    "step_id": "criterion_leading_critical_role_fact",
+                    "destination_pattern": "draft_sections/criteria/leading_critical_role/{episode_id}_phase_1.md",
+                }]},
+            )
+            rendered = workflow_module.render_prior_draft_context(
+                loaded,
+                ["criterion_leading_critical_role_fact"],
+                workflow_module.PromptOptions(episode_id="Company", episode_folder="Company"),
+            )
+        self.assertIn("Accepted phase-one text", rendered)
+
     def test_repeatable_candidates_skip_empty_template_and_merge_eng_translation_folder(self) -> None:
         with TemporaryDirectory() as temp:
             root = Path(temp)

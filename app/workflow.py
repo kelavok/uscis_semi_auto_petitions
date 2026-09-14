@@ -204,6 +204,12 @@ def render_prompt(
         parts.append("")
         parts.append(render_prior_draft_context(loaded, included_drafts))
         parts.append("")
+    prior_episode_steps = _normalize_path_list(step.get("include_prior_episode_steps", []))
+    if prior_episode_steps:
+        parts.append("## Previously completed phase for this episode")
+        parts.append("")
+        parts.append(render_prior_draft_context(loaded, prior_episode_steps, options))
+        parts.append("")
     if _truthy_config(step.get("include_working_memo", False)):
         parts.append("## Current working memorandum context")
         parts.append("")
@@ -308,7 +314,12 @@ def render_all_draft_context(loaded: LoadedCase) -> str:
     return "\n".join(parts).strip() or "[No completed drafting blocks are available yet.]"
 
 
-def render_prior_draft_context(loaded: LoadedCase, step_ids: list[str]) -> str:
+def render_prior_draft_context(
+    loaded: LoadedCase,
+    step_ids: list[str],
+    options: PromptOptions | None = None,
+) -> str:
+    options = options or PromptOptions()
     parts: list[str] = []
     for step_id in step_ids:
         try:
@@ -316,7 +327,7 @@ def render_prior_draft_context(loaded: LoadedCase, step_ids: list[str]) -> str:
         except SystemExit:
             parts.append(f"### {step_id}\n\n[Workflow step not found.]\n")
             continue
-        destination = destination_for_step(prior_step, PromptOptions())
+        destination = destination_for_step(prior_step, options)
         if not destination:
             parts.append(f"### {step_id}\n\n[No fixed draft destination is configured.]\n")
             continue
