@@ -13,6 +13,7 @@ from pathlib import Path, PurePosixPath
 from .workflow import (
     LoadedCase,
     _case_path_value,
+    _natural_sort_key,
     _normalize_slashes,
     extract_docx_text,
     load_case,
@@ -693,7 +694,12 @@ def _iter_source_files(loaded: LoadedCase) -> list[tuple[Path, str]]:
         root = loaded.case_dir / _case_path_value(loaded.config, key)
         if not root.exists():
             continue
-        for path in sorted(root.rglob("*")):
+        for path in sorted(
+            root.rglob("*"),
+            key=lambda item: tuple(
+                _natural_sort_key(part) for part in item.relative_to(root).parts
+            ),
+        ):
             if (
                 path.is_file()
                 and path.name != ".gitkeep"

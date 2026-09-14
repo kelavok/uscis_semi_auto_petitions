@@ -235,6 +235,14 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(federal, "CRE_Federal_awards_Sep_25_2025")
         self.assertEqual(moscow, "CRE_Moscow_awards_Apr_24_2025")
 
+    def test_folder_natural_sort_places_ten_after_nine(self) -> None:
+        names = ["11. Eleven", "1. One", "10. Ten", "2. Two", "9. Nine"]
+        ordered = sorted(names, key=workflow_module._natural_sort_key)
+        self.assertEqual(
+            ordered,
+            ["1. One", "2. Two", "9. Nine", "10. Ten", "11. Eleven"],
+        )
+
     def test_repeatable_candidates_skip_empty_template_and_merge_eng_translation_folder(self) -> None:
         with TemporaryDirectory() as temp:
             root = Path(temp)

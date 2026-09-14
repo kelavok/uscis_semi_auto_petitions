@@ -1294,7 +1294,9 @@ def _repeatable_episode_candidates(loaded: LoadedCase, step: dict[str, Any]) -> 
             if not role_folder.exists():
                 continue
             subfolders = [
-                path for path in sorted(role_folder.iterdir()) if path.is_dir() and _folder_has_files(path)
+                path
+                for path in sorted(role_folder.iterdir(), key=lambda item: _natural_sort_key(item.name))
+                if path.is_dir() and _folder_has_files(path)
             ]
             episode_subfolders = [
                 path
@@ -1323,17 +1325,10 @@ def _repeatable_episode_candidates(loaded: LoadedCase, step: dict[str, Any]) -> 
             elif _folder_has_files(role_folder):
                 candidate = ("1", ".")
                 grouped_candidates.setdefault(".", (candidate[0], candidate[1], priority))
-    ordered = sorted(grouped_candidates.values(), key=lambda item: (item[2], item[1].casefold()))
-    if loaded.config.get("task_type") == "o1b_petition":
-        ordered.sort(
-            key=lambda item: (
-                item[2],
-                tuple(
-                    (0, int(part)) if part.isdigit() else (1, part.casefold())
-                    for part in re.split(r"(\d+)", item[1])
-                ),
-            )
-        )
+    ordered = sorted(
+        grouped_candidates.values(),
+        key=lambda item: (item[2], _natural_sort_key(item[1])),
+    )
     return [(episode_id, folder_name) for episode_id, folder_name, _priority in ordered]
 
 
@@ -1369,7 +1364,7 @@ def _scoped_repeatable_episode_candidate(
             role_folder = _case_insensitive_path(source_root, folder_name)
             if not role_folder.exists():
                 continue
-            for child in sorted(role_folder.iterdir()):
+            for child in sorted(role_folder.iterdir(), key=lambda item: _natural_sort_key(item.name)):
                 if (
                     child.is_dir()
                     and _folder_has_files(child)
@@ -1437,7 +1432,11 @@ def _repeatable_candidates_from_evidence_sources(
         folder = source_root if folder_value in {"", "."} else source_root / folder_value
         if not folder.exists():
             continue
-        subfolders = [path for path in sorted(folder.iterdir()) if path.is_dir() and _folder_has_files(path)]
+        subfolders = [
+            path
+            for path in sorted(folder.iterdir(), key=lambda item: _natural_sort_key(item.name))
+            if path.is_dir() and _folder_has_files(path)
+        ]
         if subfolders:
             for child in subfolders:
                 episode_id = _episode_id_from_folder_name(child.name)
@@ -1521,6 +1520,15 @@ def _matching_episode_group_key(
 
 def _folder_has_files(path: Path) -> bool:
     return any(item.is_file() and item.name != ".gitkeep" for item in path.rglob("*"))
+
+
+def _natural_sort_key(value: str) -> tuple[tuple[int, object], ...]:
+    """Sort embedded numbers numerically: 2 before 10, including nested labels."""
+    return tuple(
+        (0, int(part)) if part.isdigit() else (1, part.casefold())
+        for part in re.split(r"(\d+)", value)
+        if part
+    )
 
 
 def _case_insensitive_path(root: Path, relative: str | Path) -> Path:
@@ -2170,7 +2178,7 @@ def _episode_folder_for(role_folder: Path, options: PromptOptions) -> Path:
 
     episode_id = options.episode_id.strip().lower()
     candidates = []
-    for child in sorted(role_folder.iterdir()):
+    for child in sorted(role_folder.iterdir(), key=lambda item: _natural_sort_key(item.name)):
         if not child.is_dir():
             continue
         name = child.name.strip().lower()
@@ -2196,7 +2204,7 @@ def _episode_folders_for(
     if scoped_terms:
         selected = [
             child
-            for child in sorted(role_folder.iterdir())
+            for child in sorted(role_folder.iterdir(), key=lambda item: _natural_sort_key(item.name))
             if child.is_dir()
             and _folder_has_files(child)
             and _episode_folder_matches_terms(child.name, scoped_terms)
@@ -2221,7 +2229,7 @@ def _episode_folders_for(
         seen.add(exact.resolve())
 
     target_key = _episode_group_key(options.episode_folder or options.episode_id)
-    for child in sorted(role_folder.iterdir()):
+    for child in sorted(role_folder.iterdir(), key=lambda item: _natural_sort_key(item.name)):
         if not child.is_dir() or not _folder_has_files(child):
             continue
         if _episode_group_key(child.name) != target_key and _episode_folder_similarity(

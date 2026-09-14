@@ -1428,7 +1428,7 @@ def _rfe_issues_from_folders(case_dir: Path) -> list[str]:
     for root in roots:
         if not root.exists():
             continue
-        for child in sorted(root.iterdir()):
+        for child in sorted(root.iterdir(), key=lambda item: _natural_key(item.name)):
             if child.is_dir() and child.name not in seen and child.name != ".gitkeep":
                 candidates.append(child.name)
                 seen.add(child.name)
@@ -1440,7 +1440,7 @@ def _episode_names(folder: Path) -> list[str]:
         return []
     subfolders = [
         child.name
-        for child in sorted(folder.iterdir())
+        for child in sorted(folder.iterdir(), key=lambda item: _natural_key(item.name))
         if child.is_dir() and _folder_has_documents(child)
     ]
     if subfolders:
@@ -2092,15 +2092,21 @@ def _normalize_episode_override_key(value: str) -> str:
     )
 
 
-def _exhibit_index_sort_key(row: dict[str, str]) -> tuple[int, list[object], str]:
+def _exhibit_index_sort_key(
+    row: dict[str, str],
+) -> tuple[int, tuple[tuple[int, object], ...], str]:
     order = row.get("final_bundle_order", "").strip()
     if order.isdigit():
-        return (0, [int(order)], row.get("exhibit_number", ""))
+        return (0, ((0, int(order)),), row.get("exhibit_number", ""))
     return (1, _natural_key(row.get("exhibit_number", "")), row.get("exhibit_id", ""))
 
 
-def _natural_key(value: str) -> list[object]:
-    return [int(part) if part.isdigit() else part.casefold() for part in re.split(r"(\d+)", value)]
+def _natural_key(value: str) -> tuple[tuple[int, object], ...]:
+    return tuple(
+        (0, int(part)) if part.isdigit() else (1, part.casefold())
+        for part in re.split(r"(\d+)", value)
+        if part
+    )
 
 
 def _o1b_document_xml(config: dict[str, Any], case_dir: Path) -> str:

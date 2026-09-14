@@ -416,7 +416,21 @@ def build_original_directory_catalog(case_id: str) -> list[dict[str, Any]]:
     for directory, item in directory_map.items():
         item["parent"] = directory.rsplit("/", 1)[0] if "/" in directory else ""
         item["depth"] = 0 if not directory else directory.count("/") + 1
-    return sorted(directory_map.values(), key=lambda item: str(item.get("directory", "")).casefold())
+    return sorted(
+        directory_map.values(),
+        key=lambda item: _natural_directory_key(str(item.get("directory", ""))),
+    )
+
+
+def _natural_directory_key(value: str) -> tuple[tuple[tuple[int, object], ...], ...]:
+    return tuple(
+        tuple(
+            (0, int(part)) if part.isdigit() else (1, part.casefold())
+            for part in re.split(r"(\d+)", component)
+            if part
+        )
+        for component in value.replace("\\", "/").split("/")
+    )
 
 
 def _directory_ancestors(directory: str) -> list[str]:
