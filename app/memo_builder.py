@@ -194,6 +194,7 @@ def refresh_case_sources(case_id: str) -> IntakeSummary:
             Path(_clean_user_path(raw_path)),
             loaded.case_dir / _path_from_config(config, key),
             refresh_existing=True,
+            mirror=True,
         )
         copied += refreshed
         skipped += unchanged
@@ -1671,14 +1672,37 @@ def _apply_updates(config: dict[str, Any], updates: dict[str, str]) -> int:
 
 
 def _copy_source_folder(
-    source: Path, destination: Path, *, refresh_existing: bool = False
+    source: Path,
+    destination: Path,
+    *,
+    refresh_existing: bool = False,
+    mirror: bool = False,
 ) -> tuple[int, int]:
     if not source.exists() or not source.is_dir():
         raise SystemExit(f"Source folder not found: {source}")
     copied = 0
     skipped = 0
     destination.mkdir(parents=True, exist_ok=True)
-    for item in sorted(source.rglob("*")):
+    source_files = [item for item in sorted(source.rglob("*")) if item.is_file()]
+    if mirror and source.resolve() != destination.resolve():
+        source_keys = {
+            item.relative_to(source).as_posix().casefold()
+            for item in source_files
+        }
+        for existing in sorted(destination.rglob("*")):
+            if not existing.is_file() or existing.name == ".gitkeep":
+                continue
+            relative_key = existing.relative_to(destination).as_posix().casefold()
+            if relative_key not in source_keys:
+                existing.unlink()
+        for folder in sorted(
+            (item for item in destination.rglob("*") if item.is_dir()),
+            key=lambda item: len(item.parts),
+            reverse=True,
+        ):
+            if not any(folder.iterdir()):
+                folder.rmdir()
+    for item in source_files:
         if not item.is_file():
             continue
         rel = item.relative_to(source)

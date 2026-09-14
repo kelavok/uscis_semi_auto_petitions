@@ -1073,6 +1073,7 @@ class CliSmokeTests(unittest.TestCase):
             external_translations.mkdir(parents=True)
             (source_dir / "award.txt").write_text("Award evidence", encoding="utf-8")
             (external_originals / "new-original.txt").write_text("Original", encoding="utf-8")
+            (external_originals / "removed-on-refresh.txt").write_text("Old", encoding="utf-8")
             (external_translations / "new-translation.txt").write_text("Translation", encoding="utf-8")
             (template_dir / "machine_template.txt").write_text(
                 "EB-1A TEMPLATE\n\n"
@@ -1151,6 +1152,7 @@ class CliSmokeTests(unittest.TestCase):
                         "source_other": "",
                     },
                 )
+                (external_originals / "removed-on-refresh.txt").unlink()
                 summary = build_working_memo(
                     "case_001",
                     template_path="templates/EB1A/machine_template.txt",
@@ -1179,6 +1181,9 @@ class CliSmokeTests(unittest.TestCase):
             self.assertNotIn("__REQUIRED__", document_xml)
             self.assertTrue((case_dir / "source_documents" / "originals" / "new-original.txt").exists())
             self.assertTrue((case_dir / "source_documents" / "translations" / "new-translation.txt").exists())
+            self.assertFalse(
+                (case_dir / "source_documents" / "originals" / "removed-on-refresh.txt").exists()
+            )
             saved_config = (case_dir / "case_config.yaml").read_text(encoding="utf-8")
             self.assertIn("source_imports:", saved_config)
             self.assertIn(str(external_originals), saved_config)
