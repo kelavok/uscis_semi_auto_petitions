@@ -931,6 +931,37 @@ class CliSmokeTests(unittest.TestCase):
             resolved = workflow_module._case_insensitive_path(root, "comparable evidence")
         self.assertEqual(resolved.name, actual.name)
 
+    def test_comparable_evidence_is_not_filtered_by_claimed_criteria_in_llm_stage(self) -> None:
+        with TemporaryDirectory() as temp:
+            case_root = Path(temp) / "case_workspace"
+            with patch.object(cli_support, "CASE_ROOT", case_root):
+                case_dir = cli_support.create_case_from_template("comparable_test", "eb1a_petition")
+                episode = (
+                    case_dir
+                    / "source_documents"
+                    / "originals"
+                    / "CoMpArAbLe EvIdEnCe"
+                    / "1. Professional recognition"
+                )
+                episode.mkdir(parents=True, exist_ok=True)
+                (episode / "recognition.txt").write_text("Documented recognition", encoding="utf-8")
+                apply_case_intake(
+                    "comparable_test",
+                    {
+                        "beneficiary_full_name": "Test Beneficiary",
+                        "preferred_reference": "Mr. Beneficiary",
+                        "gender": "male",
+                        "field": "Business",
+                        "specialization": "Supply chains",
+                    },
+                    claimed_criteria=["awards"],
+                )
+                stage = build_llm_stage("comparable_test")
+
+        units = [unit for unit in stage.units if unit.step_id == "comparable_evidence_episode"]
+        self.assertEqual(len(units), 1)
+        self.assertEqual(units[0].episode_folder, "1. Professional recognition")
+
     def test_machine_templates_are_parseable_for_working_memo_builder(self) -> None:
         eb1a = parse_machine_template(Path("templates/EB1A/EB1A_unified_template_LLM.docx"))
         rfe = Path("templates/RFE/EB1/EB1A_RFE_response_unified_LLM_template.yaml").read_text(encoding="utf-8")

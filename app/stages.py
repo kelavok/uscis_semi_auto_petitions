@@ -121,7 +121,13 @@ def build_llm_stage(case_id: str) -> LLMStage:
             and criterion == "comparable_evidence"
         ):
             continue
-        if criterion and criterion not in {"employment_plan", "industry_overview", "beneficiary_statement"} and claimed and criterion not in claimed:
+        noncriterion_sections = {
+            "employment_plan",
+            "industry_overview",
+            "beneficiary_statement",
+            "comparable_evidence",
+        }
+        if criterion and criterion not in noncriterion_sections and claimed and criterion not in claimed:
             continue
         if "repeatable" in execution:
             if enabled_steps and step_id not in enabled_steps:
