@@ -212,8 +212,7 @@ steps:
     section_instructions: instructions/task_types/eb1a_petition/sections/two_phase_criterion_phase_1.md
     evidence_folder_roles:
       - original_contribution
-    shared_episode_id: primary_contribution
-    episode_folder_terms:
+    phase_subfolder_terms:
       - contribution description originality formal evidence description
       - вклад его подтверждение оригинальность выражение
       - факт наличия вклада
@@ -230,8 +229,7 @@ steps:
     section_instructions: instructions/task_types/eb1a_petition/sections/two_phase_criterion_phase_2.md
     evidence_folder_roles:
       - original_contribution
-    shared_episode_id: primary_contribution
-    episode_folder_terms:
+    phase_subfolder_terms:
       - major significance
       - major sigbificance
     destination_pattern: draft_sections/criteria/original_contribution/{episode_id}_phase_2.md

@@ -379,6 +379,41 @@ class CliSmokeTests(unittest.TestCase):
                 ["Факт наличия вклада"],
             )
 
+    def test_two_phase_contribution_accepts_named_episode_folder(self) -> None:
+        with TemporaryDirectory() as temp:
+            case_dir = Path(temp)
+            episode = case_dir / "source_documents" / "originals" / "5. Вклад" / "CILM"
+            episode.mkdir(parents=True)
+            (episode / "evidence.pdf").write_bytes(b"evidence")
+            for kind in ("translations", "other"):
+                (case_dir / "source_documents" / kind).mkdir(parents=True)
+            workflow = load_yaml_file(Path("workflows/eb1a_petition.yaml"))
+            loaded = workflow_module.LoadedCase(
+                case_id="case_001",
+                case_dir=case_dir,
+                config={
+                    "task_type": "eb1a_petition",
+                    "paths": {
+                        "source_originals": "source_documents/originals",
+                        "source_translations": "source_documents/translations",
+                        "source_other": "source_documents/other",
+                    },
+                    "eb1a_folder_roles": {"original_contribution": "5. Вклад"},
+                },
+                workflow=workflow,
+            )
+            fact = find_step(workflow, "criterion_original_contribution_fact")
+            significance = find_step(workflow, "criterion_original_contribution_significance")
+
+            self.assertEqual(
+                workflow_module._repeatable_episode_candidates(loaded, fact),
+                [("CILM", "CILM")],
+            )
+            self.assertEqual(
+                workflow_module._repeatable_episode_candidates(loaded, significance),
+                [("CILM", "CILM")],
+            )
+
     def test_o1b_case_builds_company_memo_and_two_phase_units(self) -> None:
         with TemporaryDirectory() as temp:
             root = Path(temp)
