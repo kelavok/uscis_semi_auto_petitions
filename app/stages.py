@@ -52,7 +52,7 @@ CRITERION_LABELS = {
     "organization_role": "O-1B Criterion (iii): organizational role",
     "commercial_critical_success": "O-1B Criterion (iv): commercial/critical success",
     "significant_recognition": "O-1B Criterion (v): significant recognition",
-    "comparable_evidence": "O-1B Arts comparable evidence",
+    "comparable_evidence": "Comparable evidence",
 }
 
 

@@ -996,6 +996,12 @@ class CliSmokeTests(unittest.TestCase):
             resolved = workflow_module._case_insensitive_path(root, "comparable evidence")
         self.assertEqual(resolved.name, actual.name)
 
+    def test_comparable_evidence_stage_label_is_visa_neutral(self) -> None:
+        from app.stages import CRITERION_LABELS
+
+        self.assertEqual(CRITERION_LABELS["comparable_evidence"], "Comparable evidence")
+        self.assertNotIn("O-1B", CRITERION_LABELS["comparable_evidence"])
+
     def test_comparable_evidence_is_not_filtered_by_claimed_criteria_in_llm_stage(self) -> None:
         with TemporaryDirectory() as temp:
             case_root = Path(temp) / "case_workspace"

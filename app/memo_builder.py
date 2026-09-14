@@ -79,7 +79,7 @@ O1B_CRITERION_STEP_BY_ROLE = {
     "commercial_critical_success": ("o1b_criterion_iv_episode", "Commercial or critically acclaimed success"),
     "significant_recognition": ("o1b_criterion_v_episode", "Significant recognition"),
     "high_salary": ("o1b_criterion_vi_compensation", "High salary or substantial remuneration"),
-    "comparable_evidence": ("o1b_comparable_evidence_episode", "Comparable evidence (Arts only)"),
+    "comparable_evidence": ("o1b_comparable_evidence_episode", "Comparable evidence"),
 }
 
 RFE_CRITERION_TEMPLATE_KEY_BY_ROLE = {

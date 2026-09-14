@@ -301,7 +301,7 @@ steps:
   - step_id: o1b_comparable_evidence_episode
     execution: llm_manual_repeatable
     repeat_unit: one_comparable_evidence_category
-    title: O-1B Arts comparable evidence episode
+    title: Comparable evidence episode
     objective: >
       Draft one comparable-evidence episode only for an Arts case. Explain why
       a listed criterion does not readily apply and why the submitted evidence
