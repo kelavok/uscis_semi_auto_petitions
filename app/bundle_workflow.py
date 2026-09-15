@@ -1011,6 +1011,9 @@ def _desired_exhibit_assignments(loaded: LoadedCase) -> EvidenceLayoutPlan:
     references = 0
     next_document_order = 1
     next_exhibit_order = 1
+    document_rows = _read_csv(
+        loaded.case_dir / _case_path_value(loaded.config, "document_index"), INDEX_FIELDS
+    )
     for stem in ordered_stems:
         path = files.get(stem)
         if not path:
@@ -1052,7 +1055,13 @@ def _desired_exhibit_assignments(loaded: LoadedCase) -> EvidenceLayoutPlan:
             existing_title or title,
             existing_section or memo_section,
         )
-        for item in _ordered_used_documents(data):
+        ordered_documents = _ordered_used_documents(data)
+        if step_id == "industry_overview":
+            # Industry evidence belongs to the common Exhibit 0 according to
+            # its source-folder structure. Assign it below as one deterministic
+            # group, independent of the LLM's selection or narrative order.
+            ordered_documents = []
+        for item in ordered_documents:
             if not isinstance(item, dict):
                 continue
             document_id = str(item.get("document_id", "")).strip()
@@ -1074,6 +1083,26 @@ def _desired_exhibit_assignments(loaded: LoadedCase) -> EvidenceLayoutPlan:
                 desired[document_id] = exhibit_number
                 document_order[document_id] = next_document_order
                 next_document_order += 1
+    if str(loaded.config.get("task_type", "")) == "eb1a_petition":
+        industry_documents = sorted(
+            (
+                row
+                for row in document_rows
+                if row.get("category", "").strip() == "about_the_industry"
+            ),
+            key=lambda row: _natural_sort_key(row.get("file_path", "")),
+        )
+        if industry_documents:
+            exhibit_metadata.setdefault("0", ("General supporting documents", "industry_overview"))
+        for row in industry_documents:
+            document_id = row.get("document_id", "").strip()
+            if not document_id or document_id in desired:
+                continue
+            desired[document_id] = "0"
+            document_order[document_id] = next_document_order
+            next_document_order += 1
+            document_titles.setdefault(document_id, row.get("display_title", "").strip())
+
     return EvidenceLayoutPlan(
         document_to_exhibit=desired,
         document_order=document_order,
@@ -1421,6 +1450,12 @@ def build_exhibit_index(case_id: str) -> ExhibitIndexSummary:
                 document_orders_written += 1
             global_document_order += 1
 
+    exhibit_rows.sort(
+        key=lambda row: (
+            int(row.get("final_bundle_order", "") or 10**9),
+            _natural_sort_key(row.get("exhibit_number", "")),
+        )
+    )
     _write_csv(document_index_path, document_rows, INDEX_FIELDS)
     _write_csv(exhibit_index_path, exhibit_rows, EXHIBIT_FIELDS)
     return ExhibitIndexSummary(

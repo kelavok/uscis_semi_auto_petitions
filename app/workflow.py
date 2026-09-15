@@ -16,7 +16,6 @@ from .simple_yaml import load_yaml_subset
 from .json_input import parse_llm_json_object
 from .file_rules import is_office_temporary_file, prompt_sidecar_kind
 from .template_variants import (
-    eb1a_rfe_template_variant,
     eb1a_rfe_variant_source_path,
     eb1a_template_variant,
     eb1a_variant_source_path,
@@ -1661,6 +1660,8 @@ def _citation_plan_for_step(
         return {"exhibit_number": "0", "item_prefix": "0."}
     if step_id.startswith("recommendation_letters"):
         return {"exhibit_number": "0-1", "item_prefix": "0-1."}
+    if step_id == "industry_overview":
+        return {"exhibit_number": "0", "item_prefix": "0."}
     role_map = {
         "awards": "1",
         "memberships": "2",
@@ -1676,6 +1677,8 @@ def _citation_plan_for_step(
     }
     roles = _normalize_path_list(step.get("evidence_folder_roles", []))
     role = roles[0] if len(roles) == 1 else ""
+    if loaded.config.get("task_type") == "eb1a_petition":
+        role_map = _eb1a_exhibit_numbers(loaded)
     exhibit_number = role_map.get(role, "")
     if not exhibit_number:
         return {}
@@ -1696,14 +1699,72 @@ def _citation_plan_for_step(
     }
 
 
+def _eb1a_exhibit_numbers(loaded: LoadedCase) -> dict[str, str]:
+    """Number present EB-1A evidence sections consecutively.
+
+    Criterion labels retain their statutory numbers in headings, but Exhibit
+    numbers describe the actual assembled record and therefore cannot contain
+    gaps when an unclaimed criterion is absent.
+    """
+    statutory_order = (
+        "awards",
+        "memberships",
+        "media",
+        "judging",
+        "original_contribution",
+        "scholarly_articles",
+        "exhibitions",
+        "leading_critical_role",
+        "high_salary",
+        "commercial_success",
+    )
+    configured_claims = loaded.config.get("claimed_criteria")
+    if isinstance(configured_claims, list):
+        claimed = {str(role).strip() for role in configured_claims if str(role).strip()}
+    else:
+        claimed = {
+            role
+            for step in loaded.workflow.get("steps", [])
+            if isinstance(step, dict)
+            for role in _normalize_path_list(step.get("evidence_folder_roles", []))
+            if role in statutory_order
+        }
+    ordered_roles = [role for role in statutory_order if role in claimed]
+
+    comparable_step = next(
+        (
+            step
+            for step in loaded.workflow.get("steps", [])
+            if isinstance(step, dict)
+            and str(step.get("step_id", "")) == "comparable_evidence_episode"
+        ),
+        None,
+    )
+    if comparable_step and _step_enabled_for_case(loaded.config, comparable_step, loaded.case_dir):
+        if _repeatable_episode_candidates(loaded, comparable_step):
+            ordered_roles.append("comparable_evidence")
+
+    employment_step = next(
+        (
+            step
+            for step in loaded.workflow.get("steps", [])
+            if isinstance(step, dict) and str(step.get("step_id", "")) == "employment_plan"
+        ),
+        None,
+    )
+    if employment_step and _step_enabled_for_case(loaded.config, employment_step, loaded.case_dir):
+        ordered_roles.append("employment_plan")
+    return {role: str(index) for index, role in enumerate(ordered_roles, start=1)}
+
+
 def _rfe_strategy_citation_plan(
     loaded: LoadedCase, episode_id: str
 ) -> dict[str, str]:
     """Return the exhibit and episode prefix for a strategy-driven RFE unit.
 
-    Migrator EB-1A responses number top-level exhibits by first appearance in
-    the accepted strategy, while retaining the statutory criterion number in
-    the exhibit title. Other tracks keep their established role mapping.
+    EB-1A responses number top-level exhibits by first appearance in the
+    accepted strategy, while retaining the statutory criterion number in the
+    exhibit title. EB-2 NIW keeps its prong-based mapping.
     """
     task_type = str(loaded.config.get("task_type", ""))
     if task_type not in {"eb1a_rfe_response", "eb2niw_rfe_response"} or not episode_id:
@@ -1726,7 +1787,7 @@ def _rfe_strategy_citation_plan(
     if not role:
         return {}
 
-    if task_type == "eb1a_rfe_response" and eb1a_rfe_template_variant(loaded.config) == "migrator":
+    if task_type == "eb1a_rfe_response":
         ordered_roles = list(
             dict.fromkeys(
                 str(unit.get("criterion_role", "")).strip()

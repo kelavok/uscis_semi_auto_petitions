@@ -7,7 +7,7 @@ from app.memo_builder import (
     _rfe_draft_runs,
     _rfe_group_requests_quote,
 )
-from app.workflow import LoadedCase, _rfe_strategy_citation_plan
+from app.workflow import LoadedCase, _eb1a_exhibit_numbers, _rfe_strategy_citation_plan
 
 
 class RfeMigratorFormattingTests(unittest.TestCase):
@@ -40,7 +40,7 @@ class RfeMigratorFormattingTests(unittest.TestCase):
                 {"exhibit_number": "3", "item_prefix": "3.1."},
             )
 
-    def test_base_rfe_keeps_statutory_exhibit_mapping(self) -> None:
+    def test_base_rfe_also_uses_consecutive_exhibit_mapping(self) -> None:
         loaded = LoadedCase(
             "case",
             Path("case"),
@@ -50,7 +50,38 @@ class RfeMigratorFormattingTests(unittest.TestCase):
         with patch("app.rfe_strategy.effective_strategy_units", return_value=self.units):
             self.assertEqual(
                 _rfe_strategy_citation_plan(loaded, "media_two"),
-                {"exhibit_number": "3", "item_prefix": "3.2."},
+                {"exhibit_number": "1", "item_prefix": "1.2."},
+            )
+
+    def test_eb1a_petition_exhibits_are_consecutive_when_criteria_are_missing(self) -> None:
+        workflow = {
+            "steps": [
+                {"step_id": "comparable_evidence_episode"},
+                {"step_id": "employment_plan"},
+            ]
+        }
+        loaded = LoadedCase(
+            "case",
+            Path("case"),
+            {
+                "task_type": "eb1a_petition",
+                "claimed_criteria": ["awards", "media", "high_salary"],
+            },
+            workflow,
+        )
+        with (
+            patch("app.workflow._step_enabled_for_case", return_value=True),
+            patch("app.workflow._repeatable_episode_candidates", return_value=[("1", Path("1"))]),
+        ):
+            self.assertEqual(
+                _eb1a_exhibit_numbers(loaded),
+                {
+                    "awards": "1",
+                    "media": "2",
+                    "high_salary": "3",
+                    "comparable_evidence": "4",
+                    "employment_plan": "5",
+                },
             )
 
     def test_noncriterion_rfe_quote_is_strategy_controlled(self) -> None:
