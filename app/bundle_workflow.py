@@ -2411,10 +2411,9 @@ def _find_soffice() -> str:
 
 
 def _pdf_page_count(path: Path) -> int:
-    import pikepdf
+    from .pdf_assembly import pdf_page_count
 
-    with pikepdf.open(path) as pdf:
-        return len(pdf.pages)
+    return pdf_page_count(path)
 
 
 def _merge_memo_and_bundle(memo_pdf: Path, evidence_pdf: Path, final_pdf: Path, *, memo_pages: int) -> Path:
@@ -2468,7 +2467,7 @@ def _stamp_absolute_page_number(page: object, PdfReader: object, page_number: in
 def _clean_pdf_if_possible(path: Path) -> Path:
     try:
         import pikepdf  # type: ignore
-    except ModuleNotFoundError:
+    except (ImportError, OSError):
         return path
     temp_path = path.with_name(path.stem + ".cleaning.pdf")
     try:
