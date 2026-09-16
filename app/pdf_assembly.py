@@ -20,13 +20,24 @@ def merge_pdfs(paths, target: Path, *, strip_annotations=False, number_from_page
                 number_from_page=number_from_page,
             )
         else:
-            _merge_pdfs_with_pikepdf(
-                pikepdf,
-                paths,
-                temporary,
-                strip_annotations=strip_annotations,
-                number_from_page=number_from_page,
-            )
+            try:
+                _merge_pdfs_with_pikepdf(
+                    pikepdf,
+                    paths,
+                    temporary,
+                    strip_annotations=strip_annotations,
+                    number_from_page=number_from_page,
+                )
+            except Exception as pikepdf_error:  # noqa: BLE001
+                try:
+                    _merge_pdfs_with_pypdf(
+                        paths,
+                        temporary,
+                        strip_annotations=strip_annotations,
+                        number_from_page=number_from_page,
+                    )
+                except Exception:
+                    raise pikepdf_error
         try:
             temporary.replace(target)
         except PermissionError:

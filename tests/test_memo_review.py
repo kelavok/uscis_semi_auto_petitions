@@ -80,10 +80,15 @@ class ReviewedMemoTests(unittest.TestCase):
             candidate = root / "edited.docx"
             document = Document()
             document.add_paragraph("INDEX:")
+            document.add_paragraph("Exhibit 0-1: Recommendation letters")
+            document.add_paragraph("0-1.1. Recommendation Letter from Expert")
             document.add_paragraph("Exhibit 1: Media")
             document.add_paragraph("1.1. Known Document")
             document.add_paragraph("1.2. Mystery Record")
             document.add_paragraph("BODY")
+            document.add_paragraph(
+                "(Please refer to Exhibit 0-1, page PAGE: 0-1.1 - Recommendation Letter from Expert.)"
+            )
             document.add_paragraph(
                 "(Please refer to Exhibit 9, page PAGE: 9.9 - Unknown citation.)"
             )

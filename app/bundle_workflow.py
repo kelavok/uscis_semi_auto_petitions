@@ -860,7 +860,7 @@ def _parse_memo_index_docx(memo_path: Path) -> dict[str, list[dict[str, str]]]:
     current_exhibit = ""
     for line in lines[start + 1 :]:
         exhibit_match = re.match(r"^Exhibit\s+([^:]+):\s*(.+)$", line, flags=re.IGNORECASE)
-        number_match = re.match(r"^(\d+(?:\.\d+){0,3})\.\s+(.+)$", line)
+        number_match = re.match(r"^(\d+(?:-\d+)?(?:\.\d+){0,3})\.\s+(.+)$", line)
         if exhibit_match:
             current_exhibit = exhibit_match.group(1).strip()
             raw_items.append(
@@ -967,6 +967,15 @@ def _memo_document_match_score(item: dict[str, str], row: dict[str, str]) -> flo
         candidate_score = difflib.SequenceMatcher(None, needle, normalized).ratio()
         if needle and (needle in normalized or normalized in needle):
             candidate_score = max(candidate_score, 0.95)
+        needle_tokens = set(needle.split())
+        candidate_tokens = set(normalized.split())
+        if needle_tokens and candidate_tokens:
+            overlap = len(needle_tokens & candidate_tokens)
+            containment = overlap / max(1, min(len(needle_tokens), len(candidate_tokens)))
+            if containment >= 0.6:
+                candidate_score = max(candidate_score, 0.85)
+            if {"wes", "education"} <= needle_tokens and {"wes", "education"} <= candidate_tokens:
+                candidate_score = max(candidate_score, 0.95)
         score = max(score, candidate_score)
     return score
 

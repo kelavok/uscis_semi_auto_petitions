@@ -263,7 +263,7 @@ def _extract_memo_citations(path: Path) -> list[dict[str, str]]:
     text = "\n".join(paragraph.text for paragraph in Document(str(path)).paragraphs)
     pattern = re.compile(
         r"Exhibit\s+(?P<exhibit>[^,;()]+),\s*page\s+PAGE:\s*"
-        r"(?P<number>\d+(?:\.\d+){1,3})\s*-\s*(?P<title>[^;()]+)",
+        r"(?P<number>\d+(?:-\d+)?(?:\.\d+){1,3})\s*-\s*(?P<title>[^;()]+)",
         flags=re.IGNORECASE,
     )
     return [

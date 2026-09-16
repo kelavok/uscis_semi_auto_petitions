@@ -57,6 +57,16 @@ class PdfAssemblyTests(unittest.TestCase):
             self.assertIn("first source", reader.pages[0].extract_text())
             self.assertIn("2", reader.pages[1].extract_text())
 
+    def test_pypdf_fallback_runs_when_pikepdf_merge_fails(self):
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            first, target = root/'first.pdf', root/'result.pdf'
+            _make_pdf(first, "first source")
+            with patch("app.pdf_assembly._merge_pdfs_with_pikepdf", side_effect=ValueError("bad named destination")):
+                merge_pdfs([first], target)
+            self.assertEqual(pdf_page_count(target), 1)
+            self.assertIn("first source", PdfReader(target).pages[0].extract_text())
+
     def test_failure_preserves_previous_output(self):
         with TemporaryDirectory() as temp:
             root = Path(temp)
