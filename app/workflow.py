@@ -372,6 +372,10 @@ def render_final_output_guardrails(
             else "`used_documents` is the authoritative source for exhibit ordering after validation: list documents in the same logical order in which they are used in `draft_text` and in the exhibit document list. Do not sort by DOC identifier, filename, source folder, upload order, or technical index order."
         ),
     ]
+    if str(loaded.config.get("task_type", "")) in {"eb1a_petition", "eb1a_rfe_response"}:
+        lines.append(
+            "For EB-1A Criterion iii published-material sections and Criterion vi scholarly-article sections, keep the article-content description narrowly limited. The subsection or sentence group describing what the article/publication is about, such as `the published material is about the petitioner and the petitioner's work`, `short overview`, `article overview`, or similar, must be no more than one concise paragraph and no more than 100 words. This limit applies only to the description of the article's content, not to the overall episode, publication standing, authorship analysis, citations, or legal conclusion."
+        )
     if technical_step:
         lines.append("This is a technical intake/review step, so concise internal notes are allowed in `draft_text`.")
         return "\n".join(f"- {line}" for line in lines)

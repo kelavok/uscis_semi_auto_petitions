@@ -721,6 +721,27 @@ class CliSmokeTests(unittest.TestCase):
         self.assertIn("avoid repeated inline exhibit citations", guardrails)
         self.assertIn("already been cited earlier in the same `draft_text`", guardrails)
 
+    def test_eb1a_guardrails_limit_article_content_overviews(self) -> None:
+        step = {
+            "step_id": "criterion_media_episode",
+            "exhibit_number": "2",
+            "item_prefix": "2.1.",
+        }
+        for task_type in ("eb1a_petition", "eb1a_rfe_response"):
+            loaded = workflow_module.LoadedCase(
+                case_id="case_001",
+                case_dir=Path("case_workspace/case_001"),
+                config={"task_type": task_type},
+                workflow={},
+            )
+            guardrails = workflow_module.render_final_output_guardrails(
+                loaded, step, workflow_module.PromptOptions(episode_id="article")
+            )
+            self.assertIn("Criterion iii published-material", guardrails)
+            self.assertIn("Criterion vi scholarly-article", guardrails)
+            self.assertIn("no more than one concise paragraph", guardrails)
+            self.assertIn("no more than 100 words", guardrails)
+
     def test_web_parser_accepts_host_and_port(self) -> None:
         args = web.build_parser().parse_args(["--host", "127.0.0.1", "--port", "8010"])
         self.assertEqual(args.host, "127.0.0.1")
