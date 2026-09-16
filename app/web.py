@@ -57,6 +57,11 @@ from .memo_builder import (
     parse_machine_template,
     refresh_case_sources,
 )
+from .memo_review import (
+    accept_reviewed_memo,
+    load_reviewed_memo_report,
+    validate_reviewed_memo,
+)
 from .json_input import parse_llm_json_object
 from .progress import CaseProgress, build_case_progress
 from .rfe_strategy import (
@@ -709,6 +714,28 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
             f"{summary.documents_seen} document(s), {summary.exhibits_seen} exhibit(s), "
             f"{summary.episodes_seen} episode heading(s)."
         )
+    if action == "validate_reviewed_memo":
+        source_path = data.get("reviewed_memo_path", "").strip()
+        if not source_path:
+            source_path = _pick_file("")
+        report = validate_reviewed_memo(case_id, source_path)
+        warning = (
+            f" Review the {len(report.warnings)} warning(s) below; they do not block acceptance."
+            if report.warnings
+            else " No unrecognized index items or citations were found."
+        )
+        return (
+            f"Loaded corrected memorandum: matched {report.documents_matched}/"
+            f"{report.documents_seen} INDEX document(s) and checked "
+            f"{report.citations_seen} citation(s).{warning}"
+        )
+    if action == "accept_reviewed_memo":
+        report = accept_reviewed_memo(case_id)
+        return (
+            "Accepted the corrected memorandum as the authoritative working version and "
+            f"synchronized {report.documents_matched} recognized INDEX document(s). "
+            f"Warnings retained for review: {len(report.warnings)}."
+        )
     if action == "build_index":
         summary = build_exhibit_index(case_id)
         if summary.documents_seen and not summary.documents_with_exhibit_number:
@@ -1154,6 +1181,28 @@ def render_layout_page(case_id: str, params: dict[str, list[str]]) -> str:
     phase_two_class = "done" if preparation_ready else ("current" if index_ready else "locked")
     phase_three_class = "done" if final_filing_ready else ("current" if preparation_ready else "locked")
     phase_four_class = "done" if final_filing_ready else ("current" if preparation_ready else "locked")
+    review = load_reviewed_memo_report(case_id)
+    if review is None:
+        review_status = '<p class="muted">No corrected memorandum has been loaded.</p>'
+        accept_control = ""
+    else:
+        warning_items = "".join(f"<li>{escape(item)}</li>" for item in review.warnings)
+        review_status = (
+            f'<div class="alert {"error" if review.warnings else "ok"}">'
+            f'<strong>{"Accepted corrected memorandum" if review.accepted else "Corrected memorandum validated"}.</strong> '
+            f'Matched {review.documents_matched}/{review.documents_seen} INDEX document(s); '
+            f'checked {review.citations_seen} citation(s).'
+            + (f'<ul>{warning_items}</ul>' if warning_items else '<p>No unrecognized items found.</p>')
+            + '</div>'
+        )
+        accept_control = (
+            '<form method="post" class="inline-form" '
+            'data-confirm-submit="Use this corrected DOCX as the authoritative memorandum? The current working memo will be backed up and recognized INDEX order will replace the current layout index.">'
+            f'<input type="hidden" name="case" value="{escape(case_id)}">'
+            '<input type="hidden" name="action" value="accept_reviewed_memo">'
+            f'<button class="secondary"{" disabled" if review.accepted else ""}>Confirm and replace working memorandum</button>'
+            '</form>'
+        )
     return page(
         f"Layout - {case_id}",
         f"""
@@ -1168,6 +1217,18 @@ def render_layout_page(case_id: str, params: dict[str, list[str]]) -> str:
           {unsupported_notice}
           <p class="muted small">Validated evidence references: {index_status.used_document_references}; unique documents: {index_status.unique_used_documents}; assigned: {index_status.assigned_used_documents}; exhibits: {index_status.exhibit_count}.</p>
           {_render_case_font_settings_form(case_id, action="save_layout_font_settings", compact=True)}
+        </section>
+        <section class="panel">
+          <h2>Optional corrected memorandum</h2>
+          <p class="muted">After editing the generated Word file, paste its local path or leave the field empty to choose a DOCX. Validation reports unknown INDEX items, missing documents, and unrecognized PAGE citations as warnings; it does not prevent you from accepting the file.</p>
+          <form method="post" class="stack">
+            <input type="hidden" name="case" value="{escape(case_id)}">
+            <input type="hidden" name="action" value="validate_reviewed_memo">
+            <label>Corrected memorandum path or file link<input name="reviewed_memo_path" placeholder="C:\\...\\corrected memorandum.docx"></label>
+            <button>Load corrected memorandum</button>
+          </form>
+          {review_status}
+          {accept_control}
         </section>
         <section class="bundle-pipeline">
           <div class="pipeline-phase {phase_one_class}"><span class="phase-number">1</span><h2>Refresh indexes</h2><p>Rescan evidence from Stage 2 outputs, or after manual memo edits sync the technical indexes from the memo INDEX section.</p><div class="button-row">{post_button(case_id, "refresh_layout_indexes", "Refresh indexes")}{post_button(case_id, "sync_layout_indexes_from_memo", "Sync indexes from memo")}</div></div>
@@ -3141,6 +3202,8 @@ def _action_route(action: str) -> str:
         "bundle_build",
         "final_filing_build",
         "save_layout_font_settings",
+        "validate_reviewed_memo",
+        "accept_reviewed_memo",
     }:
         return "/layout"
     if action in {

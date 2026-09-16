@@ -592,6 +592,27 @@ def inspect_layout_index_status(case_id: str) -> LayoutIndexStatus:
 
 def refresh_layout_indexes(case_id: str) -> LayoutIndexRefreshSummary:
     before = load_case(case_id)
+    from .memo_review import accepted_reviewed_memo
+
+    reviewed_memo = accepted_reviewed_memo(case_id)
+    if reviewed_memo is not None:
+        scan = scan_documents(case_id)
+        synced = sync_layout_indexes_from_memo(
+            case_id,
+            memo_docx_path=str(reviewed_memo),
+            allow_unmatched=True,
+        )
+        exhibit_summary = build_exhibit_index(case_id)
+        loaded = load_case(case_id)
+        _invalidate_bundle_preparation(loaded)
+        return LayoutIndexRefreshSummary(
+            scanned_files=scan.scanned_files,
+            auxiliary_rows_removed=scan.removed_rows,
+            replacement_documents_rebound=0,
+            documents_assigned=synced.documents_matched,
+            exhibit_summary=exhibit_summary,
+            status=inspect_layout_index_status(case_id),
+        )
     if before.config.get("task_type") == "o1b_petition":
         from .o1b_exhibits import capture_draft_citations
 
@@ -723,7 +744,9 @@ def refresh_layout_indexes(case_id: str) -> LayoutIndexRefreshSummary:
     )
 
 
-def sync_layout_indexes_from_memo(case_id: str, *, memo_docx_path: str = "") -> MemoIndexSyncSummary:
+def sync_layout_indexes_from_memo(
+    case_id: str, *, memo_docx_path: str = "", allow_unmatched: bool = False
+) -> MemoIndexSyncSummary:
     loaded = load_case(case_id)
     final_memo_root = loaded.case_dir / _case_path_value(loaded.config, "final_memo")
     memo_path = Path(memo_docx_path) if memo_docx_path else final_memo_root / "working_memo.docx"
@@ -737,7 +760,7 @@ def sync_layout_indexes_from_memo(case_id: str, *, memo_docx_path: str = "") -> 
     exhibit_index_path = loaded.case_dir / _case_path_value(loaded.config, "exhibit_index")
     document_rows = _read_csv(document_index_path, INDEX_FIELDS)
     document_matches, unmatched = _match_memo_index_documents(parsed["documents"], document_rows)
-    if unmatched:
+    if unmatched and not allow_unmatched:
         raise SystemExit(
             "Could not match memo Evidence Index document(s) to document_index.csv:\n- "
             + "\n- ".join(unmatched[:50])
@@ -820,7 +843,16 @@ def _parse_memo_index_docx(memo_path: Path) -> dict[str, list[dict[str, str]]]:
         raise SystemExit("python-docx is required to parse the memo Evidence Index.") from exc
     document = Document(str(memo_path))
     lines = [paragraph.text.strip() for paragraph in document.paragraphs if paragraph.text.strip()]
-    start = next((index for index, line in enumerate(lines) if line.casefold() == "index:"), -1)
+    index_headings = {
+        "index",
+        "index:",
+        "attachments / evidence index",
+        "exhibit list",
+    }
+    start = next(
+        (index for index, line in enumerate(lines) if line.casefold() in index_headings),
+        -1,
+    )
     if start < 0:
         raise SystemExit("Could not find the memo INDEX: section.")
 

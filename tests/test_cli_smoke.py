@@ -701,6 +701,26 @@ class CliSmokeTests(unittest.TestCase):
                 "Emphasize the 110,000 sq. m. portfolio and avoid generic praise.",
             )
 
+    def test_final_guardrails_include_media_lists_and_nonduplicative_citations(self) -> None:
+        loaded = workflow_module.LoadedCase(
+            case_id="case_001",
+            case_dir=Path("case_workspace/case_001"),
+            config={"task_type": "eb1a_petition"},
+            workflow={},
+        )
+        step = {
+            "step_id": "criterion_awards_episode",
+            "exhibit_number": "1",
+            "item_prefix": "1.1.",
+        }
+        guardrails = workflow_module.render_final_output_guardrails(
+            loaded, step, workflow_module.PromptOptions(episode_id="award")
+        )
+        self.assertIn("list every media outlet/publication example", guardrails)
+        self.assertIn("name the outlet", guardrails)
+        self.assertIn("avoid repeated inline exhibit citations", guardrails)
+        self.assertIn("already been cited earlier in the same `draft_text`", guardrails)
+
     def test_web_parser_accepts_host_and_port(self) -> None:
         args = web.build_parser().parse_args(["--host", "127.0.0.1", "--port", "8010"])
         self.assertEqual(args.host, "127.0.0.1")

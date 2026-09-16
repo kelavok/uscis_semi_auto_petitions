@@ -337,6 +337,23 @@ def _clean_user_path(value: str) -> str:
 
 def build_working_memo(case_id: str, *, template_path: str = "") -> WorkingMemoSummary:
     loaded = load_case(case_id)
+    if not template_path:
+        from .memo_review import accepted_reviewed_memo
+
+        reviewed = accepted_reviewed_memo(case_id)
+        if reviewed is not None:
+            final_dir = loaded.case_dir / _path_from_config(loaded.config, "final_memo")
+            working = final_dir / "working_memo.docx"
+            if reviewed.resolve() != working.resolve():
+                shutil.copy2(reviewed, working)
+            return WorkingMemoSummary(
+                markdown_path=final_dir / "working_memo.md",
+                docx_path=working,
+                template_report_path=loaded.case_dir / "reports" / "template_parse_report.md",
+                sections_written=0,
+                placeholders_seen=0,
+                inferred_items=0,
+            )
     template = _resolve_template_path(loaded.config, template_path)
     report = parse_machine_template(template)
     skeleton = build_memo_skeleton(loaded.config, report, loaded.case_dir)
@@ -3150,7 +3167,23 @@ def _markdown_runs(text: str) -> list[tuple[str, dict[str, bool]]]:
         if part.startswith("**") and part.endswith("**"):
             runs.append((part[2:-2], {"bold": True}))
         else:
-            runs.append((part, {}))
+            for fragment in re.split(
+                r"(\((?=[^)]*\bExhibits?\b)[^)]*\))",
+                part,
+                flags=re.IGNORECASE,
+            ):
+                if not fragment:
+                    continue
+                citation = bool(
+                    re.fullmatch(
+                        r"\((?=[^)]*\bExhibits?\b)[^)]*\)",
+                        fragment,
+                        flags=re.IGNORECASE,
+                    )
+                )
+                runs.append(
+                    (fragment, {"bold": True, "italic": True} if citation else {})
+                )
     return runs
 
 
@@ -3323,10 +3356,10 @@ def _styles_xml(font_family: str = "Times New Roman") -> str:
     font = html.escape(font_family or "Times New Roman", quote=True)
     return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:rPr><w:rFonts w:ascii="{font}" w:hAnsi="{font}" w:eastAsia="{font}"/><w:sz w:val="24"/></w:rPr><w:pPr><w:spacing w:after="160" w:line="278" w:lineRule="auto"/></w:pPr></w:style>
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:rPr><w:rFonts w:ascii="{font}" w:hAnsi="{font}" w:eastAsia="{font}"/><w:sz w:val="24"/></w:rPr><w:pPr><w:spacing w:after="160" w:line="360" w:lineRule="auto"/></w:pPr></w:style>
   <w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="24"/></w:rPr><w:pPr><w:spacing w:before="0" w:after="160"/></w:pPr></w:style>
-  <w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="24"/></w:rPr><w:pPr><w:spacing w:before="0" w:after="160"/><w:keepNext/></w:pPr></w:style>
-  <w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="24"/></w:rPr><w:pPr><w:spacing w:before="0" w:after="160"/><w:keepNext/></w:pPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:pPr><w:spacing w:before="0" w:after="160"/><w:keepNext/></w:pPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="28"/></w:rPr><w:pPr><w:spacing w:before="0" w:after="160"/><w:keepNext/></w:pPr></w:style>
   <w:style w:type="paragraph" w:styleId="Heading3"><w:name w:val="heading 3"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="24"/></w:rPr><w:pPr><w:spacing w:before="0" w:after="160"/><w:keepNext/></w:pPr></w:style>
   <w:style w:type="paragraph" w:styleId="SpecialSection"><w:name w:val="Special section"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:sz w:val="32"/></w:rPr><w:pPr><w:spacing w:before="0" w:after="160"/><w:keepNext/></w:pPr></w:style>
   <w:style w:type="paragraph" w:styleId="Meta"><w:name w:val="Memo metadata"/><w:basedOn w:val="Normal"/><w:rPr><w:i/><w:sz w:val="22"/></w:rPr><w:pPr><w:spacing w:after="60"/></w:pPr></w:style>

@@ -3,9 +3,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app.memo_builder import (
+    _markdown_runs,
     _is_rfe_thesis_heading,
     _rfe_draft_runs,
     _rfe_group_requests_quote,
+    _styles_xml,
 )
 from app.workflow import LoadedCase, _eb1a_exhibit_numbers, _rfe_strategy_citation_plan
 
@@ -107,6 +109,19 @@ class RfeMigratorFormattingTests(unittest.TestCase):
                 ]
             )
         )
+
+    def test_migrator_word_styles_and_inline_exhibit_citations(self) -> None:
+        styles = _styles_xml("Times New Roman")
+        self.assertIn('w:line="360"', styles)
+        self.assertRegex(styles, r'styleId="Heading1".*?<w:sz w:val="32"/>')
+        self.assertRegex(styles, r'styleId="Heading2".*?<w:sz w:val="28"/>')
+        citation = (
+            "Text before (Please refer to Exhibit 0, page PAGE: 0.2 - Curriculum Vitae.) "
+            "text after."
+        )
+        citation_runs = [item for item in _markdown_runs(citation) if "Please refer" in item[0]]
+        self.assertEqual(len(citation_runs), 1)
+        self.assertEqual(citation_runs[0][1], {"bold": True, "italic": True})
 
     def test_thesis_quotes_and_exhibit_references_receive_required_formatting(self) -> None:
         heading = "Independent Evidence Establishes the Outlet's Professional Standing"
