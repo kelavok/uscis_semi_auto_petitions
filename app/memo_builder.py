@@ -1957,7 +1957,7 @@ def _is_rfe_thesis_heading(text: str) -> bool:
 
 
 def _rfe_draft_runs(text: str) -> list[tuple[str, dict[str, bool]]]:
-    value = text
+    value = _normalize_markdown_links(text)
     if _is_standalone_exhibit_reference(value):
         return [(value, {"bold": True, "italic": True})]
     if value.strip().casefold() in {"answer:", "response:"}:
@@ -1992,6 +1992,30 @@ def _rfe_draft_runs(text: str) -> list[tuple[str, dict[str, bool]]]:
                 properties.update(span_properties)
         runs.append((value[start:end], properties))
     return runs
+
+
+def _normalize_markdown_links(text: str) -> str:
+    def replace_link(match: re.Match[str]) -> str:
+        label = match.group("label").strip()
+        url = match.group("url").strip()
+        normalized_label = _normalize_link_text(label)
+        normalized_url = _normalize_link_text(url)
+        if normalized_label == normalized_url or normalized_label.startswith(("http://", "https://", "www.")):
+            return url
+        return f"{label} ({url})"
+
+    text = re.sub(
+        r"\[(?P<label>[^\]\n]+)\]\((?P<url>https?://[^\s)]+)\)",
+        replace_link,
+        text,
+    )
+    return re.sub(r"<(?P<url>https?://[^>\s]+)>", r"\g<url>", text)
+
+
+def _normalize_link_text(value: str) -> str:
+    value = value.strip().strip("<>")
+    value = re.sub(r"\s+", "", value)
+    return value.rstrip("/").casefold()
 
 
 def _normalized_heading(value: str) -> str:
@@ -3160,6 +3184,7 @@ def _draft_text_xml(text: str, *, strip_opening_headings: bool = False) -> str:
 
 
 def _markdown_runs(text: str) -> list[tuple[str, dict[str, bool]]]:
+    text = _normalize_markdown_links(text)
     runs: list[tuple[str, dict[str, bool]]] = []
     for part in re.split(r"(\*\*.+?\*\*)", text):
         if not part:

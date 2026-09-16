@@ -123,6 +123,31 @@ class RfeMigratorFormattingTests(unittest.TestCase):
         self.assertEqual(len(citation_runs), 1)
         self.assertEqual(citation_runs[0][1], {"bold": True, "italic": True})
 
+    def test_markdown_web_links_are_rendered_without_visible_artifacts(self) -> None:
+        same_url = "Archive [https://example.com/path](https://example.com/path) end."
+        rendered = "".join(text for text, _props in _markdown_runs(same_url))
+        self.assertEqual(rendered, "Archive https://example.com/path end.")
+        self.assertNotIn("[", rendered)
+        self.assertNotIn("](", rendered)
+
+        named = "See [Commerce supply-chain review](https://commerce.gov/review)."
+        named_rendered = "".join(text for text, _props in _markdown_runs(named))
+        self.assertEqual(
+            named_rendered,
+            "See Commerce supply-chain review (https://commerce.gov/review).",
+        )
+
+        rfe_rendered = "".join(
+            text
+            for text, _props in _rfe_draft_runs(
+                "Source: <https://example.com/source> and [https://example.com/a](https://example.com/a)."
+            )
+        )
+        self.assertEqual(
+            rfe_rendered,
+            "Source: https://example.com/source and https://example.com/a.",
+        )
+
     def test_thesis_quotes_and_exhibit_references_receive_required_formatting(self) -> None:
         heading = "Independent Evidence Establishes the Outlet's Professional Standing"
         self.assertTrue(_is_rfe_thesis_heading(heading))
