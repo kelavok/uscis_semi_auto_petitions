@@ -1,0 +1,411 @@
+schema_version: 1
+template_role: company_specific_eb2_niw_rfe_response_llm_interaction_and_script_assembly_map
+template_name: EB-2 NIW RFE Response Company Draft YAML Structure
+template_date: '2026-08-17'
+created_for: LLM-driven drafting and script assembly under the company RFE draft template, adapted from the EB-1A RFE branch
+  to EB-2 NIW
+source_references:
+- 'rfe draft template(1).docx - company-required RFE response structure: cover letter, RFE quote, answer, targeted rebuttal,
+  conclusion'
+- Pasted markdown(10).md - EB-2 NIW RFE response example using prong-by-prong RFE rebuttal and plain front index
+- 'USCIS Policy Manual, Volume 6, Part F, Chapter 5 - EB-2 NIW: EB-2 threshold eligibility and Matter of Dhanasar prongs'
+- 8 CFR 204.5(k) - EB-2 advanced degree and exceptional ability regulatory framework; verify current language before filing
+scope:
+  visa_classification: EB-2 NIW
+  form: Form I-140
+  statutory_basis: INA § 203(b)(2)(B)(i)
+  document_type: Response to Request for Evidence for EB-2 National Interest Waiver
+  company_template_order_is_mandatory: true
+  final_filing_language: English
+  instruction_language: Russian + English drafting blocks
+  core_rfe_method: Quote the RFE, identify the exact disputed issue, answer only that issue, cite relevant evidence, and conclude.
+  default_standard:
+    eb2_threshold:
+    - advanced degree professional, or
+    - person of exceptional ability in the sciences, arts, or business
+    niw_standard:
+    - 'Prong 1: proposed endeavor has both substantial merit and national importance'
+    - 'Prong 2: petitioner is well positioned to advance the proposed endeavor'
+    - 'Prong 3: on balance, it would be beneficial to waive the job offer and labor certification requirements'
+    exceptional_ability_path: At least three of six regulatory criteria, followed by final merits / totality analysis showing
+      expertise significantly above that ordinarily encountered in the field.
+  do_not_use:
+  - EB-1A extraordinary ability terminology as the legal standard for EB-2 NIW
+  - O-1A/O-1B nonimmigrant language
+  - Form I-129 language
+  - generic occupation-is-important arguments as a substitute for proposed endeavor analysis
+  - labor shortage alone as national importance or Prong 3 balance
+  - benefit to one employer or one client alone as national importance
+  - claims that USCIS accepted an issue unless the RFE expressly says so
+  - arguments on issues not disputed in the RFE unless needed for navigation or totality
+  - hardcoded USCIS fees, lockbox addresses, form edition dates, or filing instructions
+company_template_principles:
+  primary_rule: Do not write about issues that the officer did not dispute in the RFE.
+  subheading_rule: Create clear, specific subheadings so the officer can immediately understand what exact RFE objection is
+    being answered.
+  answer_rule: Begin with the rebuttal, not with a generic restatement of the legal standard.
+  evidence_rule: Use only evidence relevant to the exact RFE defect unless broader context is necessary to explain the endeavor
+    or totality.
+  conclusion_rule: Every major section ends with a conclusion listing the RFE concerns cured and the legal element established.
+  non_duplication_rule: Previously submitted evidence may be cited and referenced without duplication unless resubmission
+    is strategic or requested.
+  officer_name_rule: If the RFE identifies an office chief or officer, use the company cover style with Dear Ms./Mr. [Name]
+    and Officer [ID/name]; otherwise use Dear Officer.
+  plain_index_rule: Front index must be rendered as ordinary text paragraphs, not as a table.
+case_config:
+  case_metadata:
+    rfe_response_date: '{MONTH_DAY_YEAR}'
+    case_number: '{CASE_NUMBER}'
+    rfe_date: '{RFE_DATE}'
+    receipt_date: '{RECEIPT_DATE}'
+    uscis_office_or_service_center: '{USCIS_OFFICE_OR_SERVICE_CENTER}'
+    uscis_office_chief_name: '{USCIS_OFFICE_CHIEF_NAME_IF_KNOWN}'
+    officer_name_or_id: '{OFFICER_NAME_OR_ID_IF_KNOWN}'
+    address_line: TO USCIS
+  petitioner_beneficiary:
+    full_name: '{FIRST_AND_LAST_NAME}'
+    preferred_reference: '{Mr./Ms. Last Name}'
+    short_reference: '{Last Name}'
+    pronouns:
+      subject: '{he/she/they}'
+      object: '{him/her/them}'
+      possessive: '{his/her/their}'
+    field_of_endeavor: '{FIELD_OF_ENDEAVOR}'
+    specialization: '{SPECIALIZATION}'
+    intended_occupation: '{INTENDED_OCCUPATION}'
+    proposed_endeavor_title: '{PROPOSED_ENDEAVOR_TITLE}'
+    one_sentence_endeavor: '{ONE_SENTENCE_PROPOSED_ENDEAVOR}'
+  rfe_status_summary:
+    uscis_accepted: []
+    uscis_disputed: []
+    unclear_or_overlooked: []
+    do_not_reargue_accepted_points: true
+  filing_strategy:
+    cite_original_petition_exhibits: true
+    submit_new_rfe_exhibits: true
+    avoid_duplicate_original_exhibits_unless_needed: true
+    include_basic_eligibility_if_disputed: true
+    include_advanced_degree_if_disputed_or_relied_upon: true
+    include_exceptional_ability_if_disputed_or_relied_upon: true
+    include_only_niw_prongs_disputed_or_needing_clarification: false
+rfe_issue_matrix_schema:
+  purpose: Extract exact RFE objections and map them to EB-2 threshold eligibility, exceptional ability criteria, Dhanasar
+    prongs, or general evidentiary concerns.
+  fields:
+  - issue_id
+  - rfe_quote_exact
+  - legal_area
+  - rfe_defect_type
+  - accepted_elements_do_not_repeat
+  - disputed_elements_to_answer
+  - evidence_needed
+  - available_original_exhibits
+  - available_rfe_exhibits
+  - draft_section_id
+  - priority
+  - notes
+evidence_item_schema:
+  id: '{EXHIBIT_ID}'
+  title: '{EXHIBIT_TITLE}'
+  group: '{BASIC_ELIGIBILITY|PRONG_1|PRONG_2|PRONG_3|GENERAL}'
+  page_range: '{PAGES_FROM_TO_OR_PAGE_PLACEHOLDER}'
+  evidence_status: '{original_petition|new_rfe_exhibit|resubmitted|not_submitted}'
+  evidence_type: '{degree|evaluation|letter|business_plan|government_source|industry_report|contract|loi|award|membership|salary|media|implementation_record|other}'
+  language: '{English|non-English}'
+  translation_required: '{true|false}'
+  proves: []
+  rfe_defect_cured: []
+  use_in_sections: []
+  source_reliability_note: '{official|independent|company record|expert letter|self-prepared but corroborated|other}'
+  citation_format: (Please refer to {Original petition/RFE} Exhibit {EXHIBIT_ID}, p. {PAGE}.)
+document_render_order:
+- plain_front_index
+- cover_letter
+- optional_general_matters_if_triggered
+- basic_eligibility_intro_if_disputed
+- advanced_degree_if_disputed_or_relied_upon
+- exceptional_ability_intro_if_disputed_or_relied_upon
+- exceptional_ability_r1_academic_record_if_used
+- exceptional_ability_r2_ten_years_experience_if_used
+- exceptional_ability_r3_license_certification_if_used
+- exceptional_ability_r4_salary_remuneration_if_used
+- exceptional_ability_r5_membership_if_used
+- exceptional_ability_r6_recognition_if_used
+- exceptional_ability_final_merits_if_exceptional_ability_used
+- prong_1_intro
+- prong_1_proposed_endeavor_definition
+- prong_1_substantial_merit_if_disputed
+- prong_1_national_importance_problem_nexus_impact
+- prong_1_government_or_national_initiatives_if_available
+- prong_1_economic_public_or_sectoral_impact_if_available
+- prong_1_scale_beyond_one_employer_or_local_benefit
+- prong_1_support_letters_specific_endeavor_if_available
+- prong_1_conclusion
+- prong_2_intro
+- prong_2_field_appropriate_measures
+- prong_2_education_skills_knowledge
+- prong_2_record_of_success
+- prong_2_implementation_use_by_others
+- prong_2_leading_critical_or_significant_roles_if_available
+- prong_2_detailed_plan
+- prong_2_progress_and_support
+- prong_2_letters_with_independent_corroboration
+- prong_2_conclusion
+- prong_3_intro
+- prong_3_labor_certification_impractical_or_misaligned
+- prong_3_benefits_even_if_workers_available
+- prong_3_urgency_or_time_sensitive_need_if_available
+- prong_3_job_creation_economic_impact_or_non_displacement_if_available
+- prong_3_shortage_as_context_only_if_used
+- prong_3_balance_conclusion
+- summary_and_request_for_favorable_adjudication
+- technical_separator_pages
+- evidence_blocks
+sections:
+  plain_front_index:
+    purpose: Render the exhibit index at the front of the response as ordinary text, not a table.
+    template: 'INDEX
+
+
+      Basic Eligibility for EB-2. Exhibits from 1.1 to 1.__, Pages from __ to __
+
+      Exhibit 1.1. ...
+
+
+      First Prong: The Proposed Endeavor Has Both Substantial Merit and National Importance. Exhibits from 2.1 to 2.__, Pages
+      from __ to __
+
+      Exhibit 2.1. ...
+
+
+      Second Prong: The Petitioner Is Well Positioned to Advance the Proposed Endeavor. Exhibits from 3.1 to 3.__, Pages from
+      __ to __
+
+      Exhibit 3.1. ...
+
+
+      Third Prong: On Balance, It Would Be Beneficial to the United States to Waive the Job Offer and Labor Certification
+      Requirements. Exhibits from 4.1 to 4.__, Pages from __ to __
+
+      Exhibit 4.1. ...'
+  cover_letter:
+    heading: TO USCIS / RE line / Petitioner / Case No. / RFE Date
+    purpose: Identify the RFE response, beneficiary, EB-2 NIW basis, field, disputed issues, favorable USCIS findings, and
+      relationship to the original filing.
+    drafting_rules:
+    - List only issues actually addressed in the RFE response unless a short global orientation is needed.
+    - Separate issues recognized by USCIS from issues still disputed.
+    - Do not list a finding as recognized unless the RFE expressly recognizes it.
+    - Preserve the company template sentence explaining that previously submitted evidence is cited where relevant and not
+      duplicated when unnecessary.
+    template: '[month ___, 20__]
+
+
+      TO USCIS
+
+
+      RE: Response to Request for Evidence Regarding Form I-140 Petition under EB-2 National Interest Waiver in [FIELD] -
+      [SPECIALIZATION]
+
+
+      Petitioner/Beneficiary: [FIRST LAST NAME]
+
+      Case No.: [CASE NUMBER]
+
+      RFE Date: [RFE DATE]
+
+
+      Dear [Ms./Mr. USCIS office chief name, if known] and Officer [ID/name, if known]:
+
+
+      Please accept this response to the Request for Evidence regarding the Form I-140 petition filed on behalf of Mr./Ms.
+      [FIRST LAST NAME] under INA § 203(b)(2)(B)(i), seeking classification under the EB-2 category and a National Interest
+      Waiver in the field of [FIELD OF ENDEAVOR], with particular specialization in [SPECIALIZATION].
+
+
+      [LIST ISSUES ADDRESSED: Basic Eligibility if disputed; Prong 1; Prong 2; Prong 3.]
+
+
+      [LIST EXPRESS FAVORABLE FINDINGS, IF ANY.]
+
+
+      [NON-DUPLICATION AND TOTAL RECORD PARAGRAPH.]
+
+
+      Respectfully submitted,
+
+      [ATTORNEY / REPRESENTATIVE / PETITIONER NAME]'
+  basic_eligibility:
+    heading: Basic Eligibility for EB-2
+    purpose: Respond only if EB-2 threshold eligibility is disputed or needs clarification.
+    subsections:
+      advanced_degree:
+        use_when: USCIS disputes advanced degree, equivalency, profession, or bachelor + five years progressive experience;
+          or petitioner relies on this basis and the response must clarify it.
+        targeted_subheadings_examples:
+        - The Academic Record and Credential Evaluation Establish the Required Advanced Degree Equivalency
+        - The Intended Occupation Qualifies as a Profession Requiring at Least a Bachelor’s Degree
+        - The Post-Baccalaureate Experience Was Progressive and Directly Related to the Specialty
+      exceptional_ability:
+        use_when: USCIS disputes exceptional ability or petitioner relies on it as an independent or alternative EB-2 basis.
+        criteria:
+          R1_academic_record: degree, diploma, certificate, or similar award relating to the area of exceptional ability
+          R2_ten_years_experience: letters or evidence documenting at least ten years of full-time experience in the occupation
+          R3_license_certification: license or certification for the profession or occupation
+          R4_salary_remuneration: salary or remuneration demonstrating exceptional ability, supported by comparative evidence
+          R5_membership: membership in professional associations
+          R6_recognition: recognition for achievements and significant contributions by peers, government entities, professional
+            or business organizations
+        final_merits_required_if_used: true
+  prong_1:
+    heading: 'First Prong: The Proposed Endeavor Has Both Substantial Merit and National Importance'
+    purpose: Define the specific endeavor, address substantial merit if disputed, and prove national importance through prospective
+      impact.
+    mandatory_subsections:
+    - Clarifying and Proving the Specific Proposed Endeavor
+    - 'National Importance: National Problem, Nexus, and Prospective Impact'
+    - Scale Beyond One Employer, One Client, or Local Benefit
+    - Conclusion
+    optional_subsections:
+    - Substantial Merit if disputed
+    - Alignment with Government, Quasi-Government, Industry, or National Initiatives
+    - Economic, Public-Welfare, Regional, Sectoral, or Job-Creation Impact
+    - Letters and Support Evidence Address the Specific Endeavor
+    core_rules:
+    - Do not conflate occupation and proposed endeavor.
+    - Do not rely on general importance of the industry.
+    - Do not rely on labor shortage alone.
+    - Do not rely on benefit to one employer or one client alone.
+    - Split a complex endeavor into thesis blocks, phases, or workstreams before arguing national importance.
+  prong_2:
+    heading: 'Second Prong: The Petitioner Is Well Positioned to Advance the Proposed Endeavor'
+    purpose: Show that the petitioner, not just the field, has the preparation, record, plan, progress, and support needed
+      to advance the specific endeavor.
+    subsections:
+    - Field-Appropriate Measures of Being Well Positioned
+    - Education, Skills, Knowledge, and Specialized Preparation
+    - Record of Success in Similar or Related Efforts
+    - Implementation, Adoption, Use by Others, or Reliance by Relevant Entities
+    - Leading, Critical, or Significant Roles in Similar Efforts if available
+    - Detailed Proposal or Plan for Future Activities
+    - Progress Toward the Endeavor and Support from Relevant Entities
+    - Recommendation Letters and Expert Evidence Are Corroborated by Independent Documents
+    - Conclusion
+  prong_3:
+    heading: 'Third Prong: On Balance, It Would Be Beneficial to the United States to Waive the Job Offer and Labor Certification
+      Requirements'
+    purpose: Perform a balancing analysis showing why waiver provides greater national benefit than the ordinary job offer
+      and labor certification process.
+    subsections:
+    - Labor Certification Is Impractical or Misaligned with the Proposed Endeavor
+    - The United States Benefits from the Petitioner’s Contributions Even if Qualified U.S. Workers Are Available
+    - Urgency or Time-Sensitive National, Public, Economic, or Sectoral Need if available
+    - Job Creation, Workforce Expansion, Economic Impact, or Non-Displacement if available
+    - Labor Shortage Is Context Only, Not the Entire Argument
+    - Balance Conclusion
+  summary_and_request:
+    heading: Summary and Request for Favorable Adjudication
+    purpose: Summarize cured RFE defects and request approval under EB-2 NIW.
+block_output_contract:
+  required_keys:
+  - DRAFT_TEXT
+  - EXHIBIT_USE_LOG
+  - RFE_RESPONSE_MAP
+  - FACT_SUPPORT_MAP
+  - UNRESOLVED_ISSUES
+  - ASSEMBLY_NOTES
+  DRAFT_TEXT: Final prose for the requested block only, in English, ready to insert into the Word template.
+  EXHIBIT_USE_LOG: List of exhibits cited in the block with exhibit id, title, original/RFE status, and fact proved.
+  RFE_RESPONSE_MAP: For each exact RFE quote addressed, state where and how it was answered.
+  FACT_SUPPORT_MAP: Each factual claim mapped to supporting evidence. Flag unsupported claims.
+  UNRESOLVED_ISSUES: Missing evidence, unclear facts, contradictory evidence, page placeholders, or risky claims.
+  ASSEMBLY_NOTES: 'Instructions for the script: include/remove optional subsection, update index, resolve pages, or insert
+    divider pages.'
+global_drafting_rules:
+  rfe_first_rule: Every substantive block starts from the exact RFE quote or a tightly identified RFE concern.
+  subheading_rules:
+  - Subheadings must rebut the officer’s concern directly.
+  - Do not use generic subheadings such as Background unless necessary.
+  - Use one episode or evidence cluster per subheading when the folder structure permits.
+  evidence_rules:
+  - Every material factual claim needs an exhibit reference.
+  - Letters are stronger when corroborated by independent evidence.
+  - Official and independent sources should be used for national problems and market/economic claims.
+  - Do not invent facts, sources, dates, metrics, page numbers, or exhibit titles.
+  tone_rules:
+  - Respectful, direct, legal, and evidence-based.
+  - Do not overstate.
+  - Do not attack USCIS.
+  - Use Respectfully where appropriate, but do not hide weak evidence behind politeness.
+validation_rules:
+  pre_drafting:
+  - RFE has been parsed into exact quotes and disputed elements.
+  - Favorable findings have been separated from disputed issues.
+  - Folder structure has been mapped to Basic Eligibility, Prong 1, Prong 2, Prong 3, or General.
+  - Each evidence item has title, date, status, legal use, and citation format.
+  content_validation:
+  - No undisputed issue is overdiscussed.
+  - Each RFE quote is answered.
+  - Each claim has evidence support.
+  - Optional sections with no evidence are removed or flagged.
+  - Prong 1 defines the specific proposed endeavor before arguing national importance.
+  - Prong 3 does not rely on shortage alone.
+  assembly_validation:
+  - Plain front index matches rendered sections and exhibit groups.
+  - All exhibit numbers are consistent.
+  - All PAGE placeholders are resolved before final filing.
+  - All non-English documents referenced as evidence have certified translations or translation notes.
+  - Technical divider pages match the index.
+llm_interaction_workflow:
+- step: 1
+  name: extract_rfe_issues
+  instruction: Read the RFE. Extract exact quotes and classify each as Basic Eligibility, Advanced Degree, Exceptional Ability,
+    Prong 1, Prong 2, Prong 3, general evidence concern, or favorable finding.
+- step: 2
+  name: build_issue_matrix
+  instruction: For each RFE quote, identify disputed elements, accepted elements that must not be repeated, and evidence needed.
+- step: 3
+  name: map_folder_structure
+  instruction: Map project folders to template sections and exhibit ranges. The folder structure controls which optional sections
+    are included.
+- step: 4
+  name: map_evidence_to_defects
+  instruction: For each RFE defect, map original petition evidence and new RFE evidence. State what each document proves.
+- step: 5
+  name: draft_basic_eligibility_if_needed
+  instruction: 'Draft only the disputed EB-2 threshold sections: Advanced Degree and/or Exceptional Ability criteria.'
+- step: 6
+  name: draft_prong_1_blocks
+  instruction: Draft proposed endeavor definition first, then substantial merit if disputed, national importance, problem/nexus/impact,
+    and scale beyond one employer.
+- step: 7
+  name: draft_prong_2_blocks
+  instruction: Draft person-focused blocks based on record of success, implementation, plan, progress, and support.
+- step: 8
+  name: draft_prong_3_balance
+  instruction: Draft the balance analysis. Do not use shortage as the complete argument.
+- step: 9
+  name: assemble_and_validate
+  instruction: Assemble in document_render_order, update plain index, verify exhibit citations, flag unresolved PAGE placeholders,
+    and produce final response draft.
+prompt_registry:
+  extract_rfe_issues: Read the RFE and extract exact quotes. Classify each issue as accepted, disputed, unclear, overlooked,
+    Basic Eligibility, Advanced Degree, Exceptional Ability, Prong 1, Prong 2, Prong 3, or general evidence concern. Do not
+    draft argument yet.
+  build_issue_matrix: Build an RFE issue matrix. For each issue, identify the exact disputed elements and the elements not
+    disputed that should not be discussed.
+  map_evidence_to_defects: For each RFE defect, map already submitted evidence and new evidence. State what each document
+    proves and whether it is resubmitted, new, or cited from the initial filing only.
+  draft_basic_eligibility: 'Draft the EB-2 threshold response using the company template: heading, exhibits line, exact RFE
+    quote, Answer, targeted subheadings, direct rebuttal, evidence citations, and conclusion. Include Advanced Degree and/or
+    Exceptional Ability only if disputed or relied upon.'
+  draft_prong_1: Draft Prong 1. First define and prove the specific proposed endeavor. Then address substantial merit if disputed
+    and national importance through national problem, nexus, prospective impact, government or industry priorities, economic/public
+    impact, and scale beyond one employer or local benefit.
+  draft_prong_2: 'Draft Prong 2 as a person-focused section. Use field-appropriate evidence: education, skills, record of
+    success, implementation, use by others, roles, plan, progress, and support or interest. Do not rely on credentials alone.'
+  draft_prong_3: 'Draft Prong 3 as a balancing analysis: labor certification impracticality or mismatch, benefits even if
+    workers are available, urgency, job creation/economic impact/non-displacement, shortage as context only, and final balance.'
+  validate_response: Check that every RFE quote is answered, no undisputed issues are overdiscussed, every claim has evidence,
+    all sections listed in the cover and index are rendered or intentionally omitted, and page placeholders are resolved before
+    final filing.

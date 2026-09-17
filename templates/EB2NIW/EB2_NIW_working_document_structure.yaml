@@ -1,0 +1,21 @@
+schema_version: 1
+task_type: eb2niw_petition
+document:
+  title: Petition Memorandum
+  body_font: Times New Roman
+  body_size: 12
+  line_spacing: 1.5
+  page_number_position: footer_right
+exhibits:
+  "1": General Documents and Professional Background
+  "2": Basic Eligibility for EB-2
+  "3": Prong 1 — Proposed Endeavor, Substantial Merit, and National Importance
+  "4": Prong 2 — Well Positioned to Advance the Proposed Endeavor
+  "5": Prong 3 — Benefit of Waiving the Job Offer and Labor Certification Requirements
+optional_sections:
+  advanced_degree: inferred_from_nonempty_folder
+  exceptional_ability: inferred_from_nonempty_folder
+  exceptional_ability_criteria: inferred_from_nonempty_subfolders
+repeatable_sections:
+  prong1_national_importance: one_unit_per_nonempty_direct_subfolder
+  prong2_achievement_categories: one_unit_per_nonempty_direct_subfolder

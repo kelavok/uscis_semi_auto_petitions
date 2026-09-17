@@ -1,0 +1,2 @@
+cd "C:\Users\kelav\Документы\projects\petitions"
+python -m app.web --host 127.0.0.1 --port 8000

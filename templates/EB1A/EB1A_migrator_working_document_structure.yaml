@@ -1,0 +1,91 @@
+document:
+  template_variant: migrator
+  petition_title: I-140 Petition for Alien of Extraordinary Ability
+  cover_heading: EB-1A Petition for {formal_name}
+  salutation: Dear Sir or Madam
+  classification: Alien of Extraordinary Ability under INA section 203(b)(1)(A)
+  petition_type: Form I-140 self-petition
+
+index_rows:
+  - General documents
+  - Industry Overview
+  - Criterion (i). Awards
+  - Criterion (ii). Memberships
+  - Criterion (iii). Published material
+  - Criterion (iv). Judging
+  - Criterion (v). Original contributions
+  - Criterion (vi). Scholarly articles
+  - Criterion (vii). Artistic exhibitions or showcases
+  - Criterion (viii). Leading or critical role
+  - Criterion (ix). High salary or remuneration
+  - Criterion (x). Commercial successes in the performing arts
+  - Recommendation Letters
+  - Documentation to establish substantial benefit and continued work in the United States
+
+table_of_contents:
+  - ["INDEX", ""]
+  - ["Attorney cover letter", ""]
+  - ["OVERVIEW OF THE BENEFICIARY'S QUALIFICATIONS AND ACHIEVEMENTS", ""]
+  - ["OVERVIEW OF THE INDUSTRY", ""]
+  - ["EVIDENTIAL CRITERIA OF ELIGIBILITY", ""]
+  - ["BENEFICIARY WILL CONTINUE TO WORK IN CLAIMED AREA OF EXPERTISE. FINAL MERIT DETERMINATION.", ""]
+  - ["Conclusions", ""]
+  - ["Beneficiary Statement", ""]
+
+criteria:
+  awards:
+    roman: i
+    title: Criterion 1. Evidence of receipt of lesser nationally or internationally recognized prizes or awards for excellence
+    cover_text: Evidence of {possessive_reference} receipt of lesser nationally or internationally recognized prizes or awards for excellence
+    step_ids: [criterion_awards_episode]
+  memberships:
+    roman: ii
+    title: Criterion 2. Evidence of membership in associations in the field that require outstanding achievement of their members
+    cover_text: Evidence of {possessive_reference} membership in associations in the field that require outstanding achievement of their members
+    step_ids: [criterion_memberships_episode]
+  media:
+    roman: iii
+    title: Criterion 3. Published material about the beneficiary in professional or major trade publications or other major media
+    cover_text: Published material about {preferred_reference} in professional or major trade publications or other major media
+    step_ids: [criterion_media_episode]
+  judging:
+    roman: iv
+    title: Criterion 4. Evidence of participation as a judge of the work of others
+    cover_text: Evidence of {possessive_reference} participation as a judge of the work of others
+    step_ids: [criterion_judging_episode]
+  original_contribution:
+    roman: v
+    title: Criterion 5. Evidence of original contributions of major significance in the field
+    cover_text: Evidence of {possessive_reference} original contributions of major significance in the field
+    step_ids:
+      - criterion_original_contribution_fact
+      - criterion_original_contribution_significance
+  scholarly_articles:
+    roman: vi
+    title: Criterion 6. Evidence of authorship of scholarly articles in the field
+    cover_text: Evidence of {possessive_reference} authorship of scholarly articles in the field
+    step_ids: [criterion_scholarly_articles_episode]
+  exhibitions:
+    roman: vii
+    title: Criterion 7. Evidence of display of the beneficiary's work at artistic exhibitions or showcases
+    cover_text: Evidence of display of {possessive_reference} work at artistic exhibitions or showcases
+    step_ids: [criterion_exhibitions_episode]
+  leading_critical_role:
+    roman: viii
+    title: Criterion 8. Evidence of performance in a leading or critical role for organizations or establishments with distinguished reputations
+    cover_text: Evidence that {preferred_reference} performed in a leading or critical role for organizations or establishments with distinguished reputations
+    step_ids:
+      - criterion_leading_critical_role_fact
+      - criterion_leading_critical_role_reputation
+  high_salary:
+    roman: ix
+    title: Criterion 9. Evidence of high salary or other significantly high remuneration in relation to others in the field
+    cover_text: Evidence that {preferred_reference} commanded a high salary or other significantly high remuneration in relation to others in the field
+    step_ids:
+      - criterion_high_salary_fact
+      - criterion_high_salary_comparison
+  commercial_success:
+    roman: x
+    title: Criterion 10. Evidence of commercial successes in the performing arts
+    cover_text: Evidence of commercial successes in the performing arts
+    step_ids: [criterion_commercial_success_episode]
