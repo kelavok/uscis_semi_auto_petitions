@@ -1,18 +1,24 @@
 from __future__ import annotations
 
+from .safe_io import workspace_entries
+
+from .safe_io import atomic_open, atomic_write_text
+
 import csv
 import json
 import re
 import zipfile
+import warnings
 from dataclasses import dataclass
 from datetime import datetime
-from html import unescape
 from pathlib import Path, PurePosixPath
 from typing import Any
 from xml.etree import ElementTree
 
 from .cli_support import CASE_ROOT, PROJECT_ROOT, case_path
 from .simple_yaml import load_yaml_subset
+from .safe_io import contained_path, relative_path
+from .case_lock import case_operation
 from .json_input import parse_llm_json_object
 from .file_rules import is_office_temporary_file, prompt_sidecar_kind
 from .template_variants import (
@@ -53,20 +59,49 @@ class NextAction:
     prompt_path: Path | None = None
 
 
+@case_operation
 def load_case(case_id: str) -> LoadedCase:
     case_dir = case_path(case_id)
     config_path = case_dir / "case_config.yaml"
+    contained_path(case_dir, "case_config.yaml")
     if not config_path.exists():
         raise SystemExit(f"Missing case_config.yaml: {config_path}")
     config = load_yaml_file(config_path)
+    paths = config.get("paths", {})
+    if not isinstance(paths, dict):
+        raise ValueError("case_config.yaml field 'paths' must be a mapping.")
+    for value in paths.values():
+        contained_path(case_dir, value)
+    for name in ("case_context", "reports", "draft_sections", "case_strategy", "document_layout", "prompt_instructions"):
+        contained_path(case_dir, name)
+    for name in ("eb1a_folder_roles", "o1b_folder_roles", "eb2niw_folder_roles", "folder_roles", "rfe_folder_roles"):
+        roles = config.get(name, {})
+        if not isinstance(roles, dict):
+            raise ValueError(f"{name} must be a mapping.")
+        for value in roles.values():
+            relative_path(value)
+    for name in ("working_memo_file", "case_context_file"):
+        if config.get(name):
+            contained_path(case_dir, config[name])
+    for key in ("plan_file", "strategy_manifest"):
+        response = config.get("rfe_response", {})
+        if isinstance(response, dict) and response.get(key):
+            contained_path(case_dir, response[key])
     from .o1b_folders import resolve_o1b_folders
 
     resolve_o1b_folders(config, case_dir)
     workflow_value = str(config.get("workflow", "workflows/eb1a_petition.yaml"))
-    workflow_path = PROJECT_ROOT / workflow_value
+    workflow_path = _resolve_project_or_case_path(case_dir, workflow_value)
     if not workflow_path.exists():
         raise SystemExit(f"Missing workflow file: {workflow_path}")
     workflow = load_yaml_file(workflow_path)
+    for step in workflow.get("steps", []):
+        if not isinstance(step, dict):
+            raise ValueError("Workflow steps must be mappings.")
+        safe_path_component(str(step.get("step_id", "")))
+        for key in ("destination", "destination_pattern"):
+            if step.get(key):
+                contained_path(case_dir, step[key])
     return LoadedCase(case_id=case_id, case_dir=case_dir, config=config, workflow=workflow)
 
 
@@ -76,14 +111,19 @@ def load_yaml_file(path: Path) -> dict[str, Any]:
         import yaml  # type: ignore
 
         loaded = yaml.safe_load(text)
-    except ModuleNotFoundError:
-        loaded = load_yaml_subset(text)
-    except Exception:
-        # User-maintained config/template files can contain YAML features or
-        # plain-text values (for example a leading `!`) that PyYAML interprets
-        # as tags and rejects. Fall back to the project subset parser so the UI
-        # stays resilient to these drafting-side files instead of crashing.
-        loaded = load_yaml_subset(text)
+    except ModuleNotFoundError as exc:
+        raise SystemExit("PyYAML is required to read configuration safely; install the project dependencies.") from exc
+    except yaml.YAMLError as exc:
+        # Keep the established unquoted !folder convention, but let PyYAML
+        # validate everything else. Never silently accept malformed YAML.
+        repaired = re.sub(r'(?m)^(\s*[^#\n:]+:\s+)(![^\n]+)$',
+                          lambda match: match[1] + json.dumps(match[2], ensure_ascii=False), text)
+        try:
+            if repaired == text:
+                raise exc
+            loaded = yaml.safe_load(repaired)
+        except yaml.YAMLError as error:
+            raise ValueError(f"Invalid YAML in {path.name}; correct the file before continuing.") from error
     if not isinstance(loaded, dict):
         raise SystemExit(f"YAML file did not load as a mapping: {path}")
     return loaded
@@ -99,6 +139,7 @@ def find_step(workflow: dict[str, Any], step_id: str) -> dict[str, Any]:
     raise SystemExit(f"Step not found in workflow: {step_id}")
 
 
+@case_operation
 def build_prompt(
     case_id: str,
     step_id: str,
@@ -115,15 +156,15 @@ def build_prompt(
     prompt_dir = loaded.case_dir / _case_path_value(loaded.config, "generated_prompts")
     prompt_dir.mkdir(parents=True, exist_ok=True)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     stem = output_stem(step_id, options.episode_id)
     if custom_instructions is not None:
         save_custom_prompt_instructions(loaded, step_id, options.episode_id, custom_instructions)
     prompt_path = prompt_dir / f"{stem}.{timestamp}.prompt.md"
     latest_path = prompt_dir / f"{stem}.latest.prompt.md"
     prompt_text = render_prompt(loaded, step, runtime_instruction_files, options)
-    prompt_path.write_text(prompt_text, encoding="utf-8")
-    latest_path.write_text(prompt_text, encoding="utf-8")
+    atomic_write_text(prompt_path, prompt_text, encoding="utf-8")
+    atomic_write_text(latest_path, prompt_text, encoding="utf-8")
     return prompt_path
 
 
@@ -259,7 +300,7 @@ def save_custom_prompt_instructions(
 ) -> Path:
     path = custom_prompt_instructions_path(loaded, step_id, episode_id)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(instructions.strip() + ("\n" if instructions.strip() else ""), encoding="utf-8")
+    atomic_write_text(path, instructions.strip() + ("\n" if instructions.strip() else ""), encoding="utf-8")
     return path
 
 
@@ -301,7 +342,7 @@ def render_all_draft_context(loaded: LoadedCase) -> str:
     if not root.exists():
         return "[No completed drafting blocks are available yet.]"
     parts: list[str] = []
-    for path in sorted(root.rglob("*")):
+    for path in sorted(workspace_entries(root)):
         if not path.is_file() or path.suffix.lower() not in TEXT_EXTENSIONS:
             continue
         if path.name.startswith("_"):
@@ -557,7 +598,7 @@ def render_evidence_context(
                 for evidence_folder in evidence_folders:
                     files.extend(
                         p
-                        for p in sorted(evidence_folder.rglob("*"))
+                        for p in sorted(workspace_entries(evidence_folder))
                         if p.is_file() and p.name != ".gitkeep"
                     )
             else:
@@ -623,7 +664,7 @@ def render_configured_evidence_sources(
             parts.append("[Folder does not exist yet.]")
             parts.append("")
             continue
-        files = [p for p in sorted(evidence_folder.rglob("*")) if p.is_file() and p.name != ".gitkeep"]
+        files = [p for p in sorted(workspace_entries(evidence_folder)) if p.is_file() and p.name != ".gitkeep"]
         files = _filter_prompt_excluded_files(loaded, step, options, files, document_index)
         if not files:
             parts.append("[No files in this folder yet.]")
@@ -639,6 +680,7 @@ def render_evidence_files(
 ) -> str:
     parts: list[str] = []
     for file_path in files:
+        contained_path(loaded.case_dir, file_path.relative_to(loaded.case_dir))
         if is_office_temporary_file(file_path):
             continue
         rel = file_path.relative_to(loaded.case_dir)
@@ -691,8 +733,15 @@ def render_evidence_files(
         else:
             parts.append("- document_id: [not indexed yet]")
         parts.append("")
-        if text_extraction_path:
-            extracted = loaded.case_dir / text_extraction_path
+        if extraction_status in {"source_missing", "source_changed_locked"}:
+            parts.append("[WARNING: source is missing or changed under a manual lock. Rescan/unlock before using this evidence.]")
+        elif text_extraction_path:
+            extracted = contained_path(loaded.case_dir, text_extraction_path)
+            from .evidence import _text_fingerprint
+            expected = doc_row.get("text_extraction_fingerprint", "")
+            if expected and (not extracted.exists() or _text_fingerprint(extracted) != expected):
+                parts.append("[WARNING: extracted text is missing or changed. Run scan-documents again before drafting.]")
+                continue
             parts.append(_fenced(read_textual_file(extracted, EVIDENCE_TEXT_LIMIT), "text"))
         elif file_path.suffix.lower() in TEXT_EXTENSIONS | DOCX_EXTENSIONS:
             parts.append(
@@ -713,6 +762,9 @@ def read_document_index(loaded: LoadedCase) -> dict[str, list[dict[str, str]]]:
         for row in csv.DictReader(handle):
             key = _normalize_slashes(row.get("file_path", ""))
             if key:
+                contained_path(loaded.case_dir, key)
+                if row.get("text_extraction_path"):
+                    contained_path(loaded.case_dir, row["text_extraction_path"])
                 result.setdefault(key, []).append(row)
     return result
 
@@ -748,7 +800,7 @@ def selected_documents_for_step(
                 else folder
             )
             if evidence_folder.exists():
-                files.extend(path for path in evidence_folder.rglob("*") if path.is_file())
+                files.extend(path for path in workspace_entries(evidence_folder) if path.is_file())
     else:
         role_map = folder_role_map(loaded.config)
         for role in _normalize_path_list(step.get("evidence_folder_roles", [])):
@@ -761,7 +813,7 @@ def selected_documents_for_step(
                 for evidence_folder in _episode_folders_for(
                     _case_insensitive_path(source_root, folder_name), options, step
                 ):
-                    files.extend(path for path in evidence_folder.rglob("*") if path.is_file())
+                    files.extend(path for path in workspace_entries(evidence_folder) if path.is_file())
 
     document_index = read_document_index(loaded)
     excluded_ids = _prompt_excluded_document_ids(loaded.config, str(step.get("step_id", "")), options)
@@ -901,6 +953,7 @@ def format_missing_selected_documents_message(missing: list[dict[str, str]]) -> 
     )
 
 
+@case_operation
 def import_llm_output(
     case_id: str,
     step_id: str,
@@ -915,7 +968,7 @@ def import_llm_output(
     validate_repeatable_options(step, options)
     source = Path(output_file)
     if not source.is_absolute():
-        source = loaded.case_dir / output_file
+        source = contained_path(loaded.case_dir, output_file)
     if not source.exists():
         raise SystemExit(f"LLM output file not found: {source}")
     try:
@@ -924,17 +977,18 @@ def import_llm_output(
     except ValueError as exc:
         raise SystemExit(f"Invalid JSON output file: {source} ({exc})") from exc
     validate_llm_output(data, loaded, step_id, options)
-    if step_id not in {"opening_context_intake", "template_review"}:
-        _update_document_titles_from_llm(loaded, data)
     output_dir = loaded.case_dir / _case_path_value(loaded.config, "validated_outputs")
     output_dir.mkdir(parents=True, exist_ok=True)
     target = output_dir / f"{output_stem(step_id, options.episode_id)}.json"
     if target.exists() and not force:
         raise SystemExit(f"Validated output already exists; use --force to replace: {target}")
-    target.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_text(target, json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    if step_id not in {"opening_context_intake", "template_review"}:
+        _update_document_titles_from_llm(loaded, data)
     return target
 
 
+@case_operation
 def insert_section(
     case_id: str,
     step_id: str,
@@ -963,22 +1017,23 @@ def insert_section(
     except json.JSONDecodeError as exc:
         raise SystemExit(f"Invalid validated JSON file: {source} ({exc})") from exc
     validate_llm_output(data, loaded, step_id, options)
-    target = loaded.case_dir / str(destination)
+    target = contained_path(loaded.case_dir, destination)
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.exists() and not force:
         raise SystemExit(f"Draft section already exists; use --force to replace: {target}")
-    target.write_text(str(data["draft_text"]).strip() + "\n", encoding="utf-8")
+    atomic_write_text(target, str(data["draft_text"]).strip() + "\n", encoding="utf-8")
     # Keep exhibit assignments synchronized before rebuilding the human-facing
     # memorandum. Validated LLM output may introduce new used_documents (for
     # example a newly completed awards episode); if the layout indexes are not
     # refreshed first, the rebuilt memo can contain citations to an Exhibit that
     # is still absent from the Evidence Index and Stage 3 bundle plan.
+    failures = []
     try:
         from .bundle_workflow import refresh_layout_indexes
 
         refresh_layout_indexes(case_id)
-    except SystemExit:
-        pass
+    except (Exception, SystemExit) as exc:
+        failures.append(f"Exhibit indexes were not refreshed: {exc}")
 
     # Keep the human-facing Word memorandum synchronized with validated draft
     # sections when a working memo template is available for this case.
@@ -986,11 +1041,20 @@ def insert_section(
         from .memo_builder import build_working_memo
 
         build_working_memo(case_id)
-    except SystemExit:
-        pass
+    except (Exception, SystemExit) as exc:
+        failures.append(f"Working memorandum was not rebuilt: {exc}")
+    report_path = loaded.case_dir / "reports" / "draft_sync_status.md"
+    if failures:
+        atomic_write_text(report_path, "# Draft synchronization incomplete\n\n" + "\n".join(failures) + "\n")
+        warnings.warn("Draft section saved, but synchronization is incomplete. "
+                      "The working memorandum may be outdated; see reports/draft_sync_status.md and rebuild it.",
+                      UserWarning, stacklevel=2)
+    else:
+        atomic_write_text(report_path, "# Draft synchronization complete\n")
     return target
 
 
+@case_operation
 def build_status_report(case_id: str) -> str:
     loaded = load_case(case_id)
     lines: list[str] = []
@@ -1079,6 +1143,7 @@ def build_status_report(case_id: str) -> str:
     return "\n".join(lines)
 
 
+@case_operation
 def run_next_report(case_id: str, *, build_prompt_file: bool = False) -> str:
     loaded = load_case(case_id)
     action = determine_next_action(loaded)
@@ -1535,7 +1600,7 @@ def _matching_episode_group_key(
 
 
 def _folder_has_files(path: Path) -> bool:
-    return any(item.is_file() and item.name != ".gitkeep" for item in path.rglob("*"))
+    return any(item.is_file() and item.name != ".gitkeep" for item in workspace_entries(path))
 
 
 def _natural_sort_key(value: str) -> tuple[tuple[int, object], ...]:
@@ -1549,6 +1614,7 @@ def _natural_sort_key(value: str) -> tuple[tuple[int, object], ...]:
 
 def _case_insensitive_path(root: Path, relative: str | Path) -> Path:
     """Resolve configured evidence folders without depending on filesystem casing."""
+    contained_path(root, relative)
     current = root
     for part in Path(relative).parts:
         candidate = current / part
@@ -2181,7 +2247,7 @@ def _update_document_titles_from_llm(loaded: LoadedCase, data: dict[str, Any]) -
             changed = True
     if not changed:
         return
-    with index_path.open("w", encoding="utf-8-sig", newline="") as handle:
+    with atomic_open(index_path, "w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
@@ -2197,6 +2263,8 @@ def validate_repeatable_options(step: dict[str, Any], options: PromptOptions) ->
 
 
 def output_stem(step_id: str, episode_id: str = "") -> str:
+    if safe_path_component(step_id) != step_id:
+        raise ValueError("Invalid workflow step ID.")
     if episode_id:
         return f"{step_id}.{safe_path_component(episode_id)}"
     return step_id
@@ -2248,7 +2316,7 @@ def _episode_folder_for(role_folder: Path, options: PromptOptions) -> Path:
     if options.episode_folder in {".", ""} and options.episode_id in {"1", "."}:
         return role_folder
     if options.episode_folder:
-        return role_folder / options.episode_folder
+        return contained_path(role_folder, options.episode_folder)
     if not options.episode_id:
         return role_folder
     if not role_folder.exists():
@@ -2262,6 +2330,7 @@ def _episode_folder_for(role_folder: Path, options: PromptOptions) -> Path:
         name = child.name.strip().lower()
         if (
             name == episode_id
+            or _episode_id_from_folder_name(child.name).casefold() == episode_id
             or name.startswith(f"{episode_id} ")
             or name.startswith(f"{episode_id}.")
             or name.startswith(f"{episode_id}_")
@@ -2329,7 +2398,7 @@ def _phase_folders_for(episode_folders: list[Path], step: dict[str, Any]) -> lis
     matches: list[Path] = []
     seen: set[Path] = set()
     for episode_folder in episode_folders:
-        for child in sorted(path for path in episode_folder.rglob("*") if path.is_dir()):
+        for child in sorted(path for path in workspace_entries(episode_folder) if path.is_dir()):
             if not _folder_has_files(child) or not _episode_folder_matches_terms(child.name, terms):
                 continue
             resolved = child.resolve()
@@ -2354,15 +2423,19 @@ def _transliterate_cyrillic(value: str) -> str:
 
 def extract_docx_text(path: Path) -> str:
     with zipfile.ZipFile(path) as archive:
-        xml = archive.read("word/document.xml")
-    root = ElementTree.fromstring(xml)
-    namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
-    paragraphs: list[str] = []
-    for paragraph in root.findall(".//w:p", namespace):
-        runs = [node.text or "" for node in paragraph.findall(".//w:t", namespace)]
-        text = "".join(runs).strip()
-        if text:
-            paragraphs.append(unescape(text))
+        parts = ["word/document.xml"] + sorted(
+            name for name in archive.namelist() if re.fullmatch(r"word/(?:header\d+|footer\d+|footnotes|endnotes)\.xml", name)
+        )
+        namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+        paragraphs: list[str] = []
+        for part in parts:
+            root = ElementTree.fromstring(archive.read(part))
+            for paragraph in root.findall(".//w:p", namespace):
+                runs = [node.text or "" if node.tag.endswith("}t") else "\t" if node.tag.endswith("}tab") else "\n"
+                        for node in paragraph.iter() if node.tag in {f"{{{namespace['w']}}}t", f"{{{namespace['w']}}}tab", f"{{{namespace['w']}}}br"}]
+                text = "".join(runs).strip()
+                if text:
+                    paragraphs.append(text)
     return "\n\n".join(paragraphs)
 
 
@@ -2388,7 +2461,7 @@ def _case_path_value(config: dict[str, Any], key: str) -> Path:
     value = paths.get(key)
     if not value:
         raise SystemExit(f"case_config.yaml is missing paths.{key}")
-    return Path(str(value))
+    return relative_path(value)
 
 
 def _resolve_project_or_case_path(case_dir: Path, path_value: str) -> Path:
@@ -2397,10 +2470,10 @@ def _resolve_project_or_case_path(case_dir: Path, path_value: str) -> Path:
     path = Path(path_value)
     if path.is_absolute():
         return path
-    case_candidate = case_dir / path
+    case_candidate = contained_path(case_dir, path_value)
     if case_candidate.exists():
         return case_candidate
-    return PROJECT_ROOT / path
+    return contained_path(PROJECT_ROOT, path_value)
 
 
 def _normalize_path_list(value: Any) -> list[str]:

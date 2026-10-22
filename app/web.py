@@ -1,14 +1,21 @@
 from __future__ import annotations
 
+from .safe_io import atomic_write_text
+
 import argparse
 import csv
 import json
 import re
 import subprocess
+import socket
+import logging
 from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
+from .case_lock import locked_case
+from .safe_io import contained_path
+from .web_security import LocalRequestMixin, local_request, loopback_host, DEFAULT_MAX_POST_BYTES
 
 from .bundle_workflow import (
     bundle_display_title_review,
@@ -106,13 +113,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--max-post-bytes", type=int, default=DEFAULT_MAX_POST_BYTES)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     configure_console()
     args = build_parser().parse_args(argv)
-    server = ThreadingHTTPServer((args.host, args.port), PetitionsHandler)
+    try:
+        host = loopback_host(args.host)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    if args.max_post_bytes < 1:
+        raise SystemExit("--max-post-bytes must be positive.")
+    class LocalServer(ThreadingHTTPServer):
+        address_family = socket.AF_INET6 if ":" in host else socket.AF_INET
+    server = LocalServer((host, args.port), PetitionsHandler)
+    server.max_post_bytes = args.max_post_bytes
     print(f"Petitions web UI: http://{args.host}:{args.port}/")
     print("Press Ctrl+C to stop.")
     try:
@@ -124,9 +141,10 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-class PetitionsHandler(BaseHTTPRequestHandler):
+class PetitionsHandler(LocalRequestMixin, BaseHTTPRequestHandler):
     server_version = "PetitionsWeb/0.1"
 
+    @local_request
     def do_GET(self) -> None:  # noqa: N802
         try:
             parsed = urlparse(self.path)
@@ -174,8 +192,12 @@ class PetitionsHandler(BaseHTTPRequestHandler):
                 case_id = _single(params, "case")
                 source_key = _single(params, "source_key")
                 location = _single(params, "location") or "case"
-                opened = _open_source_folder(case_id, source_key, location)
-                self._redirect(f"/intake?case={quote(case_id)}&message={quote(f'Opened folder: {opened}')}")
+                self._send_html(page("Open source folder", f'''<form method="post">
+                    <input type="hidden" name="action" value="open_source_folder">
+                    <input type="hidden" name="case" value="{escape(case_id, quote=True)}">
+                    <input type="hidden" name="source_key" value="{escape(source_key, quote=True)}">
+                    <input type="hidden" name="location" value="{escape(location, quote=True)}">
+                    <button>Open source folder</button></form>'''))
                 return
             if parsed.path == "/file":
                 params = parse_qs(parsed.query)
@@ -198,16 +220,21 @@ class PetitionsHandler(BaseHTTPRequestHandler):
                 return
             self.send_error(404)
         except (Exception, SystemExit) as exc:  # noqa: BLE001
-            self._send_html(render_error(exc), status=500)
+            self._send_html(render_error(_public_error(exc)), status=400 if isinstance(exc, (ValueError, SystemExit)) else 500)
 
+    @local_request
     def do_POST(self) -> None:  # noqa: N802
         try:
-            length = int(self.headers.get("Content-Length", "0"))
-            raw = self.rfile.read(length).decode("utf-8", errors="replace")
+            raw = self._post_body()
+            if raw is None:
+                return
             data = {key: values[-1] for key, values in parse_qs(raw, keep_blank_values=True).items()}
+            if not self._valid_token(data):
+                return
             action = data.get("action", "")
             case_id = data.get("case", "")
-            message = handle_action(action, case_id, data)
+            with locked_case(case_id or data.get("new_case", "")):
+                message = handle_action(action, case_id, data)
             destination_case = case_id or data.get("new_case", "")
             if action in {"manual_link_translation", "unlink_translation", "open_case_file"}:
                 review_doc = data.get("review_doc", "")
@@ -235,32 +262,14 @@ class PetitionsHandler(BaseHTTPRequestHandler):
                     if data.get("redo_episode"):
                         destination += f"&episode={quote(data.get('redo_episode', ''))}"
                 self._redirect(destination)
-        except (Exception, SystemExit) as exc:  # noqa: BLE001
-            case_id = ""
-            action = ""
-            try:
-                case_id = data.get("case", "")  # type: ignore[possibly-undefined]
-                action = data.get("action", "")  # type: ignore[possibly-undefined]
-            except Exception:
-                pass
-            if case_id:
-                if action in {"manual_link_translation", "unlink_translation", "open_case_file"}:
-                    review_doc = data.get("review_doc", "") or data.get("translation_document_id", "")
-                    destination = f"/translations?case={quote(case_id)}&error={quote(str(exc))}"
-                    if review_doc:
-                        destination += f"&doc={quote(review_doc)}"
-                    self._redirect(destination)
-                else:
-                    route = _action_route(action)
-                    self._redirect(f"{route}?case={quote(case_id)}&error={quote(str(exc))}")
-            else:
-                self._send_html(render_error(exc), status=500)
+        except (Exception, SystemExit) as exc:  # User data stays in the response, never in a redirect URL.
+            self._send_html(_failed_form(locals().get("data", {}), _public_error(exc)), status=400 if isinstance(exc, (ValueError, SystemExit)) else 500)
 
     def log_message(self, format: str, *args: object) -> None:
         print("%s - %s" % (self.address_string(), format % args))
 
     def _send_html(self, html: str, *, status: int = 200) -> None:
-        body = html.encode("utf-8")
+        body = self._csrf_forms(html).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -279,7 +288,6 @@ class PetitionsHandler(BaseHTTPRequestHandler):
         body = path.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", content_type)
-        self.send_header("Cache-Control", "public, max-age=86400")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -291,6 +299,15 @@ class PetitionsHandler(BaseHTTPRequestHandler):
 
 
 def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
+    message = _handle_action(action, case_id, data)
+    if action == "insert_section" or (action == "import_output" and data.get("insert_after_import") == "on"):
+        status = load_case(case_id).case_dir / "reports" / "draft_sync_status.md"
+        if status.exists() and "synchronization incomplete" in status.read_text(encoding="utf-8"):
+            message = "WARNING: Draft section was saved, but the working memorandum or exhibit indexes may be outdated. Review reports/draft_sync_status.md and rebuild.\n\n" + message.replace("and refreshed working_memo.docx", "with incomplete synchronization")
+    return message
+
+
+def _handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
     if action == "init_case":
         new_case = data.get("new_case", "").strip()
         task_type = data.get("task_type", "eb1a_petition").strip() or "eb1a_petition"
@@ -298,6 +315,9 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
         return f"Created case {new_case}."
 
     validate_case_id(case_id)
+    if action == "open_source_folder":
+        _open_source_folder(case_id, data.get("source_key", ""), data.get("location", "case"))
+        return "Opened source folder."
     if action == "layout_pick_originals_dir":
         selected = _pick_directory(_safe_layout_setting(case_id, "originals_dir"))
         if not selected:
@@ -665,7 +685,7 @@ def handle_action(action: str, case_id: str, data: dict[str, str]) -> str:
                 "Use Retry/overwrite from the LLM workspace if replacement is intentional."
             )
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(
+        atomic_write_text(output_path,
             json.dumps(output_data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
         validated = import_llm_output(case_id, step, str(output_path), episode_id=episode_id, force=force)
@@ -2479,6 +2499,28 @@ def render_error(exc: BaseException) -> str:
     return page("Error", f"<section class='panel'><h1>Error</h1><pre>{escape(str(exc))}</pre><p><a href='/'>Back</a></p></section>")
 
 
+def _public_error(exc: BaseException) -> ValueError:
+    if not isinstance(exc, (ValueError, SystemExit)):
+        logging.getLogger(__name__).error("Local request failed: %s", type(exc).__name__)
+        return ValueError("The operation could not finish. Check file access and dependencies, then retry. Previous completed files were preserved.")
+    message = str(exc)
+    message = re.sub(r"[A-Za-z]:[\\/][^\n;]*", "[local path]", message)
+    message = re.sub(r"(?<!\w)/(?:Users|home|tmp|var)/[^\n;]*", "[local path]", message)
+    return ValueError(message)
+
+
+def _failed_form(data: dict[str, str], exc: BaseException) -> str:
+    fields = []
+    for name, value in data.items():
+        if name == "csrf_token":
+            continue
+        if name in {"action", "case", "step", "episode_id"}:
+            fields.append(f'<input type="hidden" name="{escape(name, quote=True)}" value="{escape(value, quote=True)}">')
+        else:
+            fields.append(f'<label>{escape(name)}<textarea name="{escape(name, quote=True)}" rows="6">{escape(value)}</textarea></label>')
+    return page("Operation incomplete", f'<section class="panel"><h1>Operation incomplete</h1><pre>{escape(str(exc))}</pre><p>Your submitted values are preserved below. Review the error before retrying.</p><form method="post">' + "".join(fields) + '<button>Retry with these values</button></form><p><a href="/">Back to cases</a></p></section>')
+
+
 def render_intake_panel(case_id: str, task_type: str) -> str:
     config = load_case(case_id).config
     beneficiary = config.get("beneficiary", {}) if isinstance(config.get("beneficiary"), dict) else {}
@@ -2954,7 +2996,7 @@ def _legacy_render_rfe_panel(case_id: str) -> str:
 def list_cases() -> list[str]:
     if not CASE_ROOT.exists():
         return []
-    return sorted(path.name for path in CASE_ROOT.iterdir() if path.is_dir() and path.name != "_template")
+    return sorted(path.name for path in CASE_ROOT.iterdir() if path.is_dir() and path.name != "_template" and not path.name.startswith("."))
 
 
 def latest_prompts(case_id: str) -> list[Path]:
@@ -2969,7 +3011,7 @@ def read_case_file(case_id: str, rel_path: str) -> str:
     rel = Path(unquote(rel_path))
     if rel.is_absolute() or ".." in rel.parts:
         raise ValueError("Invalid relative path.")
-    path = _case_dir(case_id) / rel
+    path = contained_path(_case_dir(case_id), unquote(rel_path))
     resolved = path.resolve()
     case_dir = _case_dir(case_id).resolve()
     if case_dir not in resolved.parents and resolved != case_dir:
@@ -2989,13 +3031,13 @@ def save_case_file(case_id: str, rel_path: str, text: str) -> Path:
     rel = Path(unquote(rel_path))
     if rel.is_absolute() or ".." in rel.parts:
         raise ValueError("Invalid relative path.")
-    path = _case_dir(case_id) / rel
+    path = contained_path(_case_dir(case_id), unquote(rel_path))
     resolved = path.resolve()
     case_dir = _case_dir(case_id).resolve()
     if case_dir not in resolved.parents and resolved != case_dir:
         raise ValueError("Path escapes case directory.")
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text.rstrip() + "\n", encoding="utf-8")
+    atomic_write_text(path, text.rstrip() + "\n", encoding="utf-8")
     return path
 
 
@@ -3043,6 +3085,8 @@ def _case_search_query(value: str, case_dir: Path) -> str:
 
 
 def _open_case_file_in_explorer(case_id: str, file_path: str) -> Path:
+    if __import__("os").name != "nt":
+        raise ValueError("Opening File Explorer requires Windows; open the case folder manually.")
     validate_case_id(case_id)
     case_dir = _case_dir(case_id).resolve()
     rel = Path(unquote(file_path))
@@ -3056,6 +3100,8 @@ def _open_case_file_in_explorer(case_id: str, file_path: str) -> Path:
 
 
 def _open_source_folder(case_id: str, source_key: str, location: str) -> Path:
+    if __import__("os").name != "nt":
+        raise ValueError("Opening File Explorer requires Windows; open the source folder manually.")
     validate_case_id(case_id)
     allowed_keys = {"source_originals", "source_translations", "source_other"}
     if source_key not in allowed_keys:
@@ -3072,7 +3118,7 @@ def _open_source_folder(case_id: str, source_key: str, location: str) -> Path:
         raw_path = paths.get(source_key, "") if isinstance(paths, dict) else ""
         if not str(raw_path).strip():
             raise ValueError(f"case_config.yaml has no paths.{source_key}")
-        target = (loaded.case_dir / str(raw_path)).resolve()
+        target = contained_path(loaded.case_dir, str(raw_path)).resolve()
     else:
         raise ValueError(f"Unsupported source location: {location}")
     if not target.exists() or not target.is_dir():

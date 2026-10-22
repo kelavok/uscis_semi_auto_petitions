@@ -19,3 +19,32 @@ case_workspace/*
 
 # Human case examples may also contain names and confidential case material.
 examples/
+
+# Local credentials, sessions, diagnostics and generated case artifacts.
+.env
+.env.*
+!.env.example
+!.env.sample
+.venv*/
+venv/
+.ruff_cache/
+*.log
+*.tmp
+*.bak
+*.key
+*.pem
+*.p12
+*.pfx
+credentials*.json
+client_secret*.json
+*service-account*.json
+token.json
+token-*.json
+tokens.json
+local_config.*
+*.local.yaml
+*.local.yml
+exports/
+outputs/
+*.assembling.pdf
+.office-conversion-*/

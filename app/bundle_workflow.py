@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from .case_lock import case_operation
+
+from .safe_io import atomic_copy, atomic_open, atomic_write_text, atomic_output, staged_directory, contained_path
+
 import csv
 import difflib
 import hashlib
@@ -9,10 +13,11 @@ import os
 import re
 import shutil
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from html import escape
 from io import BytesIO
 from pathlib import Path, PurePosixPath
+from tempfile import TemporaryDirectory
 
 from .cli_support import PROJECT_ROOT
 from .evidence import INDEX_FIELDS, scan_documents
@@ -262,6 +267,7 @@ class EvidenceLayoutPlan:
     exhibit_metadata: dict[str, tuple[str, str]]
 
 
+@case_operation
 def bundle_catalog(case_id: str) -> list[dict[str, object]]:
     loaded = load_case(case_id)
     document_rows = _read_csv(
@@ -294,6 +300,7 @@ def bundle_catalog(case_id: str) -> list[dict[str, object]]:
     return catalog
 
 
+@case_operation
 def bundle_display_title_review(case_id: str) -> list[dict[str, object]]:
     loaded = load_case(case_id)
     document_rows = _read_csv(
@@ -354,6 +361,7 @@ def bundle_display_title_review(case_id: str) -> list[dict[str, object]]:
     return review
 
 
+@case_operation
 def save_bundle_display_titles(
     case_id: str,
     *,
@@ -431,6 +439,7 @@ def save_bundle_display_titles(
     )
 
 
+@case_operation
 def load_bundle_selection(case_id: str) -> BundleSelection:
     loaded = load_case(case_id)
     catalog = bundle_catalog(case_id)
@@ -468,6 +477,7 @@ def load_bundle_selection(case_id: str) -> BundleSelection:
     return BundleSelection(exhibits, documents)
 
 
+@case_operation
 def prepare_selected_bundle(
     case_id: str, selected_exhibits: list[str], selected_document_ids: list[str]
 ) -> BundlePreparationSummary:
@@ -493,7 +503,7 @@ def prepare_selected_bundle(
     }
     state_path = _bundle_preparation_path(loaded)
     state_path.parent.mkdir(parents=True, exist_ok=True)
-    state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    atomic_write_text(state_path, json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return BundlePreparationSummary(
         selection=selection,
         exhibit_pages=separators.exhibit_pages_written,
@@ -503,6 +513,7 @@ def prepare_selected_bundle(
     )
 
 
+@case_operation
 def inspect_bundle_preparation(case_id: str) -> BundlePreparationStatus:
     loaded = load_case(case_id)
     selection = load_bundle_selection(case_id)
@@ -545,6 +556,7 @@ def inspect_bundle_preparation(case_id: str) -> BundlePreparationStatus:
     )
 
 
+@case_operation
 def inspect_layout_index_status(case_id: str) -> LayoutIndexStatus:
     loaded = load_case(case_id)
     document_index_path = loaded.case_dir / _case_path_value(loaded.config, "document_index")
@@ -571,7 +583,7 @@ def inspect_layout_index_status(case_id: str) -> LayoutIndexStatus:
         if not row:
             continue
         status, note = _source_document_status(loaded.case_dir / row.get("file_path", ""))
-        if status in {"missing", "unsupported"}:
+        if status not in {"ready_pdf", "convertible_image", "convertible_text"}:
             title = row.get("display_title", "") or row.get("original_file_name", "")
             unsupported.append(
                 f"{document_id}: {title} — {note} [{row.get('file_path', '')}]"
@@ -590,6 +602,7 @@ def inspect_layout_index_status(case_id: str) -> LayoutIndexStatus:
     )
 
 
+@case_operation
 def refresh_layout_indexes(case_id: str) -> LayoutIndexRefreshSummary:
     before = load_case(case_id)
     from .memo_review import accepted_reviewed_memo
@@ -744,6 +757,7 @@ def refresh_layout_indexes(case_id: str) -> LayoutIndexRefreshSummary:
     )
 
 
+@case_operation
 def sync_layout_indexes_from_memo(
     case_id: str, *, memo_docx_path: str = "", allow_unmatched: bool = False
 ) -> MemoIndexSyncSummary:
@@ -1022,7 +1036,7 @@ def _write_yaml_config(path: Path, data: dict[str, object]) -> None:
         import yaml  # type: ignore
     except ModuleNotFoundError as exc:
         raise SystemExit("PyYAML is required to update case_config.yaml.") from exc
-    path.write_text(
+    atomic_write_text(path,
         yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
         encoding="utf-8",
     )
@@ -1397,6 +1411,7 @@ def _rebind_supported_replacements(
             "document_type",
             "extraction_status",
             "text_extraction_path",
+            "text_extraction_fingerprint",
             "source_fingerprint",
             "last_scanned_at",
         ):
@@ -1411,6 +1426,7 @@ def _rebind_supported_replacements(
     return rebound
 
 
+@case_operation
 def build_exhibit_index(case_id: str) -> ExhibitIndexSummary:
     loaded = load_case(case_id)
     document_index_path = loaded.case_dir / _case_path_value(loaded.config, "document_index")
@@ -1514,17 +1530,26 @@ def build_exhibit_index(case_id: str) -> ExhibitIndexSummary:
     )
 
 
+@case_operation
 def generate_separator_pages(
     case_id: str, selection: BundleSelection | None = None
+) -> SeparatorSummary:
+    loaded = load_case(case_id)
+    bundle_root = loaded.case_dir / _case_path_value(loaded.config, "bundle_root")
+    published_dir = bundle_root / "separators/generated"
+    with staged_directory(published_dir) as temporary:
+        summary = _generate_separator_pages_into(case_id, selection, temporary)
+    return replace(summary, separators_dir=published_dir, manifest_path=published_dir / "manifest.md")
+
+
+def _generate_separator_pages_into(
+    case_id: str, selection: BundleSelection | None, separators_dir: Path
 ) -> SeparatorSummary:
     loaded = load_case(case_id)
     document_index_path = loaded.case_dir / _case_path_value(loaded.config, "document_index")
     exhibit_index_path = loaded.case_dir / _case_path_value(loaded.config, "exhibit_index")
     bundle_root = loaded.case_dir / _case_path_value(loaded.config, "bundle_root")
-    separators_dir = bundle_root / "separators" / "generated"
     separators_dir.mkdir(parents=True, exist_ok=True)
-    for stale_path in separators_dir.glob("*.md"):
-        stale_path.unlink()
 
     selection = selection or load_bundle_selection(case_id)
     selected_exhibits = set(selection.exhibit_numbers)
@@ -1568,12 +1593,12 @@ def generate_separator_pages(
         missing_document_ids += sum(1 for document_id in document_ids if document_id not in documents_by_id)
         document_groups = _logical_document_groups(document_ids, documents_by_id)
         exhibit_file = separators_dir / f"{exhibit_position:03d}_exhibit_{_safe_filename(exhibit_number)}.md"
-        exhibit_file.write_text(
+        atomic_write_text(exhibit_file,
             _render_exhibit_separator(exhibit, document_groups, loaded.config),
             encoding="utf-8",
         )
         exhibit_pages_written += 1
-        manifest_lines.append(f"- {exhibit_file.relative_to(bundle_root).as_posix()}")
+        manifest_lines.append(f"- separators/generated/{exhibit_file.name}")
 
         for episode_position, section in enumerate(
             _numbered_episode_document_sections(exhibit, document_groups, loaded.config),
@@ -1587,12 +1612,12 @@ def generate_separator_pages(
                     separators_dir
                     / f"{exhibit_position:03d}_{episode_position:03d}_000_episode_{_safe_filename(episode_number)}.md"
                 )
-                episode_file.write_text(
+                atomic_write_text(episode_file,
                     _render_episode_separator(exhibit, episode_number, episode_title, numbered_groups),
                     encoding="utf-8",
                 )
                 episode_pages_written += 1
-                manifest_lines.append(f"- {episode_file.relative_to(bundle_root).as_posix()}")
+                manifest_lines.append(f"- separators/generated/{episode_file.name}")
 
             for document_position, (document_number, document, translations) in enumerate(
                 numbered_groups,
@@ -1603,7 +1628,7 @@ def generate_separator_pages(
                     separators_dir
                     / f"{exhibit_position:03d}_{episode_position:03d}_{document_position:03d}_{_safe_filename(document_id)}.md"
                 )
-                document_file.write_text(
+                atomic_write_text(document_file,
                     _render_document_separator(
                         exhibit,
                         episode_number,
@@ -1615,10 +1640,10 @@ def generate_separator_pages(
                     encoding="utf-8",
                 )
                 document_pages_written += 1
-                manifest_lines.append(f"- {document_file.relative_to(bundle_root).as_posix()}")
+                manifest_lines.append(f"- separators/generated/{document_file.name}")
 
     manifest_path = separators_dir / "manifest.md"
-    manifest_path.write_text("\n".join(manifest_lines) + "\n", encoding="utf-8")
+    atomic_write_text(manifest_path, "\n".join(manifest_lines) + "\n", encoding="utf-8")
     return SeparatorSummary(
         separators_dir=separators_dir,
         exhibits_seen=len(ordered_exhibits),
@@ -1630,11 +1655,20 @@ def generate_separator_pages(
     )
 
 
+@case_operation
 def render_separator_pdfs(case_id: str) -> SeparatorPdfSummary:
     loaded = load_case(case_id)
     bundle_root = loaded.case_dir / _case_path_value(loaded.config, "bundle_root")
+    published_dir = bundle_root / "separators/pdf"
+    with staged_directory(published_dir) as temporary:
+        summary = _render_separator_pdfs_into(case_id, temporary)
+    return replace(summary, output_dir=published_dir, manifest_path=published_dir / "manifest.md")
+
+
+def _render_separator_pdfs_into(case_id: str, output_dir: Path) -> SeparatorPdfSummary:
+    loaded = load_case(case_id)
+    bundle_root = loaded.case_dir / _case_path_value(loaded.config, "bundle_root")
     source_dir = bundle_root / "separators" / "generated"
-    output_dir = bundle_root / "separators" / "pdf"
     if not source_dir.exists():
         raise SystemExit(
             f"Separator markdown folder not found: {source_dir}. "
@@ -1658,8 +1692,6 @@ def render_separator_pdfs(case_id: str) -> SeparatorPdfSummary:
 
     font_name = _register_pdf_font(pdfmetrics, TTFont, _bundle_font_family(loaded.config))
     output_dir.mkdir(parents=True, exist_ok=True)
-    for stale_path in output_dir.glob("*.pdf"):
-        stale_path.unlink()
     markdown_files = [
         path
         for path in sorted(source_dir.glob("*.md"))
@@ -1757,10 +1789,10 @@ def render_separator_pdfs(case_id: str) -> SeparatorPdfSummary:
         )
         document.build(story)
         pdf_count += 1
-        manifest_lines.append(f"- {pdf_path.relative_to(bundle_root).as_posix()}")
+        manifest_lines.append(f"- separators/pdf/{pdf_path.name}")
 
     manifest_path = output_dir / "manifest.md"
-    manifest_path.write_text("\n".join(manifest_lines) + "\n", encoding="utf-8")
+    atomic_write_text(manifest_path, "\n".join(manifest_lines) + "\n", encoding="utf-8")
     return SeparatorPdfSummary(
         source_dir=source_dir,
         output_dir=output_dir,
@@ -1770,6 +1802,7 @@ def render_separator_pdfs(case_id: str) -> SeparatorPdfSummary:
     )
 
 
+@case_operation
 def build_bundle_plan(
     case_id: str, selection: BundleSelection | None = None
 ) -> BundlePlanSummary:
@@ -1878,7 +1911,7 @@ def build_bundle_plan(
                 sequence += 1
                 for source_document in [document, *translations]:
                     source_id = source_document.get("document_id", "")
-                    source_path = loaded.case_dir / source_document.get("file_path", "")
+                    source_path = contained_path(loaded.case_dir, source_document.get("file_path", ""))
                     status, note = _source_document_status(source_path)
                     items.append(
                         _plan_item(
@@ -1897,19 +1930,20 @@ def build_bundle_plan(
     plan_csv_path = plan_dir / "bundle_plan.csv"
     plan_md_path = plan_dir / "bundle_plan.md"
     _write_plan_csv(plan_csv_path, items)
-    plan_md_path.write_text(_render_plan_markdown(items), encoding="utf-8")
+    atomic_write_text(plan_md_path, _render_plan_markdown(items), encoding="utf-8")
     return BundlePlanSummary(
         plan_csv_path=plan_csv_path,
         plan_md_path=plan_md_path,
         total_items=len(items),
         ready_items=sum(1 for item in items if item["status"] in {"ready_pdf", "convertible_image", "convertible_text"}),
         missing_items=sum(1 for item in items if item["status"] == "missing"),
-        unsupported_items=sum(1 for item in items if item["status"] == "unsupported"),
+        unsupported_items=sum(1 for item in items if item["status"] in {"unsupported", "invalid_pdf", "pdf_dependency_missing"}),
         source_documents=sum(1 for item in items if item["item_type"] == "source_document"),
         separator_pdfs=sum(1 for item in items if item["item_type"].endswith("_separator")),
     )
 
 
+@case_operation
 def build_evidence_bundle(case_id: str) -> BundleBuildSummary:
     loaded = load_case(case_id)
     preparation = inspect_bundle_preparation(case_id)
@@ -1920,6 +1954,11 @@ def build_evidence_bundle(case_id: str) -> BundleBuildSummary:
     items = _read_plan_csv(plan_summary.plan_csv_path)
     if not items:
         raise SystemExit("Bundle plan is empty. Run 'Refresh indexes' and generate separator PDFs first.")
+    blocked = [item for item in items if item["status"] not in {"ready_pdf", "convertible_image", "convertible_text"}]
+    if blocked:
+        raise SystemExit(f"Bundle contains {len(blocked)} missing, invalid or unsupported item(s). Review bundle/plan/bundle_plan.md; previous PDF was preserved.")
+    if not any(item["item_type"] == "source_document" for item in items):
+        raise SystemExit("Bundle contains no source documents; previous PDF was preserved.")
     try:
         from pypdf import PdfReader, PdfWriter  # type: ignore
         from reportlab.lib.pagesizes import LETTER  # type: ignore
@@ -1952,7 +1991,7 @@ def build_evidence_bundle(case_id: str) -> BundleBuildSummary:
     converted_items = 0
     skipped_items = 0
     for item in items:
-        source_path = loaded.case_dir / item["path"]
+        source_path = contained_path(loaded.case_dir, item["path"])
         pdf_path = source_path
         if item["status"] == "convertible_image":
             pdf_path = converted_dir / f"{int(item['sequence']):04d}_{_safe_filename(item['document_id'] or item['item_type'])}.pdf"
@@ -1981,6 +2020,7 @@ def build_evidence_bundle(case_id: str) -> BundleBuildSummary:
     )
 
 
+@case_operation
 def build_final_filing_pdf(case_id: str, *, memo_docx_path: str = "") -> FinalFilingSummary:
     """Stage 4: resolve memo PAGE placeholders and merge memo + evidence bundle."""
     loaded = load_case(case_id)
@@ -2029,7 +2069,7 @@ def build_final_filing_pdf(case_id: str, *, memo_docx_path: str = "") -> FinalFi
             document_id: memo_pages + bundle_page
             for document_id, bundle_page in separator_pages.items()
         }
-        shutil.copy2(source_memo, numbered_docx)
+        atomic_copy(source_memo, numbered_docx)
         replacement_summary = _replace_memo_page_placeholders(
             numbered_docx,
             document_lookup=document_lookup,
@@ -2045,7 +2085,7 @@ def build_final_filing_pdf(case_id: str, *, memo_docx_path: str = "") -> FinalFi
     final_pages = _pdf_page_count(final_pdf)
     unresolved = replacement_summary.get("unresolved", [])
     unresolved_count = len(unresolved) if isinstance(unresolved, list) else 0
-    report_path.write_text(
+    atomic_write_text(report_path,
         _render_final_filing_report(
             case_id=case_id,
             source_memo=source_memo,
@@ -2181,7 +2221,8 @@ def _replace_memo_page_placeholders(
                 replacements.append(None)
                 unresolved.append(_placeholder_context(text, match.start()))
         _replace_page_tokens_in_paragraph(paragraph, replacements)
-    document.save(docx_path)
+    with atomic_output(docx_path) as temporary:
+        document.save(temporary)
     return {"seen": seen, "resolved": resolved, "unresolved": unresolved}
 
 
@@ -2334,38 +2375,21 @@ def _normalize_citation_text(value: str) -> str:
 
 def _convert_docx_to_pdf(docx_path: Path, pdf_path: Path) -> None:
     pdf_path.parent.mkdir(parents=True, exist_ok=True)
-    if pdf_path.exists():
-        try:
-            pdf_path.unlink()
-        except PermissionError:
-            pdf_path = pdf_path.with_name(pdf_path.stem + "_updated.pdf")
-    soffice = _find_soffice()
-    if soffice:
-        output_dir = pdf_path.parent
-        subprocess.run(
-            [
-                soffice,
-                "--headless",
-                "--convert-to",
-                "pdf",
-                "--outdir",
-                str(output_dir),
-                str(docx_path),
-            ],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
+    with TemporaryDirectory(prefix=".office-conversion-", dir=pdf_path.parent) as directory:
+        output_dir = Path(directory)
         converted = output_dir / (docx_path.stem + ".pdf")
-        if converted != pdf_path:
-            if pdf_path.exists():
-                pdf_path.unlink()
-            converted.replace(pdf_path)
-        if not pdf_path.exists():
-            raise SystemExit(f"DOCX to PDF conversion did not create: {pdf_path}")
-        return
-    _convert_docx_to_pdf_with_word(docx_path, pdf_path)
+        soffice = _find_soffice()
+        if soffice:
+            subprocess.run(
+                [soffice, "--headless", "--convert-to", "pdf", "--outdir", str(output_dir), str(docx_path)],
+                check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+        else:
+            _convert_docx_to_pdf_with_word(docx_path, converted)
+        from .pdf_assembly import pdf_page_count
+        if not converted.is_file() or pdf_page_count(converted) < 1:
+            raise SystemExit("DOCX to PDF conversion did not create a readable PDF; previous result was preserved.")
+        atomic_copy(converted, pdf_path)
 
 
 def _convert_docx_to_pdf_with_word(docx_path: Path, pdf_path: Path) -> None:
@@ -2660,7 +2684,7 @@ def _validated_bundle_selection(
 def _save_bundle_selection(loaded: LoadedCase, selection: BundleSelection) -> None:
     path = _bundle_selection_path(loaded)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
+    atomic_write_text(path,
         json.dumps(
             {
                 "selected_exhibits": list(selection.exhibit_numbers),
@@ -2710,7 +2734,7 @@ def _read_csv(path: Path, fields: list[str]) -> list[dict[str, str]]:
 
 def _write_csv(path: Path, rows: list[dict[str, str]], fields: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as handle:
+    with atomic_open(path, "w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()
         for row in rows:
@@ -2724,7 +2748,7 @@ def _write_yaml(path: Path, data: dict[str, object]) -> None:
         text = yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
     except ModuleNotFoundError:
         text = json.dumps(data, ensure_ascii=False, indent=2)
-    path.write_text(text, encoding="utf-8")
+    atomic_write_text(path, text, encoding="utf-8")
 
 
 def _blank_exhibit_row() -> dict[str, str]:
@@ -3200,7 +3224,15 @@ def _plan_item(
 
 
 def _pdf_status(path: Path) -> str:
-    return "ready_pdf" if path.exists() else "missing"
+    if not path.is_file():
+        return "missing"
+    try:
+        from .pdf_assembly import pdf_page_count
+        return "ready_pdf" if pdf_page_count(path) > 0 else "invalid_pdf"
+    except SystemExit:
+        return "pdf_dependency_missing"
+    except Exception:
+        return "invalid_pdf"
 
 
 def _source_document_status(path: Path) -> tuple[str, str]:
@@ -3208,7 +3240,8 @@ def _source_document_status(path: Path) -> tuple[str, str]:
         return "missing", "Source file missing."
     suffix = path.suffix.lower()
     if suffix in PDF_SOURCE_EXTENSIONS:
-        return "ready_pdf", "Source PDF."
+        status = _pdf_status(path)
+        return status, "Source PDF." if status == "ready_pdf" else "PDF could not be read or contains no pages. Repair it before building."
     if suffix in IMAGE_SOURCE_EXTENSIONS:
         return "convertible_image", "Image will be converted to PDF."
     if suffix in TEXT_SOURCE_EXTENSIONS | DOCX_SOURCE_EXTENSIONS:
@@ -3221,7 +3254,7 @@ PLAN_FIELDS = ["sequence", "item_type", "exhibit_number", "document_id", "path",
 
 def _write_plan_csv(path: Path, items: list[dict[str, str]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as handle:
+    with atomic_open(path, "w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=PLAN_FIELDS)
         writer.writeheader()
         writer.writerows(items)
@@ -3267,6 +3300,18 @@ def _image_to_pdf(
     inch: float,
     ImageReader: object,
 ) -> None:
+    with atomic_output(pdf_path) as temporary_pdf:
+        _image_to_pdf_into(image_path, temporary_pdf, canvas, pagesize, inch, ImageReader)
+
+
+def _image_to_pdf_into(
+    image_path: Path,
+    pdf_path: Path,
+    canvas: object,
+    pagesize: tuple[float, float],
+    inch: float,
+    ImageReader: object,
+) -> None:
     pdf_path.parent.mkdir(parents=True, exist_ok=True)
     page_width, page_height = pagesize
     margin = 0.6 * inch
@@ -3286,6 +3331,11 @@ def _image_to_pdf(
 
 
 def _text_source_to_pdf(source_path: Path, pdf_path: Path, font_family: str = "Times New Roman") -> None:
+    with atomic_output(pdf_path) as temporary_pdf:
+        _text_source_to_pdf_into(source_path, temporary_pdf, font_family)
+
+
+def _text_source_to_pdf_into(source_path: Path, pdf_path: Path, font_family: str = "Times New Roman") -> None:
     try:
         from reportlab.lib.pagesizes import LETTER  # type: ignore
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet  # type: ignore

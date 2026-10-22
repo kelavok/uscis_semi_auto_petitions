@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from .safe_io import workspace_entries
+
+from .case_lock import case_operation
+
+from .safe_io import atomic_write_text, atomic_output, staged_directory, contained_path
+
 import os
 import json
 import re
@@ -8,6 +14,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from functools import lru_cache
+from tempfile import TemporaryDirectory
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -86,6 +93,7 @@ class LayoutStatus:
     unmapped_documents: tuple[dict[str, str], ...]
 
 
+@case_operation
 def load_layout_status(case_id: str) -> LayoutStatus:
     loaded = load_case(case_id)
     _ensure_layout_case(loaded.config)
@@ -162,6 +170,7 @@ def load_layout_status(case_id: str) -> LayoutStatus:
     )
 
 
+@case_operation
 def refresh_layout_sources(
     case_id: str,
     *,
@@ -240,6 +249,7 @@ def refresh_layout_sources(
     )
 
 
+@case_operation
 def update_layout_settings(case_id: str, **changes: str) -> dict[str, str]:
     loaded = load_case(case_id)
     _ensure_layout_case(loaded.config)
@@ -258,6 +268,7 @@ def list_installed_fonts() -> list[str]:
     return names
 
 
+@case_operation
 def save_layout_structure(case_id: str, data: dict[str, str]) -> None:
     loaded = load_case(case_id)
     _ensure_layout_case(loaded.config)
@@ -290,6 +301,7 @@ def save_layout_structure(case_id: str, data: dict[str, str]) -> None:
     _write_json(_layout_root(loaded.case_dir) / STRUCTURE_FILE, _renumber_structure(structure))
 
 
+@case_operation
 def save_folder_scopes(case_id: str, data: dict[str, str]) -> None:
     loaded = load_case(case_id)
     _ensure_layout_case(loaded.config)
@@ -313,6 +325,7 @@ def save_folder_scopes(case_id: str, data: dict[str, str]) -> None:
     _write_json(_layout_root(loaded.case_dir) / STRUCTURE_FILE, structure)
 
 
+@case_operation
 def add_mapping(case_id: str, document_id: str, kind: str, file_path: str) -> None:
     loaded = load_case(case_id)
     _ensure_layout_case(loaded.config)
@@ -331,6 +344,7 @@ def add_mapping(case_id: str, document_id: str, kind: str, file_path: str) -> No
     _write_json(_layout_root(loaded.case_dir) / MAPPINGS_FILE, mappings)
 
 
+@case_operation
 def set_mapping_paths(case_id: str, document_id: str, kind: str, file_paths: list[str]) -> None:
     loaded = load_case(case_id)
     _ensure_layout_case(loaded.config)
@@ -353,6 +367,7 @@ def set_mapping_paths(case_id: str, document_id: str, kind: str, file_paths: lis
     _write_json(_layout_root(loaded.case_dir) / MAPPINGS_FILE, mappings)
 
 
+@case_operation
 def remove_mapping(case_id: str, document_id: str, kind: str, index: int) -> None:
     loaded = load_case(case_id)
     _ensure_layout_case(loaded.config)
@@ -366,6 +381,7 @@ def remove_mapping(case_id: str, document_id: str, kind: str, index: int) -> Non
     _write_json(_layout_root(loaded.case_dir) / MAPPINGS_FILE, mappings)
 
 
+@case_operation
 def save_layout_selection(case_id: str, selected_exhibits: list[str], selected_documents: list[str]) -> None:
     loaded = load_case(case_id)
     _ensure_layout_case(loaded.config)
@@ -378,6 +394,7 @@ def save_layout_selection(case_id: str, selected_exhibits: list[str], selected_d
     )
 
 
+@case_operation
 def load_layout_selection(case_id: str) -> dict[str, list[str]]:
     loaded = load_case(case_id)
     _ensure_layout_case(loaded.config)
@@ -387,6 +404,7 @@ def load_layout_selection(case_id: str) -> dict[str, list[str]]:
     return _read_json(path, {"selected_exhibits": [], "selected_documents": []})
 
 
+@case_operation
 def build_original_directory_catalog(case_id: str) -> list[dict[str, Any]]:
     loaded = load_case(case_id)
     _ensure_layout_case(loaded.config)
@@ -440,6 +458,7 @@ def _directory_ancestors(directory: str) -> list[str]:
     return ["/".join(parts[:index]) for index in range(1, len(parts) + 1)]
 
 
+@case_operation
 def build_layout_preview(case_id: str) -> LayoutBuildSummary:
     loaded = load_case(case_id)
     _ensure_layout_case(loaded.config)
@@ -461,6 +480,7 @@ def build_layout_preview(case_id: str) -> LayoutBuildSummary:
     )
 
 
+@case_operation
 def build_layout_bundle(
     case_id: str,
     selected_exhibits: list[str],
@@ -534,7 +554,7 @@ def _ensure_layout_case(config: dict[str, Any]) -> None:
 
 
 def _layout_root(case_dir: Path) -> Path:
-    root = case_dir / LAYOUT_ROOT
+    root = contained_path(case_dir, LAYOUT_ROOT)
     root.mkdir(parents=True, exist_ok=True)
     return root
 
@@ -582,14 +602,14 @@ def _read_json(path: Path, default: Any) -> Any:
 
 def _write_json(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    atomic_write_text(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def _scan_inventory_group(root: Path | None, group: str) -> list[dict[str, str]]:
     if root is None:
         return []
     files: list[dict[str, str]] = []
-    for path in sorted(root.rglob("*")):
+    for path in sorted(workspace_entries(root)):
         if not path.is_file() or is_office_temporary_file(path):
             continue
         relative_path = path.relative_to(root).as_posix()
@@ -928,16 +948,15 @@ def _selected_structure(
 
 def _render_separator_components(case_dir: Path, structure: dict[str, list[dict[str, Any]]]) -> dict[str, Path]:
     components_root = _layout_root(case_dir) / COMPONENTS_DIR
-    if components_root.exists():
-        for old_file in components_root.glob("*.pdf"):
-            old_file.unlink()
-    components_root.mkdir(parents=True, exist_ok=True)
-    components = _component_definitions(structure)
-    paths: dict[str, Path] = {}
-    for index, component in enumerate(components, start=1):
-        target = components_root / f"{index:04d}_{component['kind']}_{component['id']}.pdf"
-        _render_component_pdf(component, target)
-        paths[_component_key(component)] = target
+    published_root = components_root
+    with staged_directory(published_root) as components_root:
+        components = _component_definitions(structure)
+        paths: dict[str, Path] = {}
+        for index, component in enumerate(components, start=1):
+            filename = f"{index:04d}_{component['kind']}_{component['id']}.pdf"
+            target = contained_path(components_root, filename)
+            _render_component_pdf(component, target)
+            paths[_component_key(component)] = published_root / filename
     return paths
 
 
@@ -1000,6 +1019,11 @@ def _document_parent_title(exhibit: dict[str, Any], episode: dict[str, Any]) -> 
 
 
 def _render_component_pdf(component: dict[str, Any], target: Path) -> None:
+    with atomic_output(target) as temporary_pdf:
+        _render_component_pdf_into(component, temporary_pdf)
+
+
+def _render_component_pdf_into(component: dict[str, Any], target: Path) -> None:
     try:
         from reportlab.lib import colors  # type: ignore
         from reportlab.lib.pagesizes import A4  # type: ignore
@@ -1175,6 +1199,11 @@ def _prepare_pdf_source(source_path: Path, target_pdf: Path) -> Path:
 
 
 def _image_to_pdf(source_path: Path, target_pdf: Path) -> None:
+    with atomic_output(target_pdf) as temporary_pdf:
+        _image_to_pdf_into(source_path, temporary_pdf)
+
+
+def _image_to_pdf_into(source_path: Path, target_pdf: Path) -> None:
     try:
         from reportlab.lib.pagesizes import A4  # type: ignore
         from reportlab.lib.units import inch  # type: ignore
@@ -1205,6 +1234,11 @@ def _image_to_pdf(source_path: Path, target_pdf: Path) -> None:
 
 
 def _text_to_pdf(text: str, title: str, target_pdf: Path) -> None:
+    with atomic_output(target_pdf) as temporary_pdf:
+        _text_to_pdf_into(text, title, temporary_pdf)
+
+
+def _text_to_pdf_into(text: str, title: str, target_pdf: Path) -> None:
     try:
         from reportlab.lib.pagesizes import A4  # type: ignore
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet  # type: ignore
@@ -1256,25 +1290,19 @@ def _try_office_to_pdf(source_path: Path, target_pdf: Path) -> bool:
     executable = _find_soffice()
     if executable is None:
         return False
-    output_dir = target_pdf.parent
-    output_dir.mkdir(parents=True, exist_ok=True)
-    command = [
-        executable,
-        "--headless",
-        "--convert-to",
-        "pdf",
-        "--outdir",
-        str(output_dir),
-        str(source_path),
-    ]
-    result = subprocess.run(command, capture_output=True, text=True, check=False)
-    produced = output_dir / f"{source_path.stem}.pdf"
-    if result.returncode != 0 or not produced.exists():
-        return False
-    if produced.resolve() != target_pdf.resolve():
-        if target_pdf.exists():
-            target_pdf.unlink()
-        produced.replace(target_pdf)
+    target_pdf.parent.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(prefix=".office-conversion-", dir=target_pdf.parent) as directory:
+        output_dir = Path(directory)
+        command = [executable, "--headless", "--convert-to", "pdf", "--outdir", str(output_dir), str(source_path)]
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        produced = output_dir / f"{source_path.stem}.pdf"
+        if result.returncode != 0 or not produced.exists():
+            return False
+        from .pdf_assembly import pdf_page_count
+        if pdf_page_count(produced) < 1:
+            return False
+        from .safe_io import atomic_copy
+        atomic_copy(produced, target_pdf)
     return True
 
 

@@ -1,100 +1,81 @@
 # Petitions
 
-Локальная, файлово-управляемая система для поэтапной подготовки иммиграционных меморандумов и независимой сборки PDF-пакетов доказательств.
+Локальное Python-приложение для подготовки иммиграционных меморандумов и PDF-пакетов доказательств. Workflow, юридические инструкции и шаблоны редактируются в YAML, TXT и DOCX; LLM используется вручную: приложение создаёт prompt, принимает JSON, проверяет его и вставляет разделы в рабочий документ.
 
-Сейчас репозиторий находится на **Stage 1 (project skeleton)**. Команды существуют как проверяемые CLI-каркасы, но еще не генерируют юридический текст, не изменяют DOCX и не собирают PDF.
+Поддерживаемые task types:
 
-## Основной принцип
+| Task type | Назначение |
+| --- | --- |
+| `eb1a_petition` | EB-1A petition, базовый и Migrator шаблоны |
+| `o1b_petition` | O-1B Arts/MPTV, повторяемые разделы и supporting documents |
+| `eb1a_rfe_response` | EB-1A RFE, стратегия и drafting units по issues |
+| `eb2niw_petition` | EB-2 NIW, eligibility и Dhanasar workflow |
+| `eb2niw_rfe_response` | EB-2 NIW RFE, strategy-driven workflow |
+| `document_layout` | Независимая сборка PDF из списка и сопоставленных файлов |
 
-Код отвечает за порядок действий, загрузку файлов, валидацию и воспроизводимость. Содержательные правила находятся в редактируемых файлах `instructions/`, `workflows/` и `templates/` и должны загружаться при каждом запуске. После изменения такого файла следующий запуск должен использовать новую версию без изменения Python-кода.
+Приложение создаёт кейсы, импортирует локальные папки, индексирует документы, извлекает текст, связывает оригиналы с переводами, валидирует LLM output, формирует DOCX, Exhibit Index, разделители и итоговые PDF. Автоматического OCR и подключения LLM API нет. Результаты технического Stage 0: [docs/STAGE0_AUDIT.md](docs/STAGE0_AUDIT.md). Номера стадий в интерфейсе обозначают рабочие шаги кейса, а не готовность серверного продукта.
 
-Существующие материалы в `templates/`, `examples/` и `algorythms/` сохранены без изменений. На следующих этапах они будут подключаться через явные пути в workflow, а не зашиваться в код.
+## Установка
 
-## Предлагаемая верхнеуровневая структура
-
-```text
-petitions/
-  app/                    # Python CLI и нейтральная инфраструктура
-  workflows/              # отдельный алгоритм для каждого task type
-  instructions/           # универсальные, task-specific и section-specific правила
-  schemas/                # редактируемые табличные схемы/примеры
-  case_workspace/         # рабочие папки кейсов и модель `_template`
-  templates/              # предоставленные шаблоны документов
-  examples/               # предоставленные примеры кейсов
-  algorythms/              # исходные пользовательские заметки об алгоритмах
-  tests/                   # автоматические проверки
-```
-
-Верхний уровень предполагается стабильным. Внутренняя структура конкретного кейса может отличаться: фактические пути задаются в `case_config.yaml`, а workflow ссылается на логические роли (`document_index`, `generated_prompts`, `draft_sections`), а не на случайные имена папок.
-
-## Два независимых процесса
-
-### A. Controlled drafting
+Требуется Python 3.11+ и полный checkout репозитория: приложение использует соседние `workflows/`, `instructions/`, `schemas/`, `templates/` и `case_workspace/_template/`. Устанавливайте из корня checkout в отдельное окружение:
 
 ```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[pdf]"
+python -m pip check
+```
+
+Основные зависимости: PyYAML и python-docx. Extra `pdf` устанавливает pdfplumber, pypdf, pikepdf, reportlab и pywin32 на Windows. `python -m pip install -e .` достаточно для базовых текстовых операций и DOCX; полный набор тестов и сборка PDF требуют `.[pdf]`. Для точной конвертации DOCX в PDF при сборке **final filing** нужен установленный Microsoft Word на Windows либо LibreOffice (`soffice`). Сборка evidence bundle из PDF, изображений и текстовых документов не требует Word; DOCX evidence при этом преобразуется в текстовое представление и не сохраняет исходный Word layout.
+
+## Быстрый запуск
+
+```powershell
+python -m app.draft --help
 python -m app.draft init-case --case case_001 --task-type eb1a_petition
-python -m app.draft build-prompt --case case_001 --step STEP_ID
-python -m app.draft import-output --case case_001 --step STEP_ID --file output.json
-python -m app.draft insert-section --case case_001 --step STEP_ID
+python -m app.web --host 127.0.0.1 --port 8000
 ```
 
-Планируемая цепочка: workflow → инструкции → шаблон секции → одобренный индекс → extracted text → prompt → ручной LLM output → валидация → draft section.
+Откройте `http://127.0.0.1:8000/`, заполните Intake, выберите заявляемые критерии, импортируйте документы, выполните сканирование и проверьте связи переводов. Затем используйте LLM workspace для prompt/JSON, проверьте DOCX и подготовьте выбранные Exhibits перед сборкой PDF. Для CLI используйте фактический `step_id` и `episode_id` из workflow/статуса кейса.
 
-Первый provider для MVP — `ManualProvider`: система сохраняет полный prompt в файл и ждет, пока пользователь вручную положит структурированный ответ в case folder. Автоматизация веб-интерфейса ChatGPT не планируется.
+## Локальный режим и рабочие данные
 
-API-provider не является обязательной частью проекта. Основной сценарий — без API:
-скрипт готовит полный prompt-пакет, пользователь вставляет его в LLM вручную,
-сохраняет JSON-ответ локально, а скрипт валидирует и раскладывает результат.
+Сервер предназначен только для доверенного локального компьютера. Он принимает loopback-адреса (`127.0.0.1`, `localhost`, `::1`); внешнее прослушивание блокируется. Проверяются Host, Origin/Referer и CSRF-токен форм. По умолчанию POST ограничен 16 MiB; для более крупного JSON можно указать `--max-post-bytes 33554432`. После обновления приложения перезагрузите открытые формы. Отдельной системы аккаунтов нет; не публикуйте интерфейс через proxy, tunnel или port forwarding.
 
-### B. Evidence bundle
+Кейсы по умолчанию находятся в `case_workspace/<case_id>`; шаблон `_template` не является кейсом. Расположение не зависит от текущей папки запуска. Можно заранее задать абсолютный путь:
 
 ```powershell
-python -m app.bundle build --case case_001
+$env:PETITIONS_CASE_ROOT = "D:\PetitionsData\cases"
+python -m app.web
 ```
 
-Этот процесс должен читать только одобренные индексы, детерминированно создавать separator pages и собирать PDF. Он не должен вызывать LLM и не зависит от drafting-команд.
+Каталоги из `paths` внутри `case_config.yaml` должны оставаться внутри кейса; traversal, drive-relative paths и выход через symlink/junction отклоняются. Внешние источники подключаются явно через Intake/`source_imports`; абсолютные пути к пользовательским шаблонам остаются допустимыми. Refresh sources зеркалирует импорт: после успешного копирования удаляет из импортированной папки кейса файлы, которых больше нет в источнике. Храните самостоятельные локальные документы отдельно от зеркалируемых папок.
 
-## Приоритет инструкций
+Запись конфигураций, индексов, JSON, разделов и основных результатов выполняется через временный файл и замену; генерации разделителей публикуются после успешной подготовки. Локальные CLI-процессы используют блокировки кейса, HTTP-запросы сериализуются. На Windows открытый в Word/PDF-viewer файл может препятствовать замене: закройте файл и повторите операцию. Это не распределённая транзакция и не система резервного копирования: отдельно сохраняйте копии кейсов. Не редактируйте CSV/YAML внешним редактором одновременно с операцией приложения.
 
-```text
-runtime user instruction
-> case-specific instruction
-> task-type instruction
-> section-specific instruction
-> visa/RFE-specific instruction
-> universal instruction
-> templates/examples
+Сканер сохраняет ручные поля и document IDs при однозначном переименовании/перемещении; неоднозначные одинаковые файлы требуют проверки. Отсутствующие источники остаются в индексе со статусом `source_missing`; изменённые заблокированные строки получают `source_changed_locked`. Повреждённый TXT-кэш переизвлекается; ручное отключение связи перевода сохраняется до явного повторного назначения. Новые технические CSV-поля добавляются без изменения JSON-схемы LLM.
+
+PDF evidence извлекается целиком, без прежних лимитов в 20 страниц/200000 символов. Сканы, ошибки формата и отсутствующие зависимости имеют отдельные статусы. OCR не выполняется; добавьте ручное описание либо читаемый перевод. Текст DOCX включает таблицы, колонтитулы, footnotes/endnotes; изображения, диаграммы, embedded/OLE и сложная вёрстка требуют ручной проверки. Большие документы могут требовать много памяти.
+
+При ошибке автосинхронизации после вставки раздел сохраняется, появляется предупреждение и `reports/draft_sync_status.md`; меморандум необходимо пересобрать. При невалидных, отсутствующих или неподдерживаемых элементах сборка PDF останавливается и сохраняет прежний итоговый файл. Не считайте технически сформированный документ готовым к подаче: проверьте факты, незавершённые placeholders, цитаты и комплектность вручную.
+
+## Проверка
+
+```powershell
+python -m pip install -e ".[pdf]"
+python -m unittest discover -s tests -v
+python -m compileall -q app tests
+python -m pip check
+git diff --check
 ```
 
-На Stage 2 для каждого загруженного фрагмента будет храниться источник и уровень приоритета. Потенциальные содержательные конфликты должны попадать в отчет и останавливать соответствующий drafting step до решения пользователя.
+`python scripts/check_full_suite.py` дополнительно отклоняет пропуски тестов и отсутствие PDF-библиотек. GitHub Actions запускает эту проверку на Windows/Linux с Python 3.11/3.12. Все фикстуры синтетические; LLM и Google API не вызываются. Проверки конвертации через реальный Word/LibreOffice зависят от установленного офисного приложения и выполняются отдельно от переносимого CI.
 
-## Модель кейса
+## Структура и инструкции
 
-Черновик находится в `case_workspace/_template/`. Ключевой файл — `case_config.yaml`; в нем задаются task type, данные заявителя, workflow и относительные пути. Пустые каталоги закреплены файлами `.gitkeep`.
+`app/` содержит CLI, HTTP, workflow, evidence, memo и bundle processing; `tests/` — регрессии. Пользовательские данные отделены от исходников логически через case config. Юридические правила остаются в `instructions/`, `workflows/` и `templates/`; Stage 0 не меняет их содержание. Исходные шаблоны и архивы сохранены. Полная переносимая wheel-поставка, серверная изоляция и API-интеграции отложены.
 
-Индексы считаются пользовательскими данными. Будущий re-scan сможет добавлять новые строки и обновлять только автоматически управляемые поля. Поля с ручным управлением (`display_title`, категории, exhibit numbering, порядок и approval) не должны перезаписываться.
-
-## Текущий MVP
-
-- Task type: `eb1a_petition`.
-- Первый drafting step: еще не выбран пользователем.
-- Юридические критерии и правила не добавлены в workflow от имени системы.
-- `templates/EB1A/EB1A_unified_template_LLM.txt` рассматривается как предоставленный источник, но его части еще не размечены по шагам.
-- `examples/Kashurin EB1A memorandum.docx` рассматривается как пример результата, не как нормативная инструкция.
-
-## Что будет на Stage 2
-
-После согласования структуры:
-
-1. определить схему и валидатор `case_config.yaml`;
-2. утвердить первый EB-1A drafting step;
-3. разметить источники инструкций для этого шага;
-4. реализовать загрузчик workflow и иерархии инструкций;
-5. формализовать поля document/exhibit indexes и правила сохранения ручных правок.
-
-До такого согласования CLI намеренно завершается сообщением `Stage 1 scaffold only`.
-
-## Что уже работает после Stage 2
+## Ручной workflow EB-1A
 
 Минимальный ручной цикл для EB1A уже включен.
 
@@ -126,7 +107,7 @@ PDF поддерживаются как optional layer: если установ�
 `extraction_status`. Фото и изображения индексируются как `image_or_photo`; для
 них нужна ручная расшифровка, описание или читаемый перевод.
 
-Строки с `manual_edit_lock=true` не перезаписываются scanner'ом.
+У строк с `manual_edit_lock=true` сохраняются ручные поля; изменение или отсутствие исходника отражается техническим предупреждением.
 
 ### Manual descriptions для фото, сканов и нечитаемых PDF
 
@@ -309,7 +290,7 @@ bundle/separators/pdf/manifest.md
 Для этой команды нужен `reportlab`. В обычном Python его можно поставить через:
 
 ```powershell
-pip install .[pdf]
+python -m pip install -e ".[pdf]"
 ```
 
 В Codex bundled runtime `reportlab` уже доступен. Если Poppler (`pdfinfo`,
@@ -625,7 +606,7 @@ Create an O-1B case from the local UI or with:
 python -m app.draft init-case --case artist_001 --task-type o1b_petition
 ```
 
-The case starts from `templates/O1B/case_folders_template`, uses
+The case starts from the configured O-1B folder roles and an optional `templates/O1B/case_folders_template`, uses
 `templates/O1B/O1B_company_memo_llm_structure.yaml` as the detailed LLM/legal
 instruction source, and builds the human working memorandum from
 `templates/O1B/O1B_working_document_structure.yaml` in the order required by

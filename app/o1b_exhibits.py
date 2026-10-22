@@ -1,3 +1,5 @@
+from .case_lock import case_operation
+from .safe_io import atomic_write_text
 """Case-specific O-1B exhibit numbering and stable identities for saved drafts."""
 import csv
 import hashlib
@@ -121,7 +123,7 @@ def capture_draft_citations(loaded):
     for _, key in missing:
         saved[key] = snapshot
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(saved, ensure_ascii=False, indent=2), encoding='utf-8')
+    atomic_write_text(path, json.dumps(saved, ensure_ascii=False, indent=2), encoding='utf-8')
 
 
 def render_draft_citations(loaded, draft_path, text):

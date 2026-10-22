@@ -130,11 +130,12 @@ def _merge_pdfs_with_pypdf(
                 page_index += 1
                 if strip_annotations and "/Annots" in page:
                     page.pop(NameObject("/Annots"), None)
-                if number_from_page is not None and page_index >= number_from_page:
-                    _stamp_page_with_pypdf(page, PdfReader, page_index)
-                if strip_annotations and "/Annots" in page:
-                    page.pop(NameObject("/Annots"), None)
                 writer.add_page(page)
+                output_page = writer.pages[-1]
+                if number_from_page is not None and page_index >= number_from_page:
+                    _stamp_page_with_pypdf(output_page, PdfReader, page_index)
+                if strip_annotations and "/Annots" in output_page:
+                    output_page.pop(NameObject("/Annots"), None)
         except Exception as exc:  # noqa: BLE001
             raise ValueError(f"Cannot assemble PDF {Path(path).name}: {exc}") from exc
     with target.open("wb") as handle:

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from .case_lock import case_operation
+
+from .safe_io import atomic_copy, atomic_write_text
+
 import html
 import filecmp
 import csv
@@ -12,10 +16,12 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .cli_support import PROJECT_ROOT, case_path
+from .safe_io import atomic_output, contained_path, workspace_entries
 from .workflow import (
     DOCX_EXTENSIONS,
     TEXT_EXTENSIONS,
     PromptOptions,
+    _case_path_value,
     _repeatable_episode_candidates,
     _case_insensitive_path,
     destination_for_step,
@@ -177,6 +183,7 @@ class IntakeSummary:
     source_files_skipped: int
 
 
+@case_operation
 def refresh_case_sources(case_id: str) -> IntakeSummary:
     """Refresh remembered external source folders without changing intake data."""
     loaded = load_case(case_id)
@@ -207,7 +214,7 @@ def refresh_case_sources(case_id: str) -> IntakeSummary:
                 skipped += 1
             else:
                 target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(context_path, target)
+                atomic_copy(context_path, target)
                 copied += 1
     return IntakeSummary(
         config_path=loaded.case_dir / "case_config.yaml",
@@ -217,6 +224,7 @@ def refresh_case_sources(case_id: str) -> IntakeSummary:
     )
 
 
+@case_operation
 def apply_case_intake(
     case_id: str,
     fields: dict[str, str],
@@ -258,7 +266,7 @@ def apply_case_intake(
             raise SystemExit("Case context file must be TXT, MD, YAML, JSON, CSV, or DOCX.")
         target = _case_context_target(loaded.case_dir, context_source)
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(context_source, target)
+        atomic_copy(context_source, target)
         relative_target = target.relative_to(loaded.case_dir).as_posix()
         if config.get("case_context_file") != relative_target:
             config["case_context_file"] = relative_target
@@ -335,6 +343,7 @@ def _clean_user_path(value: str) -> str:
     return cleaned
 
 
+@case_operation
 def build_working_memo(case_id: str, *, template_path: str = "") -> WorkingMemoSummary:
     loaded = load_case(case_id)
     if not template_path:
@@ -345,7 +354,7 @@ def build_working_memo(case_id: str, *, template_path: str = "") -> WorkingMemoS
             final_dir = loaded.case_dir / _path_from_config(loaded.config, "final_memo")
             working = final_dir / "working_memo.docx"
             if reviewed.resolve() != working.resolve():
-                shutil.copy2(reviewed, working)
+                atomic_copy(reviewed, working)
             return WorkingMemoSummary(
                 markdown_path=final_dir / "working_memo.md",
                 docx_path=working,
@@ -364,13 +373,13 @@ def build_working_memo(case_id: str, *, template_path: str = "") -> WorkingMemoS
     report_path = loaded.case_dir / "reports" / "template_parse_report.md"
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
-    markdown_path.write_text(render_markdown_skeleton(loaded.case_id, loaded.config, skeleton), encoding="utf-8")
-    report_path.write_text(render_template_report(report), encoding="utf-8")
     if docx_path.exists():
         backup_dir = final_dir / "backups"
         backup_dir.mkdir(exist_ok=True)
-        shutil.copy2(docx_path, backup_dir / f"working_memo_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.docx")
+        atomic_copy(docx_path, backup_dir / f"working_memo_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.docx")
     write_docx(docx_path, loaded.case_id, loaded.config, skeleton)
+    atomic_write_text(markdown_path, render_markdown_skeleton(loaded.case_id, loaded.config, skeleton), encoding="utf-8")
+    atomic_write_text(report_path, render_template_report(report), encoding="utf-8")
     return WorkingMemoSummary(
         markdown_path=markdown_path,
         docx_path=docx_path,
@@ -435,6 +444,7 @@ def render_template_report(report: TemplateParseReport) -> str:
     return "\n".join(lines) + "\n"
 
 
+@case_operation
 def render_markdown_skeleton(
     case_id: str, config: dict[str, Any], skeleton: list[dict[str, Any]]
 ) -> str:
@@ -488,7 +498,7 @@ def write_docx(path: Path, case_id: str, config: dict[str, Any], skeleton: list[
     app_xml = _app_xml()
     core_xml = _core_xml(case_id)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+    with atomic_output(path) as temporary, zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("[Content_Types].xml", content_types)
         archive.writestr("_rels/.rels", rels)
         archive.writestr("docProps/app.xml", app_xml)
@@ -880,17 +890,18 @@ def _write_rfe_company_docx(path: Path, config: dict[str, Any], case_dir: Path) 
         section.header_distance = Inches(0.5)
         section.footer_distance = Inches(0.5)
     path.parent.mkdir(parents=True, exist_ok=True)
-    document.save(str(path))
+    with atomic_output(path) as temporary:
+        document.save(str(temporary))
 
 
 def _resolve_project_or_case_template(case_dir: Path, value: str) -> Path:
     candidate = Path(value)
     if candidate.is_absolute():
         return candidate
-    project_candidate = PROJECT_ROOT / candidate
+    project_candidate = contained_path(PROJECT_ROOT, value)
     if project_candidate.exists():
         return project_candidate
-    return case_dir / candidate
+    return contained_path(case_dir, value)
 
 
 def _rfe_criterion_heading(yaml_template: dict[str, Any], role: str) -> str:
@@ -1469,7 +1480,7 @@ def _episode_names(folder: Path) -> list[str]:
 
 def _folder_has_documents(folder: Path) -> bool:
     return folder.exists() and any(
-        child.is_file() and child.name != ".gitkeep" for child in folder.rglob("*")
+        child.is_file() and child.name != ".gitkeep" for child in workspace_entries(folder)
     )
 
 
@@ -1523,7 +1534,7 @@ def _resolve_template_path(config: dict[str, Any], template_path: str) -> Path:
     task_type = str(config.get("task_type", ""))
     if template_path.strip():
         path = Path(template_path.strip())
-        resolved = path if path.is_absolute() else PROJECT_ROOT / path
+        resolved = path if path.is_absolute() else contained_path(PROJECT_ROOT, path)
         if task_type not in {"eb1a_rfe_response", "eb2niw_rfe_response"} or resolved.exists():
             return resolved
         # Existing browser forms/case configs may still submit the retired TXT path.
@@ -1534,7 +1545,7 @@ def _resolve_template_path(config: dict[str, Any], template_path: str) -> Path:
     else:
         value = configured or DEFAULT_TEMPLATE_BY_TASK_TYPE.get(task_type, DEFAULT_TEMPLATE_BY_TASK_TYPE["eb1a_petition"])
     path = Path(str(value))
-    resolved = path if path.is_absolute() else PROJECT_ROOT / path
+    resolved = path if path.is_absolute() else contained_path(PROJECT_ROOT, path)
     if task_type in {"eb1a_rfe_response", "eb2niw_rfe_response"} and not resolved.exists():
         return PROJECT_ROOT / DEFAULT_TEMPLATE_BY_TASK_TYPE[task_type]
     return resolved
@@ -1697,28 +1708,19 @@ def _copy_source_folder(
 ) -> tuple[int, int]:
     if not source.exists() or not source.is_dir():
         raise SystemExit(f"Source folder not found: {source}")
+    source_resolved, destination_resolved = source.resolve(), destination.resolve()
+    if source_resolved != destination_resolved and (
+        source_resolved.is_relative_to(destination_resolved) or destination_resolved.is_relative_to(source_resolved)
+    ):
+        raise ValueError("Source and destination folders must not contain each other.")
     copied = 0
     skipped = 0
     destination.mkdir(parents=True, exist_ok=True)
-    source_files = [item for item in sorted(source.rglob("*")) if item.is_file()]
-    if mirror and source.resolve() != destination.resolve():
-        source_keys = {
-            item.relative_to(source).as_posix().casefold()
-            for item in source_files
-        }
-        for existing in sorted(destination.rglob("*")):
-            if not existing.is_file() or existing.name == ".gitkeep":
-                continue
-            relative_key = existing.relative_to(destination).as_posix().casefold()
-            if relative_key not in source_keys:
-                existing.unlink()
-        for folder in sorted(
-            (item for item in destination.rglob("*") if item.is_dir()),
-            key=lambda item: len(item.parts),
-            reverse=True,
-        ):
-            if not any(folder.iterdir()):
-                folder.rmdir()
+    source_files = [item for item in sorted(workspace_entries(source)) if item.is_file()]
+    destination_entries = list(workspace_entries(destination))
+    for item in source_files:
+        contained_path(source, item.relative_to(source))
+        contained_path(destination, item.relative_to(source))
     for item in source_files:
         if not item.is_file():
             continue
@@ -1733,8 +1735,26 @@ def _copy_source_folder(
                 skipped += 1
                 continue
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(item, target)
+        atomic_copy(item, target)
         copied += 1
+    if mirror and source.resolve() != destination.resolve():
+        source_keys = {
+            item.relative_to(source).as_posix().casefold()
+            for item in source_files
+        }
+        for existing in sorted(destination_entries):
+            if not existing.is_file() or existing.name == ".gitkeep":
+                continue
+            relative_key = existing.relative_to(destination).as_posix().casefold()
+            if relative_key not in source_keys:
+                existing.unlink()
+        for folder in sorted(
+            (item for item in destination_entries if item.is_dir()),
+            key=lambda item: len(item.parts),
+            reverse=True,
+        ):
+            if not any(folder.iterdir()):
+                folder.rmdir()
     return copied, skipped
 
 
@@ -1745,7 +1765,7 @@ def _write_yaml_file(path: Path, data: dict[str, Any]) -> None:
         text = yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
     except ModuleNotFoundError:
         text = _dump_simple_yaml(data)
-    path.write_text(text, encoding="utf-8")
+    atomic_write_text(path, text, encoding="utf-8")
 
 
 def _dump_simple_yaml(data: dict[str, Any], indent: int = 0) -> str:
@@ -1768,10 +1788,7 @@ def _dump_simple_yaml(data: dict[str, Any], indent: int = 0) -> str:
 
 
 def _path_from_config(config: dict[str, Any], key: str) -> Path:
-    paths = config.get("paths", {})
-    if not isinstance(paths, dict) or not paths.get(key):
-        raise SystemExit(f"case_config.yaml is missing paths.{key}")
-    return Path(str(paths[key]))
+    return _case_path_value(config, key)
 
 
 def _substitute(text: str, config: dict[str, Any]) -> str:

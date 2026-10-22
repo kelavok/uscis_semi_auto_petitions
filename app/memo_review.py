@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from .case_lock import case_operation
+
+from .safe_io import atomic_copy, atomic_write_text
+
 import difflib
 import json
 import re
@@ -49,6 +53,7 @@ class ReviewedMemoReport:
         )
 
 
+@case_operation
 def validate_reviewed_memo(case_id: str, source_path: str) -> ReviewedMemoReport:
     loaded = load_case(case_id)
     source = _resolve_user_docx_path(source_path)
@@ -61,7 +66,7 @@ def validate_reviewed_memo(case_id: str, source_path: str) -> ReviewedMemoReport
     final_root.mkdir(parents=True, exist_ok=True)
     candidate = final_root / REVIEW_CANDIDATE
     if source.resolve() != candidate.resolve():
-        shutil.copy2(source, candidate)
+        atomic_copy(source, candidate)
 
     document_rows = _read_document_index(
         loaded.case_dir / _case_path_value(loaded.config, "document_index")
@@ -147,6 +152,7 @@ def validate_reviewed_memo(case_id: str, source_path: str) -> ReviewedMemoReport
     return report
 
 
+@case_operation
 def accept_reviewed_memo(case_id: str) -> ReviewedMemoReport:
     loaded = load_case(case_id)
     final_root = loaded.case_dir / _case_path_value(loaded.config, "final_memo")
@@ -161,13 +167,13 @@ def accept_reviewed_memo(case_id: str) -> ReviewedMemoReport:
     if working.exists():
         backup_root = final_root / "backups"
         backup_root.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(
+        atomic_copy(
             working,
             backup_root / f"working_memo_before_review_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.docx",
         )
     accepted_path = final_root / REVIEW_ACCEPTED
-    shutil.copy2(candidate, accepted_path)
-    shutil.copy2(candidate, working)
+    atomic_copy(candidate, accepted_path)
+    atomic_copy(candidate, working)
 
     if report.index_parsed:
         sync_layout_indexes_from_memo(
@@ -178,7 +184,7 @@ def accept_reviewed_memo(case_id: str) -> ReviewedMemoReport:
 
     accepted = ReviewedMemoReport(**{**asdict(report), "accepted": True})
     _write_report(final_root / REVIEW_REPORT, accepted)
-    (final_root / REVIEW_STATE).write_text(
+    atomic_write_text(final_root / REVIEW_STATE,
         json.dumps(
             {
                 "accepted": True,
@@ -194,6 +200,7 @@ def accept_reviewed_memo(case_id: str) -> ReviewedMemoReport:
     return accepted
 
 
+@case_operation
 def load_reviewed_memo_report(case_id: str) -> ReviewedMemoReport | None:
     loaded = load_case(case_id)
     path = _review_root(loaded) / REVIEW_REPORT
@@ -220,6 +227,7 @@ def load_reviewed_memo_report(case_id: str) -> ReviewedMemoReport | None:
         return None
 
 
+@case_operation
 def accepted_reviewed_memo(case_id: str) -> Path | None:
     loaded = load_case(case_id)
     final_root = _review_root(loaded)
@@ -273,7 +281,7 @@ def _extract_memo_citations(path: Path) -> list[dict[str, str]]:
 
 
 def _write_report(path: Path, report: ReviewedMemoReport) -> None:
-    path.write_text(
+    atomic_write_text(path,
         json.dumps(asdict(report), ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )

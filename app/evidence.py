@@ -1,14 +1,20 @@
 from __future__ import annotations
 
+from .safe_io import atomic_open, atomic_write_text
+
 import csv
 import hashlib
 import logging
 import re
 import zipfile
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from pathlib import Path, PurePosixPath
+from xml.etree import ElementTree
+from .safe_io import contained_path, relative_path, workspace_entries
+from .case_lock import case_operation
 
 from .workflow import (
     LoadedCase,
@@ -17,6 +23,7 @@ from .workflow import (
     _normalize_slashes,
     extract_docx_text,
     load_case,
+    safe_path_component,
 )
 from .file_rules import is_office_temporary_file, is_prompt_sidecar
 
@@ -47,6 +54,8 @@ INDEX_FIELDS = [
     "last_scanned_at",
     "manual_edit_lock",
     "notes",
+    "text_extraction_fingerprint",
+    "translation_link_mode",
 ]
 
 TEXT_EXTENSIONS = {".txt", ".md", ".csv", ".json", ".yaml", ".yml"}
@@ -101,6 +110,7 @@ class ManualTranslationLinkSummary:
     displaced_translation_ids: tuple[str, ...]
 
 
+@case_operation
 def scan_documents(case_id: str) -> ScanSummary:
     loaded = load_case(case_id)
     index_path = loaded.case_dir / _case_path_value(loaded.config, "document_index")
@@ -125,12 +135,34 @@ def scan_documents(case_id: str) -> ScanSummary:
     manual_description_files = 0
     seen_paths: set[str] = set()
 
-    for file_path, source_kind in _iter_source_files(loaded):
+    source_files = _iter_source_files(loaded)
+    fingerprints = {path: _fingerprint(path) for path, _kind in source_files}
+    current_paths = {_normalize_slashes(path.relative_to(loaded.case_dir).as_posix()) for path, _kind in source_files}
+    missing_by_fingerprint = defaultdict(list)
+    new_by_fingerprint = defaultdict(list)
+    for row in rows:
+        if row.get("file_path") not in current_paths:
+            missing_by_fingerprint[(row.get("source_fingerprint"), row.get("translation_status"))].append(row)
+    for path, kind in source_files:
+        if _normalize_slashes(path.relative_to(loaded.case_dir).as_posix()) not in by_path:
+            new_by_fingerprint[(fingerprints[path], kind)].append(path)
+    for file_path, source_kind in source_files:
         scanned_files += 1
         rel_path = _normalize_slashes(file_path.relative_to(loaded.case_dir).as_posix())
         seen_paths.add(rel_path)
         existing = by_path.get(rel_path)
+        fingerprint = fingerprints[file_path]
+        if existing is None:
+            candidates = missing_by_fingerprint[(fingerprint, source_kind)]
+            matching_new = new_by_fingerprint[(fingerprint, source_kind)]
+            if len(candidates) == 1 and len(matching_new) == 1:
+                existing = candidates[0]
+                existing["file_path"] = rel_path
+                by_path[rel_path] = existing
         if existing and _truthy(existing.get("manual_edit_lock", "")):
+            if existing.get("source_fingerprint") != fingerprint:
+                existing["extraction_status"] = "source_changed_locked"
+                existing["notes"] = _merge_notes(existing.get("notes", ""), "Source changed while manually locked; unlock and rescan before drafting.")
             locked_rows_skipped += 1
             continue
 
@@ -153,7 +185,6 @@ def scan_documents(case_id: str) -> ScanSummary:
             by_path[rel_path] = row
             added_rows += 1
 
-        fingerprint = _fingerprint(file_path)
         extraction = _reusable_extraction(loaded, row, doc_id, fingerprint) or _extract_text(
             file_path, loaded, doc_id
         )
@@ -172,6 +203,10 @@ def scan_documents(case_id: str) -> ScanSummary:
         row["translation_status"] = row.get("translation_status") or source_kind
         row["extraction_status"] = extraction.status
         row["text_extraction_path"] = extraction.relative_text_path
+        row["text_extraction_fingerprint"] = (
+            _text_fingerprint(contained_path(loaded.case_dir, extraction.relative_text_path))
+            if extraction.relative_text_path else ""
+        )
         row["source_fingerprint"] = fingerprint
         row["last_scanned_at"] = now
         row["notes"] = _merge_notes(_without_obsolete_extraction_notes(row.get("notes", "")), extraction.note)
@@ -179,10 +214,10 @@ def scan_documents(case_id: str) -> ScanSummary:
     retained_rows: list[dict[str, str]] = []
     for row in rows:
         rel_path = _normalize_slashes(row.get("file_path", ""))
-        if not rel_path or rel_path in seen_paths or _truthy(row.get("manual_edit_lock", "")):
-            retained_rows.append(row)
-            continue
-        removed_rows += 1
+        if rel_path and rel_path not in seen_paths:
+            row["extraction_status"] = "source_missing"
+            row["notes"] = _merge_notes(row.get("notes", ""), "Source file missing; retained document ID and manual decisions.")
+        retained_rows.append(row)
     rows = retained_rows
 
     index_path.parent.mkdir(parents=True, exist_ok=True)
@@ -200,12 +235,13 @@ def scan_documents(case_id: str) -> ScanSummary:
     )
 
 
+@case_operation
 def link_translations(case_id: str, *, auto_match: bool = True) -> LinkSummary:
     loaded = load_case(case_id)
     index_path = loaded.case_dir / _case_path_value(loaded.config, "document_index")
     rows = _read_index(index_path)
-    originals = [row for row in rows if row.get("translation_status") == "original"]
-    translations = [row for row in rows if row.get("translation_status") == "translation"]
+    originals = [row for row in rows if row.get("translation_status") == "original" and row.get("extraction_status") != "source_missing"]
+    translations = [row for row in rows if row.get("translation_status") == "translation" and row.get("extraction_status") != "source_missing"]
 
     linked_translations = 0
     already_linked = 0
@@ -220,6 +256,10 @@ def link_translations(case_id: str, *, auto_match: bool = True) -> LinkSummary:
     report_rows: list[dict[str, str]] = []
 
     for translation in translations:
+        if translation.get("translation_link_mode") == "unlinked":
+            unmatched_translations += 1
+            report_rows.append(_translation_report_row(translation, "manually_unlinked", "", 0.0, []))
+            continue
         if _truthy(translation.get("manual_edit_lock", "")):
             locked_rows_skipped += 1
             report_rows.append(_translation_report_row(translation, "locked", "", 0.0, []))
@@ -244,6 +284,7 @@ def link_translations(case_id: str, *, auto_match: bool = True) -> LinkSummary:
         if decision.candidate is not None and auto_match:
             original = decision.candidate
             translation["parent_document_id"] = original.get("document_id", "")
+            translation["translation_link_mode"] = "auto"
             translation["relationship_type"] = "translation"
             translation["translation_status"] = "translation"
             translation["notes"] = _merge_notes(
@@ -333,6 +374,7 @@ def link_translations(case_id: str, *, auto_match: bool = True) -> LinkSummary:
     )
 
 
+@case_operation
 def manual_link_translation(
     case_id: str,
     translation_reference: str,
@@ -382,9 +424,12 @@ def manual_link_translation(
     displaced_ids: list[str] = []
     if not allow_shared_original:
         for displaced in used_rows:
+            if _truthy(displaced.get("manual_edit_lock", "")):
+                raise ValueError("An existing translation link is manually locked; unlock it before reassignment.")
             displaced_id = displaced.get("document_id", "")
             displaced["parent_document_id"] = ""
             displaced["relationship_type"] = ""
+            displaced["translation_link_mode"] = "unlinked"
             displaced["notes"] = _merge_notes(
                 displaced.get("notes", ""),
                 f"Link to {original_id} was displaced by manual reassignment to {translation_id}; manual review required.",
@@ -393,6 +438,7 @@ def manual_link_translation(
                 displaced_ids.append(displaced_id)
 
     translation["parent_document_id"] = original_id
+    translation["translation_link_mode"] = "manual"
     translation["relationship_type"] = "translation"
     translation["translation_status"] = "translation"
     translation["notes"] = _merge_notes(
@@ -422,6 +468,7 @@ def manual_link_translation(
     )
 
 
+@case_operation
 def unlink_translation(case_id: str, translation_reference: str) -> Path:
     loaded = load_case(case_id)
     index_path = loaded.case_dir / _case_path_value(loaded.config, "document_index")
@@ -435,6 +482,7 @@ def unlink_translation(case_id: str, translation_reference: str) -> Path:
     previous_parent = translation.get("parent_document_id", "")
     translation["parent_document_id"] = ""
     translation["relationship_type"] = ""
+    translation["translation_link_mode"] = "unlinked"
     translation["notes"] = _merge_notes(
         translation.get("notes", ""),
         f"Manual link to {previous_parent or '[none]'} was removed.",
@@ -501,26 +549,17 @@ def _reusable_extraction(
     doc_id: str,
     fingerprint: str,
 ) -> ExtractionResult | None:
-    if row.get("source_fingerprint", "") != fingerprint:
+    if row.get("source_fingerprint", "") != fingerprint or row.get("extraction_status") != "text_extracted":
         return None
     configured_path = row.get("text_extraction_path", "")
     if configured_path:
-        existing = loaded.case_dir / configured_path
-        if existing.exists() and existing.stat().st_size > 1:
+        existing = contained_path(loaded.case_dir, configured_path)
+        if existing.exists() and row.get("text_extraction_fingerprint") == _text_fingerprint(existing):
             return ExtractionResult(
                 status=row.get("extraction_status", "") or "text_extracted",
                 relative_text_path=configured_path,
                 note="Reused unchanged extracted text.",
             )
-    # An interrupted scan can leave a valid deterministic extraction file
-    # before document_index.csv is committed. Reuse it on the next run.
-    deterministic = loaded.case_dir / _case_path_value(loaded.config, "extracted_text") / f"{doc_id}.txt"
-    if deterministic.exists() and deterministic.stat().st_size > 1:
-        return ExtractionResult(
-            status="text_extracted",
-            relative_text_path=_normalize_slashes(deterministic.relative_to(loaded.case_dir).as_posix()),
-            note="Recovered extracted text from an interrupted earlier scan.",
-        )
     return None
 
 
@@ -537,7 +576,7 @@ def _extract_text(file_path: Path, loaded: LoadedCase, doc_id: str) -> Extractio
         try:
             text = extract_docx_text(file_path)
             status = "text_extracted" if text.strip() else "docx_no_extractable_text"
-        except (OSError, KeyError, ValueError, zipfile.BadZipFile) as exc:
+        except (OSError, KeyError, ValueError, zipfile.BadZipFile, ElementTree.ParseError) as exc:
             text = ""
             status = "docx_invalid_or_corrupt"
             note = (
@@ -572,7 +611,7 @@ def _extract_text(file_path: Path, loaded: LoadedCase, doc_id: str) -> Extractio
     extracted_root = loaded.case_dir / _case_path_value(loaded.config, "extracted_text")
     extracted_root.mkdir(parents=True, exist_ok=True)
     text_path = extracted_root / f"{doc_id}.txt"
-    text_path.write_text(text.strip() + "\n", encoding="utf-8")
+    atomic_write_text(text_path, text.strip() + "\n", encoding="utf-8")
     rel_text_path = _normalize_slashes(text_path.relative_to(loaded.case_dir).as_posix())
     return ExtractionResult(status=status, relative_text_path=rel_text_path, note=note)
 
@@ -590,7 +629,7 @@ def _manual_description_for(loaded: LoadedCase, doc_id: str, source_file: Path) 
     path = root / f"{doc_id}.md"
     relative_path = _normalize_slashes(path.relative_to(loaded.case_dir).as_posix())
     if not path.exists():
-        path.write_text(_manual_description_template(doc_id, source_file), encoding="utf-8")
+        atomic_write_text(path, _manual_description_template(doc_id, source_file), encoding="utf-8")
         return ManualDescription(path=path, relative_path=relative_path, ready_text="")
     text = path.read_text(encoding="utf-8-sig", errors="replace")
     if _manual_description_is_ready(text):
@@ -601,7 +640,7 @@ def _manual_description_for(loaded: LoadedCase, doc_id: str, source_file: Path) 
 def _manual_descriptions_path(loaded: LoadedCase) -> Path:
     paths = loaded.config.get("paths", {})
     if isinstance(paths, dict) and paths.get("manual_descriptions"):
-        return Path(str(paths["manual_descriptions"]))
+        return _case_path_value(loaded.config, "manual_descriptions")
     return Path("manual_descriptions")
 
 
@@ -669,6 +708,8 @@ def _extract_pdf_text(file_path: Path) -> tuple[str, str, str]:
     try:
         import pdfplumber  # type: ignore
     except ModuleNotFoundError:
+        if pypdf_error is not None:
+            return "", "pdf_extraction_error", "PDF could not be read; repair the file or supply a manual description."
         return (
             "",
             "pdf_text_dependency_missing",
@@ -695,7 +736,7 @@ def _iter_source_files(loaded: LoadedCase) -> list[tuple[Path, str]]:
         if not root.exists():
             continue
         for path in sorted(
-            root.rglob("*"),
+            workspace_entries(root),
             key=lambda item: tuple(
                 _natural_sort_key(part) for part in item.relative_to(root).parts
             ),
@@ -706,6 +747,7 @@ def _iter_source_files(loaded: LoadedCase) -> list[tuple[Path, str]]:
                 and not is_prompt_sidecar(path)
                 and not is_office_temporary_file(path)
             ):
+                contained_path(loaded.case_dir, path.relative_to(loaded.case_dir))
                 files.append((path, source_kind))
     return files
 
@@ -748,17 +790,36 @@ def _read_index(index_path: Path) -> list[dict[str, str]]:
     if not index_path.exists():
         return []
     with index_path.open("r", encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle)
+        reader = csv.DictReader(handle, strict=True)
+        if reader.fieldnames is None:
+            return []
+        if not {"document_id", "file_path"}.issubset(reader.fieldnames):
+            raise ValueError("Document index is missing required columns; restore or correct it before scanning.")
         rows = []
+        identifiers, paths = set(), set()
         for row in reader:
+            if None in row or row.get("document_id") is None or row.get("file_path") is None:
+                raise ValueError("Document index contains a malformed CSV row; previous file was preserved.")
             normalized = _blank_row()
             normalized.update({key: value or "" for key, value in row.items() if key})
+            identifier = normalized.get("document_id", "")
+            if identifier and safe_path_component(identifier) != identifier:
+                raise ValueError("Invalid document ID in document index; correct it before scanning.")
+            if identifier:
+                relative_path(identifier)
+            path = _normalize_slashes(normalized.get("file_path", ""))
+            if (identifier and identifier in identifiers) or (path and path in paths):
+                raise ValueError("Document index contains duplicate IDs or paths; correct it before scanning.")
+            if identifier:
+                identifiers.add(identifier)
+            if path:
+                paths.add(path)
             rows.append(normalized)
         return rows
 
 
 def _write_index(index_path: Path, rows: list[dict[str, str]]) -> None:
-    with index_path.open("w", encoding="utf-8", newline="") as handle:
+    with atomic_open(index_path, "w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=INDEX_FIELDS, extrasaction="ignore")
         writer.writeheader()
         for row in rows:
@@ -864,9 +925,15 @@ def _fingerprint(path: Path) -> str:
     return "sha256:" + digest.hexdigest()
 
 
+def _text_fingerprint(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def _without_obsolete_extraction_notes(notes: str) -> str:
     obsolete_prefixes = (
         "PDF extraction limited to first ",
+        "Source changed while manually locked;",
+        "Source file missing; retained document ID",
     )
     return " | ".join(
         part
@@ -1174,7 +1241,7 @@ def _write_translation_report(path: Path, rows: list[dict[str, str]]) -> None:
         "suggested_originals",
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8-sig", newline="") as handle:
+    with atomic_open(path, "w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
         writer.writerows(rows)

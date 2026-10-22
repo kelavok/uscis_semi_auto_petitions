@@ -1,7 +1,7 @@
-# Draft index schemas
+# Index schemas
 
-`document_index.csv` — одна строка на физический или логический документ. `source_fingerprint` и `last_scanned_at` предназначены для re-scan; `manual_edit_lock` должен запрещать автоматическую замену пользовательских полей.
+`document_index.csv` — одна строка на физический или логический документ. `source_fingerprint` и `last_scanned_at` используются при повторном сканировании; `manual_edit_lock` сохраняет пользовательские поля. Изменение или исчезновение locked-источника отражается в `extraction_status`.
 
-`exhibit_index.csv` — одна строка на exhibit/group/sub-exhibit. `document_ids` временно предлагается хранить как список ID через `|`; до реализации следует решить, нужен ли нормализованный отдельный relation-файл.
+`text_extraction_fingerprint` — SHA-256 сохранённого extracted text. У старых кейсов поле может отсутствовать: scanner проверит источник и добавит checksum. `translation_link_mode` хранит `auto`, `manual` или `unlinked`; последнее запрещает восстановление явно отменённой связи автоматическим matcher. Пустое значение сохраняет историческое поведение.
 
-Обе схемы — предложения для согласования, не финальный контракт.
+`exhibit_index.csv` — одна строка на exhibit/group/sub-exhibit. `document_ids` содержит список document IDs через `;`. Новые технические CSV-поля обратно совместимы с индексами старых кейсов; JSON-контракт LLM не менялся.

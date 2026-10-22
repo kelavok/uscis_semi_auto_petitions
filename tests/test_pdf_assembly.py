@@ -2,6 +2,8 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
+from contextlib import ExitStack
+import pypdf
 from pypdf import PdfReader, PdfWriter
 from pypdf.errors import LimitReachedError
 from reportlab.pdfgen import canvas
@@ -34,7 +36,12 @@ class PdfAssemblyTests(unittest.TestCase):
                 page.Contents = pdf.make_stream(b'q Q\n' * 1000)
                 pdf.save(source, compress_streams=False)
             original = source.read_bytes()
-            with patch('pypdf.filters.MAX_DECLARED_STREAM_LENGTH', 1000):
+            with ExitStack() as stack:
+                # Use scoped settings so limits cannot leak to later tests.
+                if hasattr(pypdf, 'apply_configuration'):
+                    stack.enter_context(pypdf.apply_configuration(maximum_declared_stream_length=1000, disable_legacy_handling=True))
+                else:
+                    stack.enter_context(patch('pypdf.filters.MAX_DECLARED_STREAM_LENGTH', 1000))
                 with self.assertRaises(LimitReachedError):
                     PdfWriter().add_page(PdfReader(source).pages[0])
                 merge_pdfs([source, source], target, number_from_page=2)

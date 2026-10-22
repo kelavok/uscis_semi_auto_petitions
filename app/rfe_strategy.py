@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from .case_lock import case_operation
+
+from .safe_io import atomic_copy, atomic_write_text
+from .safe_io import contained_path, workspace_entries
+
 import json
 import filecmp
 import re
@@ -140,6 +145,7 @@ class EvidenceImportSummary:
     report_path: Path
 
 
+@case_operation
 def build_strategy_bootstrap_prompt(
     case_id: str,
     strategy_path: str,
@@ -189,10 +195,10 @@ def build_strategy_bootstrap_prompt(
     raw_root.mkdir(parents=True, exist_ok=True)
     strategy_text = _extract_text(strategy_copy)
     rfe_text = _extract_text(rfe_copy)
-    (raw_root / "human_strategy.txt").write_text(strategy_text, encoding="utf-8")
-    (raw_root / "rfe_notice.txt").write_text(rfe_text, encoding="utf-8")
+    atomic_write_text(raw_root / "human_strategy.txt", strategy_text, encoding="utf-8")
+    atomic_write_text(raw_root / "rfe_notice.txt", rfe_text, encoding="utf-8")
     if initial_memo_text:
-        (raw_root / "initial_filing_memorandum.txt").write_text(
+        atomic_write_text(raw_root / "initial_filing_memorandum.txt",
             initial_memo_text, encoding="utf-8"
         )
 
@@ -271,7 +277,7 @@ def build_strategy_bootstrap_prompt(
     prompt_root = case_dir / "generated_prompts"
     prompt_root.mkdir(parents=True, exist_ok=True)
     prompt_path = prompt_root / f"{BOOTSTRAP_PROMPT_STEM}.latest.prompt.md"
-    prompt_path.write_text(prompt, encoding="utf-8")
+    atomic_write_text(prompt_path, prompt, encoding="utf-8")
     remembered = {"rfe_strategy_file": strategy_source, "rfe_notice_file": rfe_source}
     if initial_memo_copy is not None and cleaned_initial_path:
         remembered["initial_filing_memo"] = Path(cleaned_initial_path)
@@ -284,13 +290,14 @@ def build_strategy_bootstrap_prompt(
     )
 
 
+@case_operation
 def apply_strategy_output(case_id: str, output: dict[str, Any]) -> StrategyImportSummary:
     _validate_strategy_output(case_id, output)
     case_dir = case_path(case_id)
     strategy_root = case_dir / STRATEGY_ROOT
     strategy_root.mkdir(parents=True, exist_ok=True)
     raw_output = strategy_root / "llm_strategy_output.json"
-    raw_output.write_text(json.dumps(output, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    atomic_write_text(raw_output, json.dumps(output, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     issues = {str(item["issue_id"]): item for item in output["rfe_issues"]}
     units: list[dict[str, Any]] = []
@@ -372,14 +379,15 @@ def apply_strategy_output(case_id: str, output: dict[str, Any]) -> StrategyImpor
         "units": units,
     }
     manifest_path = strategy_root / MANIFEST_NAME
-    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    atomic_write_text(manifest_path, json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     _write_unit_files(case_dir, manifest)
     _update_case_config(case_dir, manifest)
     plan_path = case_dir / "rfe_response_plan.md"
-    plan_path.write_text(_render_plan(manifest), encoding="utf-8")
+    atomic_write_text(plan_path, _render_plan(manifest), encoding="utf-8")
     return StrategyImportSummary(manifest_path=manifest_path, unit_count=len(units), plan_path=plan_path)
 
 
+@case_operation
 def import_evidence_and_scan_inputs(
     case_id: str,
     initial_memo_path: str,
@@ -409,16 +417,17 @@ def import_evidence_and_scan_inputs(
     return EvidenceImportSummary(copied, skipped, sections, report_path)
 
 
+@case_operation
 def partition_initial_filing(case_id: str) -> tuple[int, Path]:
     case_dir = case_path(case_id)
     memo_root = case_dir / "source_documents/initial_filing/memorandum"
-    files = [path for path in sorted(memo_root.rglob("*")) if path.is_file() and path.name != ".gitkeep"]
+    files = [path for path in sorted(workspace_entries(memo_root)) if path.is_file() and path.name != ".gitkeep"]
     if not files:
         raise ValueError("No initial filing memorandum was imported.")
     text = "\n\n".join(_extract_text(path) for path in files)
     output_root = case_dir / STRATEGY_ROOT / "initial_filing_sections"
     output_root.mkdir(parents=True, exist_ok=True)
-    (output_root / "_full_initial_filing.txt").write_text(text, encoding="utf-8")
+    atomic_write_text(output_root / "_full_initial_filing.txt", text, encoding="utf-8")
     manifest = load_strategy_manifest(case_dir)
     hints: dict[str, list[str]] = {role: list(aliases) for role, aliases in CRITERION_ALIASES.items()}
     for unit in manifest.get("units", []):
@@ -430,13 +439,13 @@ def partition_initial_filing(case_id: str) -> tuple[int, Path]:
     for role in sorted(set(manifest.get("challenged_criteria", [])) | {str(unit.get("criterion_role", "")) for unit in manifest.get("units", []) if unit.get("criterion_role")}):
         section_text = sections.get(role, "")
         if section_text:
-            (output_root / f"{safe_path_component(role)}.txt").write_text(section_text, encoding="utf-8")
+            atomic_write_text(output_root / f"{safe_path_component(role)}.txt", section_text, encoding="utf-8")
             report_lines.append(f"- {role}: {len(section_text)} characters")
         else:
             report_lines.append(f"- {role}: heading not found; full memorandum remains available for manual review")
     report_path = case_dir / "reports/initial_filing_partition_report.md"
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text("\n".join(report_lines) + "\n", encoding="utf-8")
+    atomic_write_text(report_path, "\n".join(report_lines) + "\n", encoding="utf-8")
     return sum(bool(value) for value in sections.values()), report_path
 
 
@@ -612,7 +621,7 @@ def _folder_has_meaningful_files(path: Path) -> bool:
         item.is_file()
         and item.name != ".gitkeep"
         and not is_office_temporary_file(item)
-        for item in path.rglob("*")
+        for item in workspace_entries(path)
     )
 
 
@@ -784,10 +793,10 @@ def render_strategy_unit_context(loaded: LoadedCase, unit_id: str) -> str:
         folders = [source_folder, *unit.get("shared_source_folders", [])]
         scoped: list[Path] = []
         for folder in dict.fromkeys(str(value).strip("/\\") for value in folders if str(value).strip("/\\")):
-            selected = root / folder
+            selected = contained_path(root, folder)
             if selected.exists():
                 scoped.extend(
-                    path for path in sorted(selected.rglob("*"))
+                    path for path in sorted(workspace_entries(selected))
                     if path.is_file() and path.name != ".gitkeep" and not is_office_temporary_file(path)
                 )
         raw_by_label.append((label, list(dict.fromkeys(scoped))))
@@ -830,10 +839,10 @@ def selected_documents_for_unit(loaded: LoadedCase, unit_id: str) -> list[dict[s
     files: list[Path] = []
     for root in roots:
         for folder in dict.fromkeys(str(value).strip("/\\") for value in folders if str(value).strip("/\\")):
-            selected = root / folder
+            selected = contained_path(root, folder)
             if selected.exists():
                 files.extend(
-                    path for path in selected.rglob("*")
+                    path for path in workspace_entries(selected)
                     if path.is_file() and path.name != ".gitkeep" and not is_office_temporary_file(path)
                 )
     files = _filter_phase_files(files, str(unit.get("source_folder", "")), str(unit.get("phase", "")))
@@ -1035,15 +1044,15 @@ def _write_unit_files(case_dir: Path, manifest: dict[str, Any]) -> None:
     for unit in manifest["units"]:
         root = units_root / str(unit["unit_id"])
         root.mkdir(parents=True, exist_ok=True)
-        (root / "metadata.json").write_text(json.dumps(unit, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        (root / "strategy.md").write_text(
+        atomic_write_text(root / "metadata.json", json.dumps(unit, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        atomic_write_text(root / "strategy.md",
             f"# {unit['title']}\n\n{unit.get('strategy', '')}\n", encoding="utf-8"
         )
         quotes = "\n\n".join(
             f"## {item.get('issue_id', '')}: {item.get('topic', '')}\n\n{item.get('exact_rfe_quote', '')}"
             for item in unit.get("rfe_issues", [])
         )
-        (root / "rfe_issues.md").write_text(quotes + ("\n" if quotes else ""), encoding="utf-8")
+        atomic_write_text(root / "rfe_issues.md", quotes + ("\n" if quotes else ""), encoding="utf-8")
 
 
 def _update_case_config(case_dir: Path, manifest: dict[str, Any]) -> None:
@@ -1188,28 +1197,34 @@ def _copy_source_file(source: Path, destination: Path) -> Path:
     destination.mkdir(parents=True, exist_ok=True)
     target = destination / source.name
     if source.resolve() != target.resolve():
-        shutil.copy2(source, target)
+        atomic_copy(source, target)
     return target
 
 
 def _copy_any(source: Path, destination: Path) -> tuple[int, int]:
+    source_root, destination_root = source.resolve(), destination.resolve()
+    if source.is_dir() and source_root != destination_root and (
+        source_root.is_relative_to(destination_root) or destination_root.is_relative_to(source_root)
+    ):
+        raise ValueError("Import source and destination folders must not contain each other.")
     destination.mkdir(parents=True, exist_ok=True)
     if source.is_file():
         target = destination / source.name
         if target.exists() and filecmp.cmp(source, target, shallow=False):
             return 0, 1
-        shutil.copy2(source, target)
+        atomic_copy(source, target)
         return 1, 0
     copied = skipped = 0
-    for item in sorted(source.rglob("*")):
+    for item in sorted(workspace_entries(source)):
         if not item.is_file() or is_office_temporary_file(item):
             continue
-        target = destination / item.relative_to(source)
+        contained_path(source, item.relative_to(source))
+        target = contained_path(destination, item.relative_to(source))
         if target.exists() and filecmp.cmp(item, target, shallow=False):
             skipped += 1
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(item, target)
+        atomic_copy(item, target)
         copied += 1
     return copied, skipped
 

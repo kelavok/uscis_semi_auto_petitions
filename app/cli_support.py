@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+from .safe_io import atomic_copy, atomic_write_text
+
 import argparse
+import os
 import re
 import shutil
 import string
 import sys
 from pathlib import Path
+from .safe_io import contained_path, relative_path
+from .case_lock import case_operation
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CASE_ROOT = PROJECT_ROOT / "case_workspace"
-CASE_TEMPLATE_ROOT = CASE_ROOT / "_template"
+CASE_ROOT = Path(os.environ.get("PETITIONS_CASE_ROOT", str(PROJECT_ROOT / "case_workspace"))).expanduser().resolve()
+CASE_TEMPLATE_ROOT = PROJECT_ROOT / "case_workspace" / "_template"
 
 
 def configure_console() -> None:
@@ -32,13 +37,15 @@ def validate_case_id(case_id: str) -> None:
         )
     if case_id in {".", "..", "_template"}:
         raise SystemExit(f"Reserved case id: {case_id}")
+    relative_path(case_id)
 
 
 def case_path(case_id: str) -> Path:
     validate_case_id(case_id)
-    return CASE_ROOT / case_id
+    return contained_path(CASE_ROOT, case_id)
 
 
+@case_operation
 def create_case_from_template(case_id: str, task_type: str) -> Path:
     workflow_value = workflow_for(task_type)
     target = case_path(case_id)
@@ -46,6 +53,10 @@ def create_case_from_template(case_id: str, task_type: str) -> Path:
         raise SystemExit(f"Case folder already exists and was not changed: {target}")
     if not CASE_TEMPLATE_ROOT.exists():
         raise SystemExit(f"Missing case template folder: {CASE_TEMPLATE_ROOT}")
+    if task_type == "eb1a_petition":
+        required = PROJECT_ROOT / "templates" / "EB1A" / "case_folders_template"
+        if not required.is_dir():
+            raise SystemExit(f"Missing required source folder template: {required}")
 
     shutil.copytree(CASE_TEMPLATE_ROOT, target)
     config_path = target / "case_config.yaml"
@@ -64,7 +75,7 @@ def create_case_from_template(case_id: str, task_type: str) -> Path:
             text = _eb2niw_case_config_text(text)
         elif task_type == "document_layout":
             text = _document_layout_case_config_text(text)
-        config_path.write_text(text, encoding="utf-8")
+        atomic_write_text(config_path, text, encoding="utf-8")
 
     if task_type == "eb1a_petition":
         source = PROJECT_ROOT / "templates" / "EB1A" / "case_folders_template"
@@ -75,7 +86,7 @@ def create_case_from_template(case_id: str, task_type: str) -> Path:
                 if child.is_dir():
                     shutil.copytree(child, child_destination)
                 else:
-                    shutil.copy2(child, child_destination)
+                    atomic_copy(child, child_destination)
     elif task_type in {"eb1a_rfe_response", "eb2niw_rfe_response"}:
         _create_rfe_structure(target, task_type)
     elif task_type == "o1b_petition":
@@ -87,7 +98,7 @@ def create_case_from_template(case_id: str, task_type: str) -> Path:
                 if child.is_dir():
                     shutil.copytree(child, child_destination)
                 else:
-                    shutil.copy2(child, child_destination)
+                    atomic_copy(child, child_destination)
     elif task_type == "eb2niw_petition":
         source = PROJECT_ROOT / "templates" / "EB2NIW" / "case_folder_template"
         destination = target / "source_documents" / "originals"
@@ -97,13 +108,18 @@ def create_case_from_template(case_id: str, task_type: str) -> Path:
                 if not raw_line.strip() or raw_line.lstrip().startswith("#"):
                     continue
                 parts = [part for part in raw_line.strip().replace("\\", "/").split("/") if part]
-                (destination.joinpath(*parts)).mkdir(parents=True, exist_ok=True)
+                contained_path(destination, "/".join(parts)).mkdir(parents=True, exist_ok=True)
         if source.exists():
             _copy_children_if_missing(source, destination)
         (target / "case_context").mkdir(parents=True, exist_ok=True)
     elif task_type == "document_layout":
         (target / "document_layout").mkdir(parents=True, exist_ok=True)
 
+    if task_type == "eb1a_petition":
+        from .workflow import load_yaml_file, folder_role_map
+        config = load_yaml_file(config_path)
+        for folder in folder_role_map(config).values():
+            contained_path(target / "source_documents" / "originals", folder).mkdir(parents=True, exist_ok=True)
     return target
 
 
@@ -453,7 +469,7 @@ def _create_rfe_structure(target: Path, task_type: str) -> None:
         folder.mkdir(parents=True, exist_ok=True)
         keep = folder / ".gitkeep"
         if not keep.exists():
-            keep.write_text("", encoding="utf-8")
+            atomic_write_text(keep, "", encoding="utf-8")
 
     source = PROJECT_ROOT / "templates" / "RFE" / "EB1" / "case_folders_template" / "new_docs"
     if task_type == "eb2niw_rfe_response":
@@ -472,7 +488,7 @@ def _create_rfe_structure(target: Path, task_type: str) -> None:
                     target / "source_documents" / "rfe_response" / "new_documents" / "originals",
                     target / "source_documents" / "rfe_response" / "new_documents" / "translations",
                 ]:
-                    destination.joinpath(*parts).mkdir(parents=True, exist_ok=True)
+                    contained_path(destination, "/".join(parts)).mkdir(parents=True, exist_ok=True)
     elif not source.exists():
         source = PROJECT_ROOT / "templates" / "EB1A" / "case_folders_template"
     if source.exists():
@@ -540,14 +556,14 @@ def _copy_children_if_missing(source: Path, destination: Path) -> None:
         if child.is_dir():
             shutil.copytree(child, child_destination)
         else:
-            shutil.copy2(child, child_destination)
+            atomic_copy(child, child_destination)
 
 
 def _write_if_missing(path: Path, text: str) -> None:
     if path.exists():
         return
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    atomic_write_text(path, text, encoding="utf-8")
 
 
 def scaffold_only(command: str, case_id: str, **details: str) -> int:

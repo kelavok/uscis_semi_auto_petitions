@@ -425,9 +425,13 @@ class RfeStrategyTests(unittest.TestCase):
                 before_layout = web.render_layout_page("rfe_test", {})
                 self.assertIn("Index refresh required", before_layout)
                 self.assertIn("Refresh indexes", before_layout)
-                next(case_dir.rglob("citation.xlsx")).with_suffix(".pdf").write_bytes(
-                    b"%PDF-1.4\n%%EOF\n"
-                )
+                from pypdf import PdfWriter
+
+                replacement_pdf = next(case_dir.rglob("citation.xlsx")).with_suffix(".pdf")
+                writer = PdfWriter()
+                writer.add_blank_page(width=612, height=792)
+                with replacement_pdf.open("wb") as handle:
+                    writer.write(handle)
                 refreshed = refresh_layout_indexes("rfe_test")
                 self.assertEqual(refreshed.replacement_documents_rebound, 1)
                 self.assertEqual(refreshed.status.assigned_used_documents, 3)
