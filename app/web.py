@@ -11,7 +11,7 @@ import socket
 import logging
 from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from urllib.parse import parse_qs, quote, unquote, urlparse
 from .case_lock import locked_case
 from .safe_io import contained_path
@@ -3079,6 +3079,16 @@ def _case_search_query(value: str, case_dir: Path) -> str:
             case_resolved = case_dir.resolve()
             if resolved == case_resolved or case_resolved in resolved.parents:
                 cleaned = resolved.relative_to(case_resolved).as_posix()
+        else:
+            # Search text can contain a Windows clipboard path even on Linux.
+            # Parse its syntax without interpreting it as a local filesystem path.
+            windows_path = PureWindowsPath(cleaned)
+            windows_case = PureWindowsPath(str(case_dir))
+            if windows_path.is_absolute() and windows_case.is_absolute():
+                try:
+                    cleaned = windows_path.relative_to(windows_case).as_posix()
+                except ValueError:
+                    pass  # A path from another case stays a complete search query.
     except OSError:
         pass
     return cleaned.replace("\\", "/").casefold()

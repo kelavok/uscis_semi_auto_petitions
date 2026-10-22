@@ -82,3 +82,13 @@ EB-1A: создание → Intake → originals/translations → scan/link → 
 | P2 environment | `deferred` | Настоящие Office conversion и installed fonts проверены на данном Windows. Linux/другие версии Word требуют отдельной rendering QA; CI не устанавливает Office. |
 
 Перед Google Drive экспериментом нужны явная модель прав доступа и происхождения документов, разделение originals/derived data, политика временных копий/удаления, metadata versions/checksums, credentials вне Git и тестовый sandbox с синтетическими материалами. Перед сервером дополнительно необходимы authentication/authorization, изоляция case storage, защищённые фоновые jobs, transactional state, мониторинг и проверяемое восстановление из резервных копий. Это рекомендации, не реализованные компоненты Stage 0.
+
+## Уточнение после первого GitHub Actions run
+
+Первый run `39766054940` для `f6bf179` подтвердил успех Windows/Python 3.11 и 3.12. На обеих Ubuntu-конфигурациях прошли 120 из 121 тестов, но упал `test_web_case_search_accepts_quoted_absolute_windows_path`: `Path` использовал правила ОС runner и на Linux не распознавал Windows drive path как абсолютный.
+
+Исправлена `web._case_search_query`: для Windows clipboard paths добавлен синтаксический разбор через `PureWindowsPath`, когда native path parser не распознаёт абсолютный путь. Нативное разрешение путей, проверка принадлежности кейсу и сохранение полного поискового запроса для другого кейса/диска остаются прежними. Это только нормализация строки поиска; файловые операции через неё не разрешаются.
+
+Добавлены пять проверок: Windows paths под POSIX parser, quotes/slashes/Unicode/case, другой кейс или диск, UNC paths, native absolute и relative queries. Успешный локальный baseline не означал подтверждённую Linux-совместимость; дальнейшее заключение по матрице должно опираться на новый Actions run.
+
+Локальный follow-up: рабочая копия — **128 passed / 0 failed / 0 skipped**; независимое содержимое коммита — **126 passed / 0 failed / 0 skipped**. Compileall, pip check и diff check успешны. Прежние пользовательские изменения сохранены вне follow-up-коммита.
