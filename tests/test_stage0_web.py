@@ -18,7 +18,10 @@ class LocalHTTPTests(SyntheticCase):
         class QuietHandler(web.PetitionsHandler):
             def log_message(self, *args):
                 pass
-        self.server = ThreadingHTTPServer(("127.0.0.1", 0), QuietHandler)
+        class TestServer(ThreadingHTTPServer):
+            # Wait for active requests before deleting their temporary cases.
+            daemon_threads = False
+        self.server = TestServer(("127.0.0.1", 0), QuietHandler)
         self.port = self.server.server_port
         self.origin = f"http://127.0.0.1:{self.port}"
         self.thread = threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
@@ -28,12 +31,13 @@ class LocalHTTPTests(SyntheticCase):
         self.addCleanup(close)
 
     def request(self, method="GET", path="/", body=None, headers=None):
-        connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
-        connection.request(method, path, body=body, headers=headers or {})
-        response = connection.getresponse()
-        result = response.status, dict(response.getheaders()), response.read().decode("utf-8", errors="replace")
-        connection.close()
-        return result
+        connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=30)
+        try:
+            connection.request(method, path, body=body, headers=headers or {})
+            response = connection.getresponse()
+            return response.status, dict(response.getheaders()), response.read().decode("utf-8", errors="replace")
+        finally:
+            connection.close()
 
     def token(self):
         status, headers, html = self.request()

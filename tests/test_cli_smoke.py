@@ -1048,11 +1048,13 @@ class CliSmokeTests(unittest.TestCase):
             case_root = Path(temp) / "case_workspace"
             with patch.object(cli_support, "CASE_ROOT", case_root):
                 case_dir = cli_support.create_case_from_template("comparable_test", "eb1a_petition")
+                originals = case_dir / "source_documents" / "originals"
+                # Rename the template folder so Linux does not retain an empty
+                # case-only duplicate alongside the evidence under test.
+                role_folder = originals / "CoMpArAbLe EvIdEnCe"
+                (originals / "comparable evidence").rename(role_folder)
                 episode = (
-                    case_dir
-                    / "source_documents"
-                    / "originals"
-                    / "CoMpArAbLe EvIdEnCe"
+                    role_folder
                     / "1. Professional recognition"
                 )
                 episode.mkdir(parents=True, exist_ok=True)
